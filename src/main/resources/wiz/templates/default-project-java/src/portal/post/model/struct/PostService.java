@@ -6,63 +6,77 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
-import com.wiz.project.main.portal.season.model.orm.OrmModel;
-import com.wiz.project.main.portal.season.model.orm.OrmService;
-import com.wiz.project.main.portal.season.model.orm.RowsQuery;
 import com.wiz.project.main.model.struct.UserStruct;
+import com.wiz.project.main.portal.post.model.db.PostEntity;
+import com.wiz.project.main.portal.post.model.db.CommentEntity;
+import com.wiz.project.main.portal.season.model.orm.Ids;
+import com.wiz.project.main.portal.season.model.orm.Jpa;
 import com.wiz.runtime.WizContext;
 
 public final class PostService {
 
     private static final DateTimeFormatter TIMESTAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private final WizContext wiz;
-    private final OrmModel db;
-    private final OrmModel comments;
+    private final Jpa jpa;
+    private final PostEntity.Repository posts;
+    private final CommentEntity.Repository comments;
 
-    public PostService(WizContext wiz) {
+    public PostService(WizContext wiz, Jpa jpa) {
         this.wiz = wiz;
-        OrmService orm = new OrmService(wiz);
-        this.db = orm.use("post");
-        this.comments = orm.use("comment");
-    }
-
-    public OrmModel db() {
-        return db;
+        this.jpa = jpa;
+        this.posts = new PostEntity.Repository(jpa.entityManager());
+        this.comments = new CommentEntity.Repository(jpa.entityManager());
     }
 
     public String create(Map<String, Object> data) {
-        String now = now();
-        LinkedHashMap<String, Object> item = writablePost(data);
-        item.put("author_id", sessionValue("id"));
-        item.put("author_name", sessionValue("name"));
-        if (string(item.get("status")).isBlank()) {
-            item.put("status", "draft");
-        }
-        item.put("created", valueOrDefault(data.get("created"), now));
-        item.put("updated", now);
-        return db.insert(item);
+        return jpa.transaction().execute(status -> {
+            PostEntity post = new PostEntity();
+            post.setId(Ids.next());
+            applyWritable(post, data);
+            if (string(post.getAuthorId()).isBlank()) {
+                post.setAuthorId(sessionValue("id"));
+            }
+            if (string(post.getAuthorName()).isBlank()) {
+                post.setAuthorName(sessionValue("name"));
+            }
+            if (string(post.getStatus()).isBlank()) {
+                post.setStatus("draft");
+            }
+            String now = now();
+            post.setCreated(valueOrDefault(data.get("created"), now));
+            post.setUpdated(now);
+            posts.save(post);
+            return post.getId();
+        });
     }
 
     public int update(Map<String, Object> data, String id) {
-        LinkedHashMap<String, Object> item = writablePost(data);
-        item.remove("id");
-        item.remove("created");
-        item.put("updated", now());
-        return db.update(item, Map.of("id", id));
+        return jpa.transaction().execute(status -> posts.findById(id).map(post -> {
+            applyWritable(post, data);
+            post.setUpdated(now());
+            posts.save(post);
+            return 1;
+        }).orElse(0));
     }
 
     public int delete(String id) {
-        comments.delete(Map.of("post_id", id));
-        return db.delete(Map.of("id", id));
+        return jpa.transaction().execute(status -> {
+            if (!posts.existsById(id)) {
+                return 0;
+            }
+            comments.deleteByPostId(id);
+            posts.deleteById(id);
+            return 1;
+        });
     }
 
     public Map<String, Object> get(String id) {
-        Map<String, Object> row = db.get("id", id);
-        return row == null ? null : format(row);
+        return posts.findById(id).map(this::format).orElse(null);
     }
 
     public List<Map<String, Object>> recent(int limit) {
-        return db.rows(RowsQuery.builder().orderBy("created").order("DESC").page(1).dump(limit).build())
+        int safeLimit = Math.max(1, limit);
+        return posts.findRecent(safeLimit)
                 .stream()
                 .map(this::format)
                 .toList();
@@ -71,11 +85,11 @@ public final class PostService {
     public SearchResult search(String text, String category, int page, int dump) {
         String normalizedText = text == null ? "" : text.trim().toLowerCase(Locale.ROOT);
         String normalizedCategory = category == null ? "" : category.trim();
-        List<Map<String, Object>> filtered = db.rows(RowsQuery.builder().orderBy("created").order("DESC").build())
+        List<Map<String, Object>> filtered = posts.findAllByOrderByCreatedDesc()
                 .stream()
-                .filter(row -> normalizedCategory.isBlank() || normalizedCategory.equals(row.get("category")))
+                .filter(row -> normalizedCategory.isBlank() || normalizedCategory.equals(row.getCategory()))
                 .filter(row -> normalizedText.isBlank()
-                        || string(row.get("title")).toLowerCase(Locale.ROOT).contains(normalizedText))
+                        || string(row.getTitle()).toLowerCase(Locale.ROOT).contains(normalizedText))
                 .map(this::format)
                 .toList();
         int safeDump = dump < 1 ? 20 : dump;
@@ -86,21 +100,23 @@ public final class PostService {
     }
 
     public List<String> categories() {
-        return db.rows(RowsQuery.builder().fields("category").build())
-                .stream()
-                .map(row -> string(row.get("category")).trim())
-                .filter(value -> !value.isBlank())
-                .distinct()
-                .sorted()
-                .toList();
+        return posts.findDistinctCategories();
     }
 
     public int count(Map<String, Object> where) {
-        return db.count(where);
+        if (where == null || where.isEmpty()) {
+            return (int) posts.count();
+        }
+        if (where.size() == 1 && where.containsKey("status")) {
+            return (int) posts.countByStatus(string(where.get("status")));
+        }
+        return (int) posts.findAll().stream()
+                .filter(post -> where.entrySet().stream().allMatch(entry -> Objects.equals(field(post, entry.getKey()), entry.getValue())))
+                .count();
     }
 
     public void seedDefaults(UserStruct users) {
-        if (db.count(Map.of()) > 0) {
+        if (posts.count() > 0) {
             return;
         }
         Map<String, Object> admin = users.seedUser("admin@example.com", "admin1234", "관리자", "010-0000-0000", "admin");
@@ -110,37 +126,57 @@ public final class PostService {
     }
 
     private void seedPost(Map<String, Object> author, String title, String category, String status, String content) {
-        LinkedHashMap<String, Object> item = new LinkedHashMap<>();
-        item.put("title", title);
-        item.put("category", category);
-        item.put("status", status);
-        item.put("content", content);
-        item.put("author_id", string(author.get("id")));
-        item.put("author_name", string(author.get("name")));
-        item.put("created", now());
-        item.put("updated", now());
-        db.insert(item);
+        create(Map.of(
+                "title", title,
+                "category", category,
+                "status", status,
+                "content", content,
+                "author_id", string(author.get("id")),
+                "author_name", string(author.get("name"))));
     }
 
-    private LinkedHashMap<String, Object> writablePost(Map<String, Object> data) {
-        LinkedHashMap<String, Object> item = new LinkedHashMap<>();
-        for (String key : List.of("id", "title", "content", "category", "author_id", "author_name", "status", "created", "updated")) {
-            if (data.containsKey(key) && data.get(key) != null) {
-                item.put(key, data.get(key));
-            }
+    private void applyWritable(PostEntity post, Map<String, Object> data) {
+        post.setTitle(valueOrDefault(data.get("title"), valueOrDefault(post.getTitle(), "Untitled")));
+        post.setContent(valueOrDefault(data.get("content"), valueOrDefault(post.getContent(), "")));
+        post.setCategory(valueOrDefault(data.get("category"), valueOrDefault(post.getCategory(), "")));
+        post.setStatus(valueOrDefault(data.get("status"), valueOrDefault(post.getStatus(), "draft")));
+        if (data.containsKey("author_id")) {
+            post.setAuthorId(string(data.get("author_id")));
         }
-        item.putIfAbsent("title", "Untitled");
-        item.putIfAbsent("content", "");
-        item.putIfAbsent("category", "");
+        if (data.containsKey("author_name")) {
+            post.setAuthorName(string(data.get("author_name")));
+        }
+    }
+
+    private Map<String, Object> format(PostEntity post) {
+        LinkedHashMap<String, Object> item = new LinkedHashMap<>();
+        item.put("id", post.getId());
+        item.put("title", post.getTitle());
+        item.put("content", post.getContent());
+        item.put("category", post.getCategory());
+        item.put("author_id", post.getAuthorId());
+        item.put("author_name", post.getAuthorName());
+        item.put("status", post.getStatus());
+        item.put("created", post.getCreated());
+        item.put("updated", post.getUpdated());
+        item.put("author", valueOrDefault(post.getAuthorName(), ""));
+        item.put("date", left(string(post.getCreated()), 10));
+        item.put("summary", left(string(post.getContent()), 120));
         return item;
     }
 
-    private Map<String, Object> format(Map<String, Object> row) {
-        LinkedHashMap<String, Object> post = new LinkedHashMap<>(row);
-        post.put("author", valueOrDefault(post.get("author_name"), ""));
-        post.put("date", left(string(post.get("created")), 10));
-        post.put("summary", left(string(post.get("content")), 120));
-        return post;
+    private Object field(PostEntity post, String key) {
+        return switch (key) {
+            case "id" -> post.getId();
+            case "title" -> post.getTitle();
+            case "category" -> post.getCategory();
+            case "author_id" -> post.getAuthorId();
+            case "author_name" -> post.getAuthorName();
+            case "status" -> post.getStatus();
+            case "created" -> post.getCreated();
+            case "updated" -> post.getUpdated();
+            default -> null;
+        };
     }
 
     private String sessionValue(String key) {

@@ -46,6 +46,9 @@ final class ProjectExtensionLoader {
                 "wiz.session.class-name"))
                 .map(List::of)
                 .orElseGet(() -> List.of(
+                        root + ".model.SessionService",
+                        root + ".model.session.SessionService",
+                        root + ".model.session.ProjectSessionService",
                         root + ".session.SessionService",
                         root + ".session.ProjectSessionService"));
     }
@@ -58,6 +61,9 @@ final class ProjectExtensionLoader {
                 "wiz.auth.class-name"))
                 .map(List::of)
                 .orElseGet(() -> List.of(
+                        root + ".model.AuthService",
+                        root + ".model.auth.AuthService",
+                        root + ".model.auth.ProjectAuthService",
                         root + ".auth.AuthService",
                         root + ".auth.ProjectAuthService"));
     }

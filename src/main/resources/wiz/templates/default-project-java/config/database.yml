@@ -1,2 +1,14 @@
-base: data/base.db
-post: data/post.db
+# Legacy database namespace kept for old WIZ project compatibility.
+#
+# The Java sample does not read this file for ORM setup. DB settings live in
+# config/application.yml under:
+# - sample.datasource.url
+# - sample.datasource.driver-class-name
+# - sample.datasource.username
+# - sample.datasource.password
+# - sample.jpa.dialect
+#
+# Keep or remove this file depending on whether migrated project code still
+# reads the legacy database namespace.
+base: data/app.db
+post: data/app.db

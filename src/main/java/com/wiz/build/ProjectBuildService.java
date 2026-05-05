@@ -196,6 +196,8 @@ public class ProjectBuildService {
 
         Path controllerRoot = project.buildRoot().resolve("src/controller");
         reconstructJavaTree(project, controllerRoot, ProjectJavaNaming.packageRoot(project.name()) + ".controller");
+        // Legacy extension locations are still compiled for existing projects.
+        // New projects should place auth/session implementations under src/model.
         reconstructJavaTree(project, project.buildRoot().resolve("src/auth"), ProjectJavaNaming.packageRoot(project.name()) + ".auth");
         reconstructJavaTree(project, project.buildRoot().resolve("src/session"), ProjectJavaNaming.packageRoot(project.name()) + ".session");
     }

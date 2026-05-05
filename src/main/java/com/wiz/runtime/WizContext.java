@@ -78,7 +78,9 @@ public class WizContext implements AutoCloseable {
     @Override
     public void close() {
         RuntimeException failure = null;
-        for (Runnable cleanupHook : cleanupHooks.reversed()) {
+        List<Runnable> hooks = new ArrayList<>(cleanupHooks);
+        cleanupHooks.clear();
+        for (Runnable cleanupHook : hooks.reversed()) {
             try {
                 cleanupHook.run();
             } catch (RuntimeException exception) {
@@ -89,7 +91,6 @@ public class WizContext implements AutoCloseable {
                 }
             }
         }
-        cleanupHooks.clear();
         if (failure != null) {
             throw failure;
         }

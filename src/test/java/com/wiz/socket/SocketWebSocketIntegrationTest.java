@@ -8,6 +8,8 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.net.http.WebSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -49,7 +51,7 @@ class SocketWebSocketIntegrationTest {
     }
 
     @Test
-    void dispatchesCompiledProjectSocketThroughSpringWebSocketEndpoint() throws Exception {
+    void dispatchesCompiledProjectSocketThroughDirectWebSocketBridgePath() throws Exception {
         ProjectContext project = new ProjectService(new PathService(WORKSPACE)).createProject("main", null, null);
         Files.writeString(project.appRoot().resolve("page.dashboard/socket.java"), dashboardSocketJava());
         BuildResult build = new ProjectBuildService().build(project, true, "bundle");
@@ -80,9 +82,82 @@ class SocketWebSocketIntegrationTest {
         webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "done").join();
     }
 
+    @Test
+    void acceptsSocketIoClientStyleNamespaceOverHttpPollingPath() throws Exception {
+        ProjectContext project = new ProjectService(new PathService(WORKSPACE)).createProject("socketio", null, null);
+        Files.writeString(project.appRoot().resolve("page.dashboard/socket.java"), dashboardSocketJava());
+        BuildResult build = new ProjectBuildService().build(project, true, "bundle");
+        assertTrue(build.success(), build.message());
+
+        HttpClient client = HttpClient.newHttpClient();
+        String base = "http://127.0.0.1:" + port + "/socket.io/?EIO=4&transport=polling";
+        String open = client.send(HttpRequest.newBuilder(URI.create(base)).GET().build(), HttpResponse.BodyHandlers.ofString()).body();
+        assertTrue(open.startsWith("0"), open);
+        Map<String, Object> openPacket = OBJECT_MAPPER.readValue(open.substring(1), new TypeReference<>() {
+        });
+        String sid = openPacket.get("sid").toString();
+
+        post(client, base + "&sid=" + sid, "40/wiz/app/socketio/page.dashboard,");
+        String connect = client.send(HttpRequest.newBuilder(URI.create(base + "&sid=" + sid)).GET().build(), HttpResponse.BodyHandlers.ofString()).body();
+        assertTrue(connect.startsWith("40/wiz/app/socketio/page.dashboard,"), connect);
+
+        post(client, base + "&sid=" + sid, "42/wiz/app/socketio/page.dashboard,[\"join\",{\"id\":\"room-it\"}]");
+        String join = client.send(HttpRequest.newBuilder(URI.create(base + "&sid=" + sid)).GET().build(), HttpResponse.BodyHandlers.ofString()).body();
+        assertTrue(join.startsWith("42/wiz/app/socketio/page.dashboard,"), join);
+        assertTrue(join.contains("\"join\""), join);
+        assertTrue(join.contains("\"room-it\""), join);
+    }
+
+    @Test
+    void broadcastsRoomResultToJoinedWebSocketSessions() throws Exception {
+        ProjectContext project = new ProjectService(new PathService(WORKSPACE)).createProject("broadcast", null, null);
+        Files.writeString(project.appRoot().resolve("page.dashboard/socket.java"), broadcastSocketJava());
+        BuildResult build = new ProjectBuildService().build(project, true, "bundle");
+        assertTrue(build.success(), build.message());
+
+        QueueListener first = new QueueListener();
+        WebSocket firstSocket = HttpClient.newHttpClient()
+                .newWebSocketBuilder()
+                .buildAsync(URI.create("ws://127.0.0.1:" + port + "/wiz/ws/app/broadcast/page.dashboard"), first)
+                .join();
+        QueueListener second = new QueueListener();
+        WebSocket secondSocket = HttpClient.newHttpClient()
+                .newWebSocketBuilder()
+                .buildAsync(URI.create("ws://127.0.0.1:" + port + "/wiz/ws/app/broadcast/page.dashboard"), second)
+                .join();
+
+        assertEquals("connect", envelope(first.nextMessage()).get("event"));
+        assertEquals("connect", envelope(second.nextMessage()).get("event"));
+
+        firstSocket.sendText("{\"event\":\"join\",\"data\":{\"id\":\"room-it\"}}", true).join();
+        secondSocket.sendText("{\"event\":\"join\",\"data\":{\"id\":\"room-it\"}}", true).join();
+        assertEquals("join", envelope(first.nextMessage()).get("event"));
+        assertEquals("join", envelope(second.nextMessage()).get("event"));
+
+        firstSocket.sendText("{\"event\":\"send\",\"data\":{\"id\":\"room-it\",\"text\":\"hello room\"}}", true).join();
+        Map<String, Object> firstMessage = envelope(first.nextMessage());
+        Map<String, Object> secondMessage = envelope(second.nextMessage());
+        assertEquals("chat.message", firstMessage.get("event"));
+        assertEquals("chat.message", secondMessage.get("event"));
+        assertEquals("room-it", firstMessage.get("room"));
+        assertTrue(firstMessage.get("message").toString().contains("hello room"));
+        assertTrue(secondMessage.get("message").toString().contains("hello room"));
+
+        firstSocket.sendClose(WebSocket.NORMAL_CLOSURE, "done").join();
+        secondSocket.sendClose(WebSocket.NORMAL_CLOSURE, "done").join();
+    }
+
     private static Map<String, Object> envelope(String message) throws IOException {
         return OBJECT_MAPPER.readValue(message, new TypeReference<>() {
         });
+    }
+
+    private static void post(HttpClient client, String uri, String body) throws IOException, InterruptedException {
+        HttpResponse<String> response = client.send(HttpRequest.newBuilder(URI.create(uri))
+                .header("Content-Type", "text/plain;charset=UTF-8")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, response.statusCode(), response.body());
     }
 
     private static Path workspace() {
@@ -114,6 +189,37 @@ class SocketWebSocketIntegrationTest {
                 + "        String room = payload.get(\"id\").toString();\n"
                 + "        rooms.join(session, room);\n"
                 + "        return new SocketEventResult(true, \"join\", room);\n"
+                + "    }\n"
+                + "}\n";
+    }
+
+    private String broadcastSocketJava() {
+        return "import java.util.Map;\n"
+                + "import com.wiz.socket.SocketController;\n"
+                + "import com.wiz.socket.SocketEventHandler;\n"
+                + "import com.wiz.socket.SocketEventResult;\n"
+                + "import com.wiz.socket.SocketRoomRegistry;\n"
+                + "import com.wiz.socket.SocketSession;\n\n"
+                + "public final class PageDashboardSocketController implements SocketController {\n"
+                + "    public String appId() { return \"page.dashboard\"; }\n"
+                + "    public Map<String, SocketEventHandler> handlers() {\n"
+                + "        return Map.of(\"connect\", this::connect, \"join\", this::join, \"send\", this::send, \"disconnect\", this::disconnect);\n"
+                + "    }\n"
+                + "    private SocketEventResult connect(SocketSession session, Map<String, Object> payload, SocketRoomRegistry rooms) {\n"
+                + "        return new SocketEventResult(true, \"connect\", \"connected\");\n"
+                + "    }\n"
+                + "    private SocketEventResult join(SocketSession session, Map<String, Object> payload, SocketRoomRegistry rooms) {\n"
+                + "        String room = payload.get(\"id\").toString();\n"
+                + "        rooms.join(session, room);\n"
+                + "        return new SocketEventResult(true, \"join\", room);\n"
+                + "    }\n"
+                + "    private SocketEventResult send(SocketSession session, Map<String, Object> payload, SocketRoomRegistry rooms) {\n"
+                + "        String room = payload.get(\"id\").toString();\n"
+                + "        return new SocketEventResult(true, \"chat.message\", payload.get(\"text\").toString(), room);\n"
+                + "    }\n"
+                + "    private SocketEventResult disconnect(SocketSession session, Map<String, Object> payload, SocketRoomRegistry rooms) {\n"
+                + "        rooms.leaveAll(session);\n"
+                + "        return new SocketEventResult(true, \"disconnect\", \"disconnected\");\n"
                 + "    }\n"
                 + "}\n";
     }

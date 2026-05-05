@@ -14,7 +14,7 @@ export class Component implements OnInit {
     public async ngOnInit() {
         await this.service.init();
         let check = await this.service.auth.check();
-        if (check) return location.href = "/";
+        if (check) return location.href = "/dashboard";
     }
 
     public async alert(message: string, status: string = 'error') {
@@ -44,7 +44,7 @@ export class Component implements OnInit {
         let { code, data } = await wiz.call("login", user);
 
         if (code == 200) {
-            location.href = "/";
+            location.href = "/dashboard";
             await this.service.render();
         } else {
             await this.alert(data.message || "로그인에 실패했습니다.", 'error');

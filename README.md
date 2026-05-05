@@ -16,13 +16,13 @@ cd /root/workspace/wiz-java/wiz-spring
 실행 파일은 `target/wiz-spring-*.jar`에 생성됩니다.
 
 ```bash
-jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.0.1-SNAPSHOT.jar
+jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.0.2.jar
 workspace=/tmp/wiz-spring-demo
 
 rm -rf "$workspace"
 java -jar "$jar" create "$workspace"
 java -jar "$jar" project create --root "$workspace" --project main
-java -jar "$jar" run --root "$workspace" --host 127.0.0.1 --port 3000
+java -jar "$jar" run --root "$workspace" --port 3000
 ```
 
 `project create`는 기본적으로 jar에 내장된 Java sample project를 생성한 뒤 clean bundle build까지 수행합니다. 생성만 하고 싶으면 `--skip-build`를 붙입니다.
@@ -34,7 +34,7 @@ java -jar "$jar" project create --root "$workspace" --project main --skip-build
 자주 쓸 때는 shell alias를 두면 편합니다.
 
 ```bash
-alias wiz-spring='java -jar /root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.0.1-SNAPSHOT.jar'
+alias wiz-spring='java -jar /root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.0.2.jar'
 
 wiz-spring create ./demo
 wiz-spring project create --root ./demo --project main
@@ -69,7 +69,7 @@ Python WIZ의 `pip install season`처럼 runtime 자체를 Python package로 설
 | Project Java API/model/controller dependency | `project/<name>/pom.xml` | `wiz project build`가 `mvn dependency:copy-dependencies`를 실행해 `target/dependency` jar를 준비하고, Java compile/runtime classpath에 포함합니다. 직접 jar를 둘 경우 `project/<name>/lib`도 인식합니다. |
 | Project Spring/runtime config | `project/<name>/config/application.yml` | `wiz run` 시작 시 workspace `config/application.yml` 다음으로 로드됩니다. `server.port`, datasource, project extension class 등 project별 설정을 여기에 둡니다. |
 
-runtime의 핵심 정의 파일은 [`pom.xml`](pom.xml)입니다. 여기에는 Spring Boot, WebMVC, WebSocket, picocli 같은 core runtime dependency만 둡니다. SQLite ORM, SMTP, project별 SDK처럼 app/package마다 달라지는 dependency는 각 project의 `pom.xml`에 둡니다. Angular sample dependency는 내장 sample의 `src/angular/package.json`에 있고, build 시 `npm ci` 또는 `npm install` 후 Angular CLI `ng build`를 실행합니다.
+runtime의 핵심 정의 파일은 [`pom.xml`](pom.xml)입니다. 여기에는 Spring Boot, WebMVC, WebSocket, picocli 같은 core runtime dependency만 둡니다. JPA/Hibernate, SMTP, project별 SDK처럼 app/package마다 달라지는 dependency는 각 project의 `pom.xml`에 둡니다. Angular sample dependency는 내장 sample의 `src/angular/package.json`에 있고, build 시 `npm ci` 또는 `npm install` 후 Angular CLI `ng build`를 실행합니다.
 
 ## CLI 지원 범위
 
@@ -83,7 +83,7 @@ runtime의 핵심 정의 파일은 [`pom.xml`](pom.xml)입니다. 여기에는 S
 | `wiz project list` | 지원. workspace의 project 목록을 출력합니다. |
 | `wiz project delete` | 지원. 지정 project를 삭제합니다. |
 | `wiz project export` | 지원. project를 `.wizproject` archive로 내보냅니다. |
-| `wiz run` | 지원. `run --root --host --port --project`로 Spring server를 시작합니다. 기본 포트는 `3000`이며, `--host`/`--port`가 없으면 workspace/project `application.yml` 값을 사용합니다. `--bundle`, `--log` compatibility option도 받습니다. |
+| `wiz run` | 지원. `run --root --host --port --project`로 Spring server를 시작합니다. 기본 host는 `0.0.0.0`, 기본 포트는 `3000`이며, `--host`/`--port`가 없으면 workspace/project `application.yml` 값으로 override할 수 있습니다. `--bundle`, `--log` compatibility option도 받습니다. |
 | `wiz bundle` | 지원. 이미 build된 project bundle을 deploy/runtime bundle directory로 묶습니다. |
 | `wiz kill` | 지원. Spring WIZ `run` process만 대상으로 종료하며 `--dry-run`을 지원합니다. |
 | `wiz project app list/create/delete` | 지원. `src/app` 및 portal app skeleton을 생성/삭제합니다. |
@@ -110,15 +110,17 @@ Spring runtime은 다음 기능을 지원합니다.
 | Controller hook | built-in `base`, `user`, `admin` controller와 project-local Java controller hook을 지원합니다. |
 | Route | `src/route/*/app.json` metadata와 `route.java` handler dispatch를 지원합니다. |
 | Config | project source에서 `config/*.yml` namespace load와 compatibility key normalization을 지원합니다. Spring server 설정은 workspace `config/application.yml`과 project `config/application.yml`에서 override할 수 있습니다. |
-| Session/Auth | core는 session/auth facade와 user/admin guard 기본 구현만 제공합니다. 실제 구현은 project `src/session/SessionService.java`, `src/auth/AuthService.java` convention 또는 `application.yml`의 `wiz.session.service-class`, `wiz.auth.service-class`로 덮어쓸 수 있습니다. `/auth/check`, `/auth/logout` endpoint는 기본 sample project의 route source가 정의하며, `/auth/check`는 비로그인도 HTTP `200`으로 응답하고 body의 `data.status`로 인증 여부를 표현합니다. |
-| Model/Struct | core는 `wiz.models()`와 `src/model`, `src/portal/{portal}/model` convention만 제공합니다. SQLite ORM helper는 기본 sample project 내부 `src/portal/season/model/orm`에 포함되어 project별로 수정할 수 있습니다. |
-| Portal package backend | PWA route, SMTP, ORM 같은 portal/package backend 구현은 core가 아니라 project source에 둡니다. 기본 sample은 `/sw.js` route와 SQLite sample ORM을 project-local source와 `project pom.xml` dependency로 제공합니다. |
-| WebSocket | Socket.IO protocol server가 아니라 표준 JSON WebSocket bridge를 지원합니다. endpoint는 `/wiz/ws/app/{project}/{app_id}`입니다. socket handler는 message dispatch마다 현재 bundle을 읽으므로, `socket.java` 수정 후 `project build`가 끝나면 서버 재시작 없이 다음 메시지/연결부터 새 handler가 반영됩니다. |
+| Session/Auth | core는 session/auth facade와 user/admin guard 기본 구현만 제공합니다. 실제 구현은 project `src/model/SessionService.java`, `src/model/AuthService.java` convention 또는 `application.yml`의 `wiz.session.service-class`, `wiz.auth.service-class`로 덮어쓸 수 있습니다. 기존 project 호환을 위해 `src/model/session`, `src/model/auth`, `src/session`, `src/auth`도 fallback으로 읽습니다. `/auth/check`, `/auth/logout` endpoint는 기본 sample project의 route source가 정의하며, `/auth/check`는 비로그인도 HTTP `200`으로 응답하고 body의 `data.status`로 인증 여부를 표현합니다. |
+| Model/Struct | core는 `wiz.models()`와 `src/model`, `src/portal/{portal}/model` convention만 제공합니다. 기본 sample의 DB 공통 설정은 `src/portal/season/model/orm`, password helper는 `src/portal/season/model/security`에 숨겨져 있고, app/domain 쪽은 entity 내부 `Repository`를 가져와 쓰는 구조입니다. |
+| Portal package backend | PWA route, SMTP, ORM 같은 portal/package backend 구현은 core가 아니라 project source에 둡니다. 기본 sample은 `/sw.js` route와 JPA/Hibernate sample ORM을 project-local source와 `project pom.xml` dependency로 제공합니다. |
+| Socket | 기존 frontend 패턴처럼 `wiz.socket()`이 HTTP(S) namespace(`/wiz/app/{project}/{app_id}`)로 연결됩니다. Spring core는 Socket.IO v4 HTTP long-polling handshake(`/socket.io/`)를 받아 project-local `socket.java` handler로 dispatch합니다. socket handler는 message dispatch마다 현재 bundle을 읽으므로, `socket.java` 수정 후 `project build`가 끝나면 서버 재시작 없이 다음 메시지/연결부터 새 handler가 반영됩니다. |
 | Build marker | `bundle/.wiz-build.json`에 build phase, Java/runtime version, frontend mode, artifact mtime을 기록합니다. |
 
 ## Project 생성과 import
 
 기본 Java sample project는 jar 내부 resource(`/wiz/templates/default-project-java/`)에서 생성됩니다. source는 압축 파일이 아니라 풀린 디렉터리와 manifest(`/wiz/templates/default-project-java.files`)로 관리하므로 git diff에서 변경 내용을 바로 확인할 수 있습니다. 따라서 별도의 `wiz-sample-project-java` 디렉토리가 없어도 됩니다.
+
+기본 sample에는 `/chat` 페이지가 포함되어 있으며, `view.ts`는 기존 WIZ 패턴대로 `wiz.socket()`을 사용합니다. `src/app/page.chat/socket.java`는 HTTP(S) namespace(`/wiz/app/{project}/page.chat`)를 통해 간단한 lobby 채팅을 제공합니다.
 
 기본 Java sample project:
 
@@ -220,7 +222,7 @@ wiz:
     service-class: com.example.project.session.CustomSessionService
 ```
 
-package declaration이 없는 기본 project source는 `src/auth/AuthService.java`가 `com.wiz.project.{project}.auth.AuthService`, `src/session/SessionService.java`가 `com.wiz.project.{project}.session.SessionService`로 build됩니다. 이 convention을 쓰면 `application.yml`에 class 이름을 쓰지 않아도 자동으로 로드됩니다.
+package declaration이 없는 기본 project source는 `src/model/AuthService.java`가 `com.wiz.project.{project}.model.AuthService`, `src/model/SessionService.java`가 `com.wiz.project.{project}.model.SessionService`로 build됩니다. 이 convention을 쓰면 `application.yml`에 class 이름을 쓰지 않아도 자동으로 로드됩니다. 기존 project 호환용으로 `src/model/auth`, `src/model/session`, `src/auth`, `src/session` 위치도 계속 fallback 로드됩니다.
 
 ## Route와 Socket Java source
 
@@ -255,7 +257,7 @@ cd /root/workspace/wiz-java/wiz-spring
 
 최근 검증 기준:
 
-- `./mvnw test`: 122 tests
+- `./mvnw test`: 124 tests
 - `scripts/contract-spring-http.sh`: 15 contract tests
 - `scripts/e2e-spring-smoke.sh`: Java sample create/build/run smoke
 
@@ -277,13 +279,13 @@ WIZ Spring Runtime is a Java Spring port based on the Python WIZ `2.5.2` runtime
 cd /root/workspace/wiz-java/wiz-spring
 ./mvnw clean package
 
-jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.0.1-SNAPSHOT.jar
+jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.0.2.jar
 workspace=/tmp/wiz-spring-demo
 
 rm -rf "$workspace"
 java -jar "$jar" create "$workspace"
 java -jar "$jar" project create --root "$workspace" --project main
-java -jar "$jar" run --root "$workspace" --host 127.0.0.1 --port 3000
+java -jar "$jar" run --root "$workspace" --port 3000
 ```
 
 `project create` uses the Java sample project embedded in the jar and runs an initial clean bundle build by default. Use `--skip-build` to scaffold/import sources only.
@@ -305,8 +307,8 @@ WIZ Spring is distributed as a Spring Boot jar, not as a Python package. Core ru
 
 ### Command Coverage
 
-Supported commands are `create`, `run`, `bundle`, `kill`, `service`, `project create`, `project build`, `project list`, `project delete`, `project export`, `project app`, `project controller`, `project route`, `project package`, and `project npm`. Separate `wiz server`, web IDE, plugin management, Socket.IO protocol server compatibility, and Python backend auto-conversion/execution are outside the Spring port scope.
+Supported commands are `create`, `run`, `bundle`, `kill`, `service`, `project create`, `project build`, `project list`, `project delete`, `project export`, `project app`, `project controller`, `project route`, `project package`, and `project npm`. Separate `wiz server`, web IDE, plugin management, and Python backend auto-conversion/execution are outside the Spring port scope.
 
 ### Runtime Coverage
 
-The runtime supports static SPA serving from `bundle/www`, app-local Java APIs, Java route handlers, controller hooks, config/session/auth facades, project-local model conventions, build markers, and a standard JSON WebSocket bridge at `/wiz/ws/app/{project}/{app_id}`. SQLite ORM/PWA/SMTP-style portal package backends belong to project source, not the core jar. Auth/session implementations can be supplied by project classes or configured in project `application.yml`. Socket handlers are loaded from the current bundle for each dispatch, so rebuilding a changed `socket.java` is enough for the next message/connection to use the new handler without restarting the Spring server.
+The runtime supports static SPA serving from `bundle/www`, app-local Java APIs, Java route handlers, controller hooks, config/session/auth facades, project-local model conventions, build markers, and Socket.IO-client-compatible `wiz.socket()` connections over HTTP(S) namespace URLs such as `/wiz/app/{project}/{app_id}` using Engine.IO HTTP long-polling. JPA/Hibernate/PWA/SMTP-style portal package backends belong to project source, not the core jar. Auth/session implementations can be supplied by project classes under `src/model/AuthService.java`, `src/model/SessionService.java`, or configured in project `application.yml`. Socket handlers are loaded from the current bundle for each dispatch, so rebuilding a changed `socket.java` is enough for the next message/connection to use the new handler without restarting the Spring server.

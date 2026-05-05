@@ -1,10 +1,71 @@
 # Project-local Spring Boot and WIZ runtime overrides.
 #
-# These values are loaded by `wiz run` after the workspace config and before
-# command-line options such as `--port`.
+# Load order:
+# 1. wiz-spring core defaults
+# 2. workspace config/application.yml
+# 3. project/<name>/config/application.yml, this file
+# 4. CLI options such as `wiz-spring run --host --port`
+#
+# The sample project keeps DB/auth/session implementation in project source.
+# Change these values per project; wiz-spring core should not need edits.
 server:
+  # Default WIZ port is 3000. `wiz-spring run --port` overrides this.
   port: 3000
+  # Core default host is 0.0.0.0. Use 127.0.0.1 for local-only binding.
+  # `wiz-spring run --host` overrides this.
+  # address: 0.0.0.0
 
 wiz:
   project:
+    # Default project selected when the request has no project cookie.
     default-name: main
+    # Cookie names can be changed when several WIZ runtimes share a domain.
+    # cookie-name: season-wiz-project
+    # devmode-cookie-name: season-wiz-devmode
+
+  # Auth/session services are auto-detected from:
+  # - src/model/AuthService.java
+  # - src/model/SessionService.java
+  # Set explicit class names only when you move them elsewhere.
+  # auth:
+  #   service-class: com.wiz.project.main.model.AuthService
+  # session:
+  #   service-class: com.wiz.project.main.model.SessionService
+
+sample:
+  # Sample-project database settings.
+  #
+  # Default is SQLite so a freshly created project runs without an external DB.
+  # To use MySQL or PostgreSQL:
+  # 1. Add the matching JDBC driver dependency in pom.xml.
+  # 2. Replace url/driver-class-name/username/password below.
+  # 3. Set sample.jpa.dialect for the selected database.
+  datasource:
+    # SQLite default:
+    url: jdbc:sqlite:data/app.db
+    driver-class-name: org.sqlite.JDBC
+    # username:
+    # password:
+
+    # MySQL example:
+    # url: jdbc:mysql://localhost:3306/wiz_sample?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC
+    # driver-class-name: com.mysql.cj.jdbc.Driver
+    # username: wiz
+    # password: change-me
+
+    # PostgreSQL example:
+    # url: jdbc:postgresql://localhost:5432/wiz_sample
+    # driver-class-name: org.postgresql.Driver
+    # username: wiz
+    # password: change-me
+
+  jpa:
+    # Hibernate dialect default for SQLite.
+    # MySQL: org.hibernate.dialect.MySQLDialect
+    # PostgreSQL: org.hibernate.dialect.PostgreSQLDialect
+    dialect: org.hibernate.community.dialect.SQLiteDialect
+    # update keeps the sample easy to start. Prefer validate or none in production.
+    hbm2ddl-auto: update
+    # Set true temporarily when debugging generated SQL.
+    show-sql: false
+    format-sql: false

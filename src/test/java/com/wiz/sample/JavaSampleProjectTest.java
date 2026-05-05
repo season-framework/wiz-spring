@@ -22,6 +22,11 @@ import com.wiz.runtime.ProjectRegistry;
 import com.wiz.runtime.WizRequest;
 import com.wiz.runtime.WizResult;
 import com.wiz.runtime.WizRuntime;
+import com.wiz.socket.ProjectSocketDispatcher;
+import com.wiz.socket.SocketEventResult;
+import com.wiz.socket.SocketNamespace;
+import com.wiz.socket.SocketRoomRegistry;
+import com.wiz.socket.SocketSession;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -45,6 +50,17 @@ class JavaSampleProjectTest {
         BuildResult build = new ProjectBuildService().build(project, true, "bundle");
         assertTrue(build.success(), build.message());
         assertTrue(Files.exists(project.bundleRoot().resolve("project-api.jar")));
+        assertTrue(Files.exists(project.bundleRoot().resolve("classes/com/wiz/project/main/socket/PageChatSocketController.class")));
+
+        SocketRoomRegistry rooms = new SocketRoomRegistry();
+        ProjectSocketDispatcher socketDispatcher = new ProjectSocketDispatcher(new PathService(workspace), rooms);
+        SocketNamespace chatNamespace = new SocketNamespace("main", "page.chat");
+        SocketSession chatSession = new SocketSession("chat-1", chatNamespace);
+        assertTrue(socketDispatcher.dispatch(chatSession, "join", Map.of("room", "lobby")).accepted());
+        SocketEventResult chat = socketDispatcher.dispatch(chatSession, "send", Map.of("room", "lobby", "name", "Admin", "text", "hello"));
+        assertEquals("chat.message", chat.event());
+        assertEquals("lobby", chat.room());
+        assertTrue(chat.message().contains("hello"));
 
         AppApiDispatcher dispatcher = dispatcher(workspace);
         MockHttpSession session = new MockHttpSession();

@@ -38,7 +38,7 @@ public class RunCommand implements Callable<Integer> {
         if (dryRun) {
             System.out.println("root=" + resolvedRoot);
             System.out.println("project=" + (project == null || project.isBlank() ? "<workspace/application default>" : project));
-            System.out.println("host=" + (host == null || host.isBlank() ? "<application.yml>" : host));
+            System.out.println("host=" + (host == null || host.isBlank() ? "<application.yml/default 0.0.0.0>" : host));
             System.out.println("port=" + (port == null ? "<application.yml>" : port));
             System.out.println("bundle=" + bundle);
             if (log != null) {

@@ -1,6 +1,7 @@
 import com.wiz.project.main.model.struct.UserStruct;
 import com.wiz.project.main.portal.post.model.struct.CommentService;
 import com.wiz.project.main.portal.post.model.struct.PostService;
+import com.wiz.project.main.portal.season.model.orm.Jpa;
 import com.wiz.runtime.WizContext;
 
 public final class PostStruct {
@@ -10,9 +11,22 @@ public final class PostStruct {
     private final CommentService comment;
 
     public PostStruct(WizContext wiz) {
+        this(wiz, new Jpa(wiz), true);
+    }
+
+    public PostStruct(WizContext wiz, Jpa jpa) {
+        this(wiz, jpa, false);
+    }
+
+    private PostStruct(WizContext wiz, Jpa jpa, boolean seed) {
         this.wiz = wiz;
-        this.post = new PostService(wiz);
-        this.comment = new CommentService(wiz);
+        this.post = new PostService(wiz, jpa);
+        this.comment = new CommentService(wiz, jpa);
+        if (seed) {
+            UserStruct users = new UserStruct(wiz, jpa);
+            users.seedDefaults();
+            seedDefaults(users);
+        }
     }
 
     public PostService post() {

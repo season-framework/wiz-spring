@@ -7,8 +7,28 @@
         "darkMode": "Dark mode",
         "menu": "Menu",
         "dashboard": "Dashboard",
+        "chat": "Chat",
         "posts": "Posts",
         "members": "Members"
+    },
+    "chat": {
+        "title": "Chat",
+        "room": "Room",
+        "empty": "No messages yet.",
+        "placeholder": "Enter a message",
+        "send": "Send",
+        "panelTitle": "Connection",
+        "user": "User",
+        "connection": "Status",
+        "connected": "Connected.",
+        "joined": "Joined the chat room.",
+        "disconnected": "Disconnected.",
+        "error": "Connection error.",
+        "status": {
+            "connecting": "Connecting",
+            "connected": "Connected",
+            "disconnected": "Disconnected"
+        }
     },
     "post": {
         "detail": {

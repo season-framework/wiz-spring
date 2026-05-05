@@ -27,18 +27,16 @@ class ProjectExtensionLoaderTest {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
         ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
-        Files.createDirectories(project.sourceRoot().resolve("auth"));
-        Files.createDirectories(project.sourceRoot().resolve("session"));
-        Files.writeString(project.sourceRoot().resolve("auth/AuthService.java"), authServiceJava());
-        Files.writeString(project.sourceRoot().resolve("session/SessionService.java"), sessionServiceJava());
+        Files.writeString(project.modelRoot().resolve("AuthService.java"), authServiceJava());
+        Files.writeString(project.modelRoot().resolve("SessionService.java"), sessionServiceJava());
 
         BuildResult build = new ProjectBuildService().build(project, true, "bundle");
         assertTrue(build.success(), build.message());
 
         MockHttpSession httpSession = new MockHttpSession();
         try (WizContext context = new WizContext(WizRequest.builder().session(httpSession).build(), new WizResponse(), project)) {
-            assertEquals("com.wiz.project.main.auth.AuthService", context.auth().getClass().getName());
-            assertEquals("com.wiz.project.main.session.SessionService", context.session().getClass().getName());
+            assertEquals("com.wiz.project.main.model.AuthService", context.auth().getClass().getName());
+            assertEquals("com.wiz.project.main.model.SessionService", context.session().getClass().getName());
             ResponseEnvelope envelope = (ResponseEnvelope) context.auth().check(context).entity();
             assertEquals(Map.of("projectAuth", true), envelope.data());
         }

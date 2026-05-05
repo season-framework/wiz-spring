@@ -18,7 +18,7 @@ public final class PageMembersApi {
             return wiz.response().status(400, Map.of("message", "이메일을 입력해주세요."));
         }
         Struct struct = wiz.models().get("struct", Struct.class);
-        if (struct.user().db().get("email", email.toLowerCase(java.util.Locale.ROOT)) != null) {
+        if (struct.user().existsEmail(email.toLowerCase(java.util.Locale.ROOT))) {
             return wiz.response().status(400, Map.of("message", "이미 등록된 사용자입니다."));
         }
         struct.user().create(Map.of(
@@ -48,7 +48,7 @@ public final class PageMembersApi {
             return wiz.response().status(400, Map.of("message", "ID가 필요합니다."));
         }
         Struct struct = wiz.models().get("struct", Struct.class);
-        struct.user().db().delete(Map.of("id", id));
+        struct.user().delete(id);
         return wiz.response().status(200);
     }
 }

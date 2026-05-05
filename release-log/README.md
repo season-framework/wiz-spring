@@ -5,6 +5,6 @@
 | 버전 | 상태 | 기준 |
 |------|------|------|
 | [`0.0.1`](0.0.1.md) | tagged | 최초 Spring Boot 포팅 태그 |
-| [`0.0.2-unreleased`](0.0.2-unreleased.md) | unreleased | 현재 작업 브랜치의 후속 포팅 내용 |
+| [`0.0.2`](0.0.2.md) | ready | CLI parity, project-local runtime boundary, embedded Java sample project |
 
 릴리즈를 실제로 배포할 때는 `pom.xml`의 `<version>`과 Git tag, GitHub/GitLab release note가 이 로그와 일치해야 한다.

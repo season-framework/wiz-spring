@@ -12,7 +12,7 @@ Spring WIZ runtime에서 실행되는 Java backend 샘플 프로젝트입니다.
 | carol@example.com | carol123 | Carol Lee | editor |
 | dave@example.com | dave1234 | Dave Choi | viewer |
 
-The Java Struct layer seeds these accounts and starter posts idempotently on first API access.
+The Java Struct layer seeds these accounts and starter posts idempotently on first API access. The login page also shows the admin sample account so a freshly generated project can be tested immediately.
 
 ## Source Layout
 
@@ -20,6 +20,7 @@ The Java Struct layer seeds these accounts and starter posts idempotently on fir
 src/
   app/
     page.access/api.java
+    page.chat/socket.java
     page.dashboard/api.java
     page.members/api.java
     page.mypage/api.java
@@ -28,6 +29,8 @@ src/
     UserController.java
     AdminController.java
   model/
+    AuthService.java
+    SessionService.java
     Struct.java
     struct/UserStruct.java
     db/UserEntity.java
@@ -39,9 +42,16 @@ src/
     model/struct/CommentService.java
     model/db/PostEntity.java
     model/db/CommentEntity.java
+  portal/season/
+    model/orm/Jpa.java
+    model/orm/JpaConfig.java
+    model/orm/Ids.java
+    model/security/PasswordHasher.java
 ```
 
 Frontend files such as `view.pug`, `view.ts`, `view.scss`, `app.json`, `src/angular/**`, and portal frontend assets are preserved from the original sample.
+
+Database access is project-local. This sample uses Spring ORM with JPA/Hibernate and SQLite through the project `pom.xml`; the runtime core does not contain DB/ORM implementation code. Common DB setup lives under `src/portal/season/model/orm`, and entity-specific repository helpers are nested inside each entity class. Change `config/application.yml` key `sample.datasource.url` or replace the project entity/helper classes when using another database.
 
 ## Run With Spring WIZ
 
@@ -84,3 +94,10 @@ curl -i http://127.0.0.1:3000/wiz/api/portal.post.list/search?page=1\&dump=5
 - `POST /wiz/api/portal.post.detail/delete`
 
 The `page.dashboard`, `page.members`, and `page.mypage` apps use the built-in `user` controller guard and require a session `id`. The post portal apps keep the original `base` controller metadata and populate author information from the current session when it is present.
+
+## Implemented Socket
+
+- frontend usage: `wiz.socket()`
+- HTTP(S) namespace: `/wiz/app/main/page.chat`
+- events: `connect`, `join`, `send`, `disconnect`
+- unauthenticated guests are labeled by socket session id, for example `Guest-1a2b3c`, so different browsers are distinguishable before login.

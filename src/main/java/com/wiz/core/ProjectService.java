@@ -169,7 +169,6 @@ public class ProjectService {
         writeIfMissing(project.root().resolve("pom.xml"), minimalProjectPom(project));
         writeIfMissing(project.root().resolve("package.json"), "{\n  \"type\": \"module\",\n  \"scripts\": {\n    \"build\": \"echo build placeholder\"\n  }\n}\n");
         writeIfMissing(project.configRoot().resolve("season.yml"), "auth_baseuri: /auth\n");
-        writeIfMissing(project.configRoot().resolve("database.yml"), "base: data/base.sqlite\npost: data/post.sqlite\n");
         writeIfMissing(project.assetsRoot().resolve("sample.txt"), "WIZ Java asset\n");
         writeIfMissing(project.modelRoot().resolve("README.md"), "Project model and struct Java sources live here.\n");
         writeIfMissing(project.routeRoot().resolve("README.md"), "Project route handlers live here.\n");

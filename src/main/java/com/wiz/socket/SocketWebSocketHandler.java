@@ -5,6 +5,8 @@ import java.net.URI;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -21,6 +23,8 @@ public class SocketWebSocketHandler extends TextWebSocketHandler {
 
     private final ProjectSocketDispatcher dispatcher;
     private final ObjectMapper objectMapper;
+    private final Map<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
+    private final Map<String, SocketSession> socketSessions = new ConcurrentHashMap<>();
 
     @Autowired
     public SocketWebSocketHandler(ProjectSocketDispatcher dispatcher) {
@@ -34,7 +38,11 @@ public class SocketWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
-        socketSession(session).ifPresent(socket -> send(session, dispatcher.dispatch(socket, "connect", Map.of())));
+        socketSession(session).ifPresent(socket -> {
+            sessions.put(session.getId(), session);
+            socketSessions.put(session.getId(), socket);
+            sendResult(session, socket, dispatcher.dispatch(socket, "connect", Map.of()));
+        });
     }
 
     @Override
@@ -52,7 +60,7 @@ public class SocketWebSocketHandler extends TextWebSocketHandler {
                 send(session, new SocketEventResult(false, "message", "missing event"));
                 return;
             }
-            send(session, dispatcher.dispatch(socket.get(), event, ProjectSocketDispatcher.payload(envelope.get("data"))));
+            sendResult(session, socket.get(), dispatcher.dispatch(socket.get(), event, ProjectSocketDispatcher.payload(envelope.get("data"))));
         } catch (RuntimeException exception) {
             send(session, new SocketEventResult(false, "message", "invalid json message"));
         }
@@ -60,7 +68,15 @@ public class SocketWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
-        socketSession(session).ifPresent(socket -> dispatcher.dispatch(socket, "disconnect", Map.of()));
+        SocketSession socket = socketSessions.remove(session.getId());
+        sessions.remove(session.getId());
+        if (socket == null) {
+            socket = socketSession(session).orElse(null);
+        }
+        if (socket != null) {
+            dispatcher.dispatch(socket, "disconnect", Map.of());
+            dispatcher.rooms().leaveAll(socket);
+        }
     }
 
     private Optional<SocketSession> socketSession(WebSocketSession session) {
@@ -83,11 +99,32 @@ public class SocketWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
+    private void sendResult(WebSocketSession session, SocketSession socket, SocketEventResult result) {
+        if (result.room() == null || result.room().isBlank()) {
+            send(session, result);
+            return;
+        }
+        Set<String> recipients = dispatcher.rooms().members(socket.namespace(), result.room());
+        if (recipients.isEmpty()) {
+            send(session, result);
+            return;
+        }
+        for (String recipient : recipients) {
+            WebSocketSession target = sessions.get(recipient);
+            if (target != null && target.isOpen()) {
+                send(target, result);
+            }
+        }
+    }
+
     private Map<String, Object> resultEnvelope(SocketEventResult result) {
         LinkedHashMap<String, Object> envelope = new LinkedHashMap<>();
         envelope.put("event", result.event());
         envelope.put("accepted", result.accepted());
         envelope.put("message", result.message());
+        if (result.room() != null && !result.room().isBlank()) {
+            envelope.put("room", result.room());
+        }
         return envelope;
     }
 
