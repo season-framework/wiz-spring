@@ -21,6 +21,7 @@ replay_pid*
 /public/
 /ide/
 /plugin/
+/bundle/
 /var/
 /logs/
 /tmp/

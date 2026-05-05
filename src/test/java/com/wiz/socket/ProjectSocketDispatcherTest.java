@@ -41,6 +41,27 @@ class ProjectSocketDispatcherTest {
         assertFalse(dispatcher.dispatch(session, "missing", Map.of()).accepted());
     }
 
+    @Test
+    void reloadsProjectSocketHandlerAfterRebuildWithoutNewDispatcher() throws Exception {
+        Path workspace = tempDir.resolve("reload-workspace");
+        new WorkspaceService().createWorkspace(workspace);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        Path socketSource = project.appRoot().resolve("page.dashboard/socket.java");
+        java.nio.file.Files.writeString(socketSource, versionSocketJava("one"));
+        BuildResult firstBuild = new ProjectBuildService().build(project, true, "bundle");
+        assertTrue(firstBuild.success(), firstBuild.message());
+
+        ProjectSocketDispatcher dispatcher = new ProjectSocketDispatcher(new PathService(workspace), new SocketRoomRegistry());
+        SocketSession session = new SocketSession("sid-1", new SocketNamespace("main", "page.dashboard"));
+        assertTrue(dispatcher.dispatch(session, "version", Map.of()).message().contains("one"));
+
+        java.nio.file.Files.writeString(socketSource, versionSocketJava("two"));
+        BuildResult secondBuild = new ProjectBuildService().build(project, true, "bundle");
+        assertTrue(secondBuild.success(), secondBuild.message());
+
+        assertTrue(dispatcher.dispatch(session, "version", Map.of()).message().contains("two"));
+    }
+
     private String dashboardSocketJava() {
         return "import java.util.Map;\n"
                 + "import com.wiz.socket.SocketController;\n"
@@ -60,6 +81,22 @@ class ProjectSocketDispatcherTest {
                 + "        String room = payload.get(\"id\").toString();\n"
                 + "        rooms.join(session, room);\n"
                 + "        return new SocketEventResult(true, \"join\", room);\n"
+                + "    }\n"
+                + "}\n";
+    }
+
+    private String versionSocketJava(String version) {
+        return "import java.util.Map;\n"
+                + "import com.wiz.socket.SocketController;\n"
+                + "import com.wiz.socket.SocketEventHandler;\n"
+                + "import com.wiz.socket.SocketEventResult;\n"
+                + "import com.wiz.socket.SocketRoomRegistry;\n"
+                + "import com.wiz.socket.SocketSession;\n\n"
+                + "public final class PageDashboardSocketController implements SocketController {\n"
+                + "    public String appId() { return \"page.dashboard\"; }\n"
+                + "    public Map<String, SocketEventHandler> handlers() { return Map.of(\"version\", this::version); }\n"
+                + "    private SocketEventResult version(SocketSession session, Map<String, Object> payload, SocketRoomRegistry rooms) {\n"
+                + "        return new SocketEventResult(true, \"version\", \"" + version + "\");\n"
                 + "    }\n"
                 + "}\n";
     }

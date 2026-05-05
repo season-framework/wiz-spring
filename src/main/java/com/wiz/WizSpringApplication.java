@@ -16,11 +16,20 @@ public class WizSpringApplication {
 	}
 
 	public static void runServer(String root, String host, int port) {
+		runServer(root, host, port, false, null);
+	}
+
+	public static void runServer(String root, String host, int port, boolean bundle, String log) {
 		SpringApplication application = new SpringApplication(WizSpringApplication.class);
-		application.run(
-				"--wiz.root=" + root,
-				"--server.address=" + host,
-				"--server.port=" + port);
+		java.util.ArrayList<String> args = new java.util.ArrayList<>();
+		args.add("--wiz.root=" + root);
+		args.add("--server.address=" + host);
+		args.add("--server.port=" + port);
+		args.add("--wiz.bundle=" + bundle);
+		if (log != null && !log.isBlank()) {
+			args.add("--logging.file.name=" + log);
+		}
+		application.run(args.toArray(String[]::new));
 	}
 
 }

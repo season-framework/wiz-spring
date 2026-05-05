@@ -71,9 +71,16 @@ Maven은 runtime jar를 source에서 빌드할 때만 필요합니다. 이미 �
 | `wiz project list` | 지원. workspace의 project 목록을 출력합니다. |
 | `wiz project delete` | 지원. 지정 project를 삭제합니다. |
 | `wiz project export` | 지원. project를 `.wizproject` archive로 내보냅니다. |
-| `wiz run` | 지원. `run --root --host --port`로 Spring server를 시작합니다. |
+| `wiz run` | 지원. `run --root --host --port`로 Spring server를 시작합니다. `--bundle`, `--log` compatibility option도 받습니다. |
+| `wiz bundle` | 지원. 이미 build된 project bundle을 deploy/runtime bundle directory로 묶습니다. |
+| `wiz kill` | 지원. Spring WIZ `run` process만 대상으로 종료하며 `--dry-run`을 지원합니다. |
+| `wiz project app list/create/delete` | 지원. `src/app` 및 portal app skeleton을 생성/삭제합니다. |
+| `wiz project controller list/create/delete` | 지원. Java controller hook skeleton을 생성/삭제합니다. |
+| `wiz project route list/create/delete` | 지원. `route.java` skeleton을 생성/삭제합니다. |
+| `wiz project package list/create/delete` | 지원. portal package를 생성/삭제하고 목록을 출력합니다. |
+| `wiz project npm list/install/uninstall` | 지원. `src/angular/package.json` 기준 npm dependency를 조회/설치/삭제합니다. |
+| `wiz service list/regist/unregist/status/start/stop/restart` | 지원. Linux/systemd service command입니다. `regist --dry-run`으로 생성물을 미리 볼 수 있습니다. |
 | `wiz server` | 별도 CLI command로는 미지원. Spring server 실행은 `run`으로 통합했습니다. |
-| `wiz service` | 별도 daemon/service manager command는 미지원. systemd, Docker, shell script 등 운영 도구에서 packaged jar를 감싸는 방식을 권장합니다. |
 | `wiz ide`, plugin 관리 | 미지원. 현재 포팅 범위는 IDE가 아니라 runtime/build/run입니다. |
 | Python backend 자동 실행/자동 변환 | 미지원. Python project import 시 migration report와 선택적 `api.java.stub` 생성까지만 지원합니다. |
 
@@ -94,7 +101,7 @@ Spring runtime은 다음 기능을 지원합니다.
 | Session/Auth | session facade, `/auth/check`, `/auth/logout`, user/admin guard를 지원합니다. `/auth/check`는 비로그인도 HTTP `200`으로 응답하고 body의 `data.status`로 인증 여부를 표현합니다. |
 | ORM/Model/Struct | SQLite 기반 sample repository, `wiz.orm()`, `wiz.models()`, struct/model provider convention을 지원합니다. |
 | Portal season core | PWA route(`/sw.js`, manifest), season config/session model, SMTP service boundary를 제공합니다. OIDC/SAML은 placeholder 수준입니다. |
-| WebSocket | Socket.IO protocol server가 아니라 표준 JSON WebSocket bridge를 지원합니다. endpoint는 `/wiz/ws/app/{project}/{app_id}`입니다. |
+| WebSocket | Socket.IO protocol server가 아니라 표준 JSON WebSocket bridge를 지원합니다. endpoint는 `/wiz/ws/app/{project}/{app_id}`입니다. socket handler는 message dispatch마다 현재 bundle을 읽으므로, `socket.java` 수정 후 `project build`가 끝나면 서버 재시작 없이 다음 메시지/연결부터 새 handler가 반영됩니다. |
 | Build marker | `bundle/.wiz-build.json`에 build phase, Java/runtime version, frontend mode, artifact mtime을 기록합니다. |
 
 ## Project 생성과 import
@@ -255,8 +262,8 @@ java -jar "$jar" run --root "$workspace" --host 127.0.0.1 --port 8080
 
 ### Command Coverage
 
-Supported commands are `create`, `project create`, `project build`, `project list`, `project delete`, `project export`, and `run`. Separate `wiz server`, `wiz service`, web IDE, plugin management, Socket.IO protocol server compatibility, and arbitrary Python backend auto-conversion/execution are outside the current Spring port scope.
+Supported commands are `create`, `run`, `bundle`, `kill`, `service`, `project create`, `project build`, `project list`, `project delete`, `project export`, `project app`, `project controller`, `project route`, `project package`, and `project npm`. Separate `wiz server`, web IDE, plugin management, Socket.IO protocol server compatibility, and arbitrary Python backend auto-conversion/execution are outside the current Spring port scope.
 
 ### Runtime Coverage
 
-The runtime supports static SPA serving from `bundle/www`, app-local Java APIs, Java route handlers, controller hooks, config/session/auth facades, SQLite-backed sample ORM/model helpers, PWA routes, build markers, and a standard JSON WebSocket bridge at `/wiz/ws/app/{project}/{app_id}`.
+The runtime supports static SPA serving from `bundle/www`, app-local Java APIs, Java route handlers, controller hooks, config/session/auth facades, SQLite-backed sample ORM/model helpers, PWA routes, build markers, and a standard JSON WebSocket bridge at `/wiz/ws/app/{project}/{app_id}`. Socket handlers are loaded from the current bundle for each dispatch, so rebuilding a changed `socket.java` is enough for the next message/connection to use the new handler without restarting the Spring server.

@@ -23,6 +23,12 @@ public class RunCommand implements Callable<Integer> {
     @Option(names = "--dry-run", description = "Print resolved run settings without starting the server.")
     private boolean dryRun;
 
+    @Option(names = "--bundle", description = "Run in bundle compatibility mode.")
+    private boolean bundle;
+
+    @Option(names = "--log", description = "Write Spring logs to the given file.")
+    private Path log;
+
     @Override
     public Integer call() {
         Path resolvedRoot = root.toAbsolutePath().normalize();
@@ -30,9 +36,13 @@ public class RunCommand implements Callable<Integer> {
             System.out.println("root=" + resolvedRoot);
             System.out.println("host=" + host);
             System.out.println("port=" + port);
+            System.out.println("bundle=" + bundle);
+            if (log != null) {
+                System.out.println("log=" + log.toAbsolutePath().normalize());
+            }
             return 0;
         }
-        WizSpringApplication.runServer(resolvedRoot.toString(), host, port);
+        WizSpringApplication.runServer(resolvedRoot.toString(), host, port, bundle, log == null ? null : log.toAbsolutePath().normalize().toString());
         return 0;
     }
 }

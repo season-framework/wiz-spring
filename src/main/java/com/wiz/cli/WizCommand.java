@@ -12,7 +12,10 @@ import picocli.CommandLine.Command;
         subcommands = {
                 CreateCommand.class,
                 ProjectCommand.class,
-                RunCommand.class
+                RunCommand.class,
+                BundleCommand.class,
+                KillCommand.class,
+                ServiceCommand.class
         })
 public class WizCommand implements Callable<Integer> {
 
