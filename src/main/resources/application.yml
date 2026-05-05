@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: wiz-spring
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+wiz:
+  root: .
+  default-project: main
+  compatibility:
+    python-config: false

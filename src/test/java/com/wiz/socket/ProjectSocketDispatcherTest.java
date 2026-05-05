@@ -1,0 +1,66 @@
+package com.wiz.socket;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.nio.file.Path;
+import java.util.Map;
+
+import com.wiz.build.BuildResult;
+import com.wiz.build.ProjectBuildService;
+import com.wiz.core.ProjectService;
+import com.wiz.core.WorkspaceService;
+import com.wiz.runtime.PathService;
+import com.wiz.runtime.ProjectContext;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+class ProjectSocketDispatcherTest {
+
+    @TempDir
+    Path tempDir;
+
+    @Test
+    void dispatchesProjectSocketJavaThroughCompiledBundle() throws Exception {
+        Path workspace = tempDir.resolve("workspace");
+        new WorkspaceService().createWorkspace(workspace);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        java.nio.file.Files.writeString(project.appRoot().resolve("page.dashboard/socket.java"), dashboardSocketJava());
+        BuildResult build = new ProjectBuildService().build(project, true, "bundle");
+        assertTrue(build.success(), build.message());
+
+        SocketRoomRegistry rooms = new SocketRoomRegistry();
+        ProjectSocketDispatcher dispatcher = new ProjectSocketDispatcher(new PathService(workspace), rooms);
+        SocketNamespace namespace = new SocketNamespace("main", "page.dashboard");
+        SocketSession session = new SocketSession("sid-1", namespace);
+
+        assertTrue(dispatcher.dispatch(session, "connect", Map.of()).accepted());
+        assertTrue(dispatcher.dispatch(session, "join", Map.of("id", "room-1")).accepted());
+        assertTrue(rooms.contains(namespace, "room-1", "sid-1"));
+        assertFalse(dispatcher.dispatch(session, "missing", Map.of()).accepted());
+    }
+
+    private String dashboardSocketJava() {
+        return "import java.util.Map;\n"
+                + "import com.wiz.socket.SocketController;\n"
+                + "import com.wiz.socket.SocketEventHandler;\n"
+                + "import com.wiz.socket.SocketEventResult;\n"
+                + "import com.wiz.socket.SocketRoomRegistry;\n"
+                + "import com.wiz.socket.SocketSession;\n\n"
+                + "public final class PageDashboardSocketController implements SocketController {\n"
+                + "    public String appId() { return \"page.dashboard\"; }\n"
+                + "    public Map<String, SocketEventHandler> handlers() {\n"
+                + "        return Map.of(\"connect\", this::connect, \"join\", this::join);\n"
+                + "    }\n"
+                + "    private SocketEventResult connect(SocketSession session, Map<String, Object> payload, SocketRoomRegistry rooms) {\n"
+                + "        return new SocketEventResult(true, \"connect\", \"connected\");\n"
+                + "    }\n"
+                + "    private SocketEventResult join(SocketSession session, Map<String, Object> payload, SocketRoomRegistry rooms) {\n"
+                + "        String room = payload.get(\"id\").toString();\n"
+                + "        rooms.join(session, room);\n"
+                + "        return new SocketEventResult(true, \"join\", room);\n"
+                + "    }\n"
+                + "}\n";
+    }
+}
