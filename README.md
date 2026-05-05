@@ -25,7 +25,7 @@ java -jar "$jar" project create --root "$workspace" --project main
 java -jar "$jar" run --root "$workspace" --host 127.0.0.1 --port 8080
 ```
 
-`project create`는 기본적으로 Java sample project를 생성한 뒤 clean bundle build까지 수행합니다. 생성만 하고 싶으면 `--skip-build`를 붙입니다.
+`project create`는 기본적으로 jar에 내장된 Java sample project를 생성한 뒤 clean bundle build까지 수행합니다. 생성만 하고 싶으면 `--skip-build`를 붙입니다.
 
 ```bash
 java -jar "$jar" project create --root "$workspace" --project main --skip-build
@@ -58,6 +58,18 @@ wiz-spring run --root ./demo --port 8080
 | Angular sample | Angular/Angular CLI `21.0.0` 이상, TypeScript `5.9.x` |
 
 Maven은 runtime jar를 source에서 빌드할 때만 필요합니다. 이미 빌드된 jar로 workspace를 실행할 때는 Java와, real frontend build가 필요한 경우 Node.js/npm이 있으면 됩니다.
+
+## 패키지와 의존성 설치
+
+Python WIZ의 `pip install season`처럼 runtime 자체를 Python package로 설치하는 구조가 아니라, WIZ Spring은 Spring Boot 실행 jar를 빌드해서 사용합니다.
+
+| 대상 | 정의 파일 | 설치/반영 방법 |
+| --- | --- | --- |
+| WIZ Spring runtime Java/Spring dependency | `wiz-spring/pom.xml` | dependency를 추가한 뒤 `./mvnw clean package`로 jar를 다시 빌드합니다. |
+| Project frontend/npm dependency | `project/<name>/src/angular/package.json` | `wiz project npm install --project=<name> --package=<pkg>` 또는 직접 `package.json` 수정 후 `wiz project build`를 실행합니다. |
+| Project Java API/model/controller dependency | 기본적으로 runtime jar classpath | 현재는 `api.java`, `route.java`, `socket.java`, model/controller Java source가 WIZ Spring runtime classpath를 기준으로 컴파일됩니다. 외부 Java library가 필요하면 우선 `wiz-spring/pom.xml`에 추가하고 runtime jar를 재빌드합니다. |
+
+핵심 정의 파일은 [`pom.xml`](pom.xml)입니다. Spring Boot, WebMVC, WebSocket, SQLite JDBC, picocli 같은 runtime dependency가 모두 여기에 있습니다. Angular sample dependency는 내장 sample의 `src/angular/package.json`에 있고, build 시 `npm ci` 또는 `npm install` 후 Angular CLI `ng build`를 실행합니다.
 
 ## CLI 지원 범위
 
@@ -106,6 +118,8 @@ Spring runtime은 다음 기능을 지원합니다.
 
 ## Project 생성과 import
 
+기본 Java sample project는 jar 내부 resource(`/wiz/templates/default-project-java.zip`)에서 생성됩니다. 따라서 별도의 `wiz-sample-project-java` 디렉토리가 없어도 됩니다.
+
 기본 Java sample project:
 
 ```bash
@@ -152,7 +166,7 @@ build는 기본 `bundle` phase로 실행됩니다.
 | `compile` | `api.java`, `route.java`, `socket.java`, model/controller Java source를 컴파일합니다. |
 | `bundle` | frontend build/fallback 결과와 compiled Java artifact를 bundle로 묶습니다. |
 
-`src/angular/package.json`이 있으면 project-local Angular CLI package로 판단합니다. lockfile이 있으면 `npm ci`, 없으면 `npm install`을 실행한 뒤 `node_modules/.bin/ng build`를 실행합니다. Angular 입력이 없거나 real build가 불가능하면 `frontend-fallback`으로 최소 web bundle을 생성합니다.
+`src/angular/package.json`이 있으면 project-local Angular CLI package로 판단합니다. lockfile이 있으면 `npm ci`, 없으면 `npm install`을 실행한 뒤 `node_modules/.bin/ng build`를 실행합니다. Angular 21 sample은 별도 `ngc-esbuild` pipeline이 아니라 Angular CLI 내장 esbuild builder(`@angular-devkit/build-angular:browser-esbuild`)를 사용합니다. Angular 입력이 없거나 real build가 불가능하면 `frontend-fallback`으로 최소 web bundle을 생성합니다.
 
 ## App-local Java API
 
@@ -246,7 +260,7 @@ java -jar "$jar" project create --root "$workspace" --project main
 java -jar "$jar" run --root "$workspace" --host 127.0.0.1 --port 8080
 ```
 
-`project create` runs an initial clean bundle build by default. Use `--skip-build` to scaffold/import sources only.
+`project create` uses the Java sample project embedded in the jar and runs an initial clean bundle build by default. Use `--skip-build` to scaffold/import sources only.
 
 ### Requirements
 
@@ -259,6 +273,10 @@ java -jar "$jar" run --root "$workspace" --host 127.0.0.1 --port 8080
 | SQLite JDBC | `3.49.1.0` |
 | Node.js | `^20.19.0`, `^22.12.0`, or `>=24.0.0` for Angular CLI 21 |
 | Angular sample | Angular/CLI `21.0.0` or later, TypeScript `5.9.x` |
+
+### Dependencies
+
+WIZ Spring is distributed as a Spring Boot jar, not as a Python package. Runtime dependencies live in `wiz-spring/pom.xml`; add Java/Spring libraries there and rebuild with `./mvnw clean package`. Frontend dependencies live in each project at `project/<name>/src/angular/package.json`; use `wiz project npm install` or edit the file and run `wiz project build`.
 
 ### Command Coverage
 

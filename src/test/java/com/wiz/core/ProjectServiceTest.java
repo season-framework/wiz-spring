@@ -45,6 +45,13 @@ class ProjectServiceTest {
     }
 
     @Test
+    void packagesDefaultJavaProjectTemplateAsResource() throws Exception {
+        try (var input = ProjectService.class.getResourceAsStream("/wiz/templates/default-project-java.zip")) {
+            assertTrue(input != null);
+        }
+    }
+
+    @Test
     void rewritesDefaultJavaTemplateForProjectName() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);

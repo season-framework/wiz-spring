@@ -1,10 +1,12 @@
 package com.wiz.core;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.LinkOption;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.Set;
 import java.util.Comparator;
 import java.util.List;
@@ -28,6 +30,7 @@ public class ProjectService {
 
     private static final Set<String> EXPORT_EXCLUDED_DIRECTORIES = Set.of(".git", "build", "bundle", "node_modules", ".angular");
     private static final Set<String> EXPORT_EXCLUDED_FILES = Set.of("migration-report.json", "migration-report.md");
+    private static final String EMBEDDED_JAVA_SAMPLE = "/wiz/templates/default-project-java.zip";
 
     private final PathService paths;
     private final ProjectInventoryService inventory;
@@ -165,7 +168,18 @@ public class ProjectService {
     }
 
     private void createDefaultProject(ProjectContext project) throws IOException {
-        Optional<Path> template = defaultJavaTemplate();
+        Optional<Path> template = configuredTemplate();
+        if (template.isPresent()) {
+            copyDirectory(template.get(), project.root());
+            rewriteTemplateProjectPackage(project);
+            return;
+        }
+        if (copyEmbeddedJavaTemplate(project)) {
+            rewriteTemplateProjectPackage(project);
+            return;
+        }
+
+        template = defaultJavaTemplate();
         if (template.isPresent()) {
             copyDirectory(template.get(), project.root());
             rewriteTemplateProjectPackage(project);
@@ -228,9 +242,24 @@ public class ProjectService {
     }
 
     private Optional<Path> defaultJavaTemplate() {
-        return configuredTemplate()
-                .or(() -> findTemplateFrom(Path.of("").toAbsolutePath().normalize()))
+        return findTemplateFrom(Path.of("").toAbsolutePath().normalize())
                 .or(this::findTemplateFromCodeSource);
+    }
+
+    private boolean copyEmbeddedJavaTemplate(ProjectContext project) throws IOException {
+        try (InputStream input = ProjectService.class.getResourceAsStream(EMBEDDED_JAVA_SAMPLE)) {
+            if (input == null) {
+                return false;
+            }
+            Path temp = Files.createTempFile("wiz-default-project-java-", ".zip");
+            try {
+                Files.copy(input, temp, StandardCopyOption.REPLACE_EXISTING);
+                new ZipProjectSource().extract(temp, project.root());
+            } finally {
+                Files.deleteIfExists(temp);
+            }
+            return true;
+        }
     }
 
     private Optional<Path> configuredTemplate() {

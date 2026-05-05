@@ -43,7 +43,7 @@ class JavaSampleProjectTest {
     void javaSampleProjectBuildsAndRunsMainApis() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, sampleProjectRoot());
+        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
         removeAngularSource(project);
         BuildResult build = new ProjectBuildService().build(project, true, "bundle");
         assertTrue(build.success(), build.message());
@@ -201,7 +201,8 @@ class JavaSampleProjectTest {
 
     @Test
     void javaSampleProjectContainsNoPythonBackendFiles() throws Exception {
-        try (var paths = Files.walk(sampleProjectRoot())) {
+        ProjectContext project = createEmbeddedSampleProject("no-python-workspace", "main");
+        try (var paths = Files.walk(project.root())) {
             assertTrue(paths.noneMatch(path -> Files.isRegularFile(path) && path.getFileName().toString().endsWith(".py")));
         }
     }
@@ -209,7 +210,7 @@ class JavaSampleProjectTest {
     @Test
     void javaSampleProjectCoversPythonApiFunctionSurface() throws Exception {
         Path pythonSrc = pythonSampleProjectRoot().resolve("src");
-        Path javaSrc = sampleProjectRoot().resolve("src");
+        Path javaSrc = createEmbeddedSampleProject("parity-workspace", "main").sourceRoot();
         ArrayList<String> missing = new ArrayList<>();
         try (var paths = Files.walk(pythonSrc)) {
             for (Path pythonApi : paths.filter(path -> path.getFileName().toString().equals("api.py")).toList()) {
@@ -267,15 +268,10 @@ class JavaSampleProjectTest {
         return (List<T>) value;
     }
 
-    private Path sampleProjectRoot() {
-        Path cwd = Path.of("").toAbsolutePath().normalize();
-        List<Path> candidates = List.of(
-                cwd.resolve("../wiz-sample-project-java").normalize(),
-                cwd.resolve("wiz-sample-project-java").normalize());
-        return candidates.stream()
-                .filter(Files::isDirectory)
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("wiz-sample-project-java not found from " + cwd));
+    private ProjectContext createEmbeddedSampleProject(String workspaceName, String projectName) throws Exception {
+        Path workspace = tempDir.resolve(workspaceName);
+        new WorkspaceService().createWorkspace(workspace);
+        return new ProjectService(new PathService(workspace)).createProject(projectName, null, null);
     }
 
     private Path pythonSampleProjectRoot() {
