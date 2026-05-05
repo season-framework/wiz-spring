@@ -3,15 +3,14 @@ package com.wiz.dispatch;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Map;
 import java.util.Optional;
 
 import com.wiz.core.ProjectJavaNaming;
+import com.wiz.runtime.ProjectClassPath;
 import com.wiz.runtime.SafePath;
 import com.wiz.runtime.WizBadRequestException;
 import com.wiz.runtime.WizContext;
@@ -80,7 +79,7 @@ public class AppApiDispatcher {
     }
 
     private WizResult dispatchProjectJavaApi(WizContext context, String handlerClass, String function) {
-        try (URLClassLoader loader = new URLClassLoader(projectApiUrls(context), Thread.currentThread().getContextClassLoader())) {
+        try (URLClassLoader loader = new URLClassLoader(ProjectClassPath.apiUrls(context.project()), Thread.currentThread().getContextClassLoader())) {
             ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
             Thread.currentThread().setContextClassLoader(loader);
             try {
@@ -121,19 +120,6 @@ public class AppApiDispatcher {
             return Optional.empty();
         }
         return Optional.of(handler.toString());
-    }
-
-    private URL[] projectApiUrls(WizContext context) throws IOException {
-        ArrayList<URL> urls = new ArrayList<>();
-        Path classes = context.project().bundleRoot().resolve("classes");
-        Path jar = context.project().bundleRoot().resolve("project-api.jar");
-        if (Files.isDirectory(classes)) {
-            urls.add(classes.toUri().toURL());
-        }
-        if (Files.isRegularFile(jar)) {
-            urls.add(jar.toUri().toURL());
-        }
-        return urls.toArray(URL[]::new);
     }
 
     private Method findMethod(Class<?> handlerType, String function) {

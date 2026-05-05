@@ -1,0 +1,11 @@
+{
+  "name": "wiz-sample-project-java",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@angular/cli": "^21.0.0"
+  },
+  "scripts": {
+    "build": "echo frontend build is handled by wiz-spring build wrapper"
+  }
+}

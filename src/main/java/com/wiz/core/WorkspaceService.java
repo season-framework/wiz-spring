@@ -24,7 +24,8 @@ public class WorkspaceService {
         int port = nextAvailablePort(DEFAULT_PORT);
         Files.createDirectories(root.resolve("config"));
         Files.createDirectories(root.resolve("project"));
-        Files.writeString(root.resolve("config/wiz.yml"), workspaceConfig(port));
+        Files.writeString(root.resolve("config/application.yml"), workspaceConfig(port));
+        Files.writeString(root.resolve("config/wiz.yml"), "workspace: java\n");
         return new CreatedWorkspace(root, port);
     }
 
@@ -32,10 +33,9 @@ public class WorkspaceService {
         return "server:\n"
                 + "  port: " + port + "\n"
                 + "wiz:\n"
-                + "  default-project: main\n"
-                + "  secret: \"" + secret() + "\"\n"
-                + "  compatibility:\n"
-                + "    python-config: false\n";
+                + "  project:\n"
+                + "    default-name: main\n"
+                + "  secret: \"" + secret() + "\"\n";
     }
 
     private String secret() {

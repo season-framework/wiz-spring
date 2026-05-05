@@ -1,0 +1,66 @@
+package com.wiz.runtime;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Map;
+
+import com.wiz.build.BuildResult;
+import com.wiz.build.ProjectBuildService;
+import com.wiz.core.ProjectService;
+import com.wiz.core.WorkspaceService;
+import com.wiz.http.ResponseEnvelope;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.springframework.mock.web.MockHttpSession;
+
+class ProjectExtensionLoaderTest {
+
+    @TempDir
+    Path tempDir;
+
+    @Test
+    void loadsProjectAuthAndSessionImplementationsFromBundle() throws Exception {
+        Path workspace = tempDir.resolve("workspace");
+        new WorkspaceService().createWorkspace(workspace);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        Files.createDirectories(project.sourceRoot().resolve("auth"));
+        Files.createDirectories(project.sourceRoot().resolve("session"));
+        Files.writeString(project.sourceRoot().resolve("auth/AuthService.java"), authServiceJava());
+        Files.writeString(project.sourceRoot().resolve("session/SessionService.java"), sessionServiceJava());
+
+        BuildResult build = new ProjectBuildService().build(project, true, "bundle");
+        assertTrue(build.success(), build.message());
+
+        MockHttpSession httpSession = new MockHttpSession();
+        try (WizContext context = new WizContext(WizRequest.builder().session(httpSession).build(), new WizResponse(), project)) {
+            assertEquals("com.wiz.project.main.auth.AuthService", context.auth().getClass().getName());
+            assertEquals("com.wiz.project.main.session.SessionService", context.session().getClass().getName());
+            ResponseEnvelope envelope = (ResponseEnvelope) context.auth().check(context).entity();
+            assertEquals(Map.of("projectAuth", true), envelope.data());
+        }
+    }
+
+    private String authServiceJava() {
+        return "import java.util.Map;\n"
+                + "import com.wiz.runtime.WizContext;\n"
+                + "import com.wiz.runtime.WizResult;\n\n"
+                + "public class AuthService extends com.wiz.session.AuthService {\n"
+                + "    public WizResult check(WizContext context) {\n"
+                + "        return context.response().status(200, Map.of(\"projectAuth\", true));\n"
+                + "    }\n"
+                + "}\n";
+    }
+
+    private String sessionServiceJava() {
+        return "import jakarta.servlet.http.HttpSession;\n\n"
+                + "public class SessionService extends com.wiz.session.SessionService {\n"
+                + "    public SessionService(HttpSession httpSession) {\n"
+                + "        super(httpSession);\n"
+                + "    }\n"
+                + "}\n";
+    }
+}

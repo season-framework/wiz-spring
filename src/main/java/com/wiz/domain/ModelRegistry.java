@@ -2,16 +2,13 @@ package com.wiz.domain;
 
 import java.io.IOException;
 import java.lang.reflect.Constructor;
-import java.net.URL;
 import java.net.URLClassLoader;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.wiz.runtime.ProjectClassPath;
 import com.wiz.runtime.WizContext;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -101,16 +98,7 @@ public class ModelRegistry {
 
     private URLClassLoader projectClassLoader(WizContext context, ClassLoader parent) {
         try {
-            ArrayList<URL> urls = new ArrayList<>();
-            Path classes = context.project().bundleRoot().resolve("classes");
-            Path jar = context.project().bundleRoot().resolve("project-api.jar");
-            if (Files.isDirectory(classes)) {
-                urls.add(classes.toUri().toURL());
-            }
-            if (Files.isRegularFile(jar)) {
-                urls.add(jar.toUri().toURL());
-            }
-            return new URLClassLoader(urls.toArray(URL[]::new), parent);
+            return new URLClassLoader(ProjectClassPath.apiUrls(context.project()), parent);
         } catch (IOException exception) {
             throw new IllegalArgumentException("Failed to create project model classloader", exception);
         }

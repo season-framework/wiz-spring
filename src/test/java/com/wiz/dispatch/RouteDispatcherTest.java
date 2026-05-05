@@ -29,7 +29,7 @@ class RouteDispatcherTest {
     Path tempDir;
 
     @Test
-    void handlesCoreAuthCheckBeforeSpaFallback() throws Exception {
+    void handlesProjectAuthCheckBeforeSpaFallback() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
         ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
@@ -44,7 +44,7 @@ class RouteDispatcherTest {
     }
 
     @Test
-    void handlesCoreAuthLogoutAsRedirectAndClearsSessionCookie() throws Exception {
+    void handlesProjectAuthLogoutAsRedirectAndClearsSessionCookie() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
         ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
@@ -61,7 +61,7 @@ class RouteDispatcherTest {
     }
 
     @Test
-    void handlesAuthenticatedCoreAuthCheck() throws Exception {
+    void handlesAuthenticatedProjectAuthCheck() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
         ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
@@ -128,7 +128,7 @@ class RouteDispatcherTest {
                 new WizRuntime(registry),
                 new RouteRegistry(),
                 new ControllerChain(),
-                List.of(new AuthRouteHandler()));
+                List.of());
     }
 
     private String echoRouteJava() {

@@ -7,7 +7,6 @@ import java.util.Map;
 
 import com.wiz.domain.ModelAccessor;
 import com.wiz.domain.ModelRegistry;
-import com.wiz.persistence.OrmService;
 import com.wiz.session.AuthService;
 import com.wiz.session.SessionService;
 
@@ -17,7 +16,6 @@ public class WizContext implements AutoCloseable {
     private final WizResponse response;
     private final ProjectContext project;
     private final ConfigService config;
-    private final OrmService orm;
     private final SessionService session;
     private final AuthService auth;
     private final ModelRegistry models;
@@ -32,13 +30,12 @@ public class WizContext implements AutoCloseable {
         this.request = request;
         this.response = response;
         this.project = project;
-        this.config = new ConfigService(project);
-        this.orm = new OrmService(project, config);
-        this.session = new SessionService(request.httpSession());
-        this.auth = new AuthService();
         this.models = models;
         this.modelRegistry = new LinkedHashMap<>();
         this.cleanupHooks = new ArrayList<>();
+        this.config = new ConfigService(project);
+        this.session = ProjectExtensionLoader.session(this, request.httpSession());
+        this.auth = ProjectExtensionLoader.auth(this);
     }
 
     public WizRequest request() {
@@ -55,10 +52,6 @@ public class WizContext implements AutoCloseable {
 
     public ConfigService config() {
         return config;
-    }
-
-    public OrmService orm() {
-        return orm;
     }
 
     public SessionService session() {

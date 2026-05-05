@@ -33,21 +33,15 @@ class PathServiceTest {
     }
 
     @Test
-    void findsJavaAndLegacyWorkspaceRoots() throws Exception {
+    void findsJavaWorkspaceRootsOnly() throws Exception {
         Path javaRoot = tempDir.resolve("java-root");
         Files.createDirectories(javaRoot.resolve("config"));
         Files.createDirectories(javaRoot.resolve("project/main/src/app"));
-        Files.writeString(javaRoot.resolve("config/wiz.yml"), "wiz: {}\n");
-
-        Path legacyRoot = tempDir.resolve("legacy-root");
-        Files.createDirectories(legacyRoot.resolve("config"));
-        Files.writeString(legacyRoot.resolve("config/boot.py"), "");
-        Files.writeString(legacyRoot.resolve("config/ide.py"), "");
-        Files.writeString(legacyRoot.resolve("config/service.py"), "");
+        Files.writeString(javaRoot.resolve("config/application.yml"), "wiz:\n  project:\n    default-name: main\n");
 
         PathService service = new PathService(tempDir);
         assertEquals(javaRoot, service.findWorkspaceRoot(javaRoot.resolve("project/main/src/app")).orElseThrow());
-        assertEquals(legacyRoot, service.findWorkspaceRoot(legacyRoot.resolve("config")).orElseThrow());
+        assertTrue(service.findWorkspaceRoot(tempDir.resolve("missing")).isEmpty());
     }
 
     @Test

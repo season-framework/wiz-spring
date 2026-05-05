@@ -5,13 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.ArrayList;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import com.wiz.build.BuildResult;
 import com.wiz.build.ProjectBuildService;
@@ -200,39 +197,11 @@ class JavaSampleProjectTest {
     }
 
     @Test
-    void javaSampleProjectContainsNoPythonBackendFiles() throws Exception {
-        ProjectContext project = createEmbeddedSampleProject("no-python-workspace", "main");
+    void javaSampleProjectContainsOnlyJavaBackendFiles() throws Exception {
+        ProjectContext project = createEmbeddedSampleProject("java-only-workspace", "main");
         try (var paths = Files.walk(project.root())) {
             assertTrue(paths.noneMatch(path -> Files.isRegularFile(path) && path.getFileName().toString().endsWith(".py")));
         }
-    }
-
-    @Test
-    void javaSampleProjectCoversPythonApiFunctionSurface() throws Exception {
-        Path pythonSrc = pythonSampleProjectRoot().resolve("src");
-        Path javaSrc = createEmbeddedSampleProject("parity-workspace", "main").sourceRoot();
-        ArrayList<String> missing = new ArrayList<>();
-        try (var paths = Files.walk(pythonSrc)) {
-            for (Path pythonApi : paths.filter(path -> path.getFileName().toString().equals("api.py")).toList()) {
-                List<String> functions = pythonApiFunctions(Files.readString(pythonApi));
-                if (functions.isEmpty()) {
-                    continue;
-                }
-                Path relative = pythonSrc.relativize(pythonApi);
-                Path javaApi = javaSrc.resolve(relative).resolveSibling("api.java");
-                if (!Files.isRegularFile(javaApi)) {
-                    missing.add(relative + " -> api.java");
-                    continue;
-                }
-                String javaSource = Files.readString(javaApi);
-                for (String function : functions) {
-                    if (!Pattern.compile("\\b" + Pattern.quote(function) + "\\s*\\(").matcher(javaSource).find()) {
-                        missing.add(relative + " -> " + function);
-                    }
-                }
-            }
-        }
-        assertTrue(missing.isEmpty(), "Missing Java API parity: " + missing);
     }
 
     private AppApiDispatcher dispatcher(Path workspace) {
@@ -272,27 +241,6 @@ class JavaSampleProjectTest {
         Path workspace = tempDir.resolve(workspaceName);
         new WorkspaceService().createWorkspace(workspace);
         return new ProjectService(new PathService(workspace)).createProject(projectName, null, null);
-    }
-
-    private Path pythonSampleProjectRoot() {
-        Path cwd = Path.of("").toAbsolutePath().normalize();
-        List<Path> candidates = List.of(
-                cwd.resolve("../wiz-sample-project").normalize(),
-                cwd.resolve("wiz-sample-project").normalize());
-        return candidates.stream()
-                .filter(Files::isDirectory)
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("wiz-sample-project not found from " + cwd));
-    }
-
-    private List<String> pythonApiFunctions(String source) {
-        Pattern pattern = Pattern.compile("(?m)^def\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*\\(");
-        Matcher matcher = pattern.matcher(source);
-        ArrayList<String> functions = new ArrayList<>();
-        while (matcher.find()) {
-            functions.add(matcher.group(1));
-        }
-        return functions;
     }
 
     private void removeAngularSource(ProjectContext project) throws Exception {

@@ -3,7 +3,8 @@ spring:
     name: wiz-spring
 
 server:
-  port: 8080
+  address: 127.0.0.1
+  port: 3000
 
 management:
   endpoints:
@@ -13,6 +14,5 @@ management:
 
 wiz:
   root: .
-  default-project: main
-  compatibility:
-    python-config: false
+  project:
+    default-name: main

@@ -80,9 +80,9 @@ public class CommandExecutor {
     private Path resolveExecutable(Path workspaceRoot, Path cwd, String command) {
         Path commandPath = command.contains("/") || command.contains("\\") ? cwd.resolve(command).toAbsolutePath().normalize() : null;
         String fileName = commandPath == null ? command : commandPath.getFileName().toString();
-        if (fileName.equals("node") || fileName.equals("npm")) {
+        if (fileName.equals("node") || fileName.equals("npm") || fileName.equals("mvn")) {
             if (commandPath != null) {
-                throw new IllegalArgumentException("node and npm must be invoked by command name");
+                throw new IllegalArgumentException(fileName + " must be invoked by command name");
             }
             return findOnPath(fileName).orElseThrow(() -> new IllegalArgumentException(fileName + " is not available on PATH"));
         }
@@ -119,12 +119,20 @@ public class CommandExecutor {
     private void configureEnvironment(Map<String, String> environment, Path workspaceRoot) throws IOException {
         String path = System.getenv("PATH");
         String home = System.getenv("HOME");
+        String javaHome = System.getenv("JAVA_HOME");
+        String mavenOpts = System.getenv("MAVEN_OPTS");
         environment.clear();
         if (path != null && !path.isBlank()) {
             environment.put("PATH", path);
         }
         if (home != null && !home.isBlank()) {
             environment.put("HOME", home);
+        }
+        if (javaHome != null && !javaHome.isBlank()) {
+            environment.put("JAVA_HOME", javaHome);
+        }
+        if (mavenOpts != null && !mavenOpts.isBlank()) {
+            environment.put("MAVEN_OPTS", mavenOpts);
         }
         Path npmCache = workspaceRoot.resolve(".wiz/npm-cache");
         Files.createDirectories(npmCache);

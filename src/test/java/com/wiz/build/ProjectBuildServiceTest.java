@@ -126,7 +126,7 @@ class ProjectBuildServiceTest {
         BuildResult result = new ProjectBuildService().build(project, true, "bundle");
 
         assertTrue(result.success());
-        assertEquals(java.util.List.of("reconstruct", "java-compile", "frontend-fallback", "bundle"), result.phases());
+        assertEquals(java.util.List.of("reconstruct", "java-source", "project-dependencies", "java-compile", "frontend-fallback", "bundle"), result.phases());
         assertTrue(Files.exists(project.buildRoot().resolve("main/java/com/wiz/project/main/api/PageDashboardApi.java")));
         assertTrue(Files.exists(project.buildRoot().resolve("classes/com/wiz/project/main/api/PageDashboardApi.class")));
         assertTrue(Files.exists(project.buildRoot().resolve("project-api.jar")));

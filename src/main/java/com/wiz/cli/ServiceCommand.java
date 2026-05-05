@@ -79,7 +79,7 @@ public class ServiceCommand implements Callable<Integer> {
             Path logPath = log == null ? Path.of("/var/log/wiz").resolve(name.toLowerCase(java.util.Locale.ROOT) + ".log") : log.toAbsolutePath().normalize();
             Path commandPath = Path.of("/usr/local/bin").resolve(serviceName);
             Path servicePath = Path.of("/etc/systemd/system").resolve(serviceName + ".service");
-            String script = script(jarPath, rootPath, port == null ? 8080 : port, "bundle".equalsIgnoreCase(String.valueOf(bundleToken)), logPath);
+            String script = script(jarPath, rootPath, port == null ? 3000 : port, "bundle".equalsIgnoreCase(String.valueOf(bundleToken)), logPath);
             String unit = unit(serviceName, commandPath);
             if (dryRun) {
                 System.out.println(commandPath);

@@ -11,7 +11,6 @@ import java.util.stream.Collectors;
 
 import com.wiz.dispatch.AppApiDispatcher;
 import com.wiz.dispatch.RouteDispatcher;
-import com.wiz.portal.SeasonPortalModule;
 import com.wiz.runtime.WizRequest;
 import com.wiz.runtime.WizResult;
 
@@ -35,22 +34,16 @@ public class WizHttpController {
     private final StaticFileService staticFiles;
     private final AppApiDispatcher appApiDispatcher;
     private final RouteDispatcher routeDispatcher;
-    private final SeasonPortalModule seasonPortal;
 
     @Autowired
-    public WizHttpController(StaticFileService staticFiles, AppApiDispatcher appApiDispatcher, RouteDispatcher routeDispatcher, SeasonPortalModule seasonPortal) {
+    public WizHttpController(StaticFileService staticFiles, AppApiDispatcher appApiDispatcher, RouteDispatcher routeDispatcher) {
         this.staticFiles = staticFiles;
         this.appApiDispatcher = appApiDispatcher;
         this.routeDispatcher = routeDispatcher;
-        this.seasonPortal = seasonPortal;
-    }
-
-    public WizHttpController(StaticFileService staticFiles, AppApiDispatcher appApiDispatcher, RouteDispatcher routeDispatcher) {
-        this(staticFiles, appApiDispatcher, routeDispatcher, null);
     }
 
     public WizHttpController(StaticFileService staticFiles, AppApiDispatcher appApiDispatcher) {
-        this(staticFiles, appApiDispatcher, null, null);
+        this(staticFiles, appApiDispatcher, null);
     }
 
     @RequestMapping(path = { "/wiz/api/{appId}/{function}", "/wiz/api/{appId}/{function}/**" }, method = { RequestMethod.GET, RequestMethod.POST })
@@ -60,27 +53,6 @@ public class WizHttpController {
             HttpServletRequest request) throws IOException {
         WizResult result = appApiDispatcher.dispatch(toWizRequest(request), appId, function, "");
         return resultResponse(result);
-    }
-
-    @RequestMapping(path = "/sw.js", method = RequestMethod.GET)
-    public ResponseEntity<String> serviceWorker(HttpServletRequest request) {
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType("text/javascript; charset=UTF-8"))
-                .header(HttpHeaders.CACHE_CONTROL, "no-cache")
-                .body(seasonPortal == null ? "" : seasonPortal.serviceWorker(cookies(request)));
-    }
-
-    @RequestMapping(path = { "/manifest.json", "/manifest.webmanifest" }, method = RequestMethod.GET)
-    public ResponseEntity<Object> manifest(HttpServletRequest request) {
-        if (seasonPortal == null) {
-            return ResponseEntity.notFound().build();
-        }
-        return seasonPortal.manifest(cookies(request))
-                .<ResponseEntity<Object>>map(manifest -> ResponseEntity.ok()
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .header(HttpHeaders.CACHE_CONTROL, "no-cache")
-                        .body(manifest))
-                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @RequestMapping(path = "/assets/**", method = RequestMethod.GET)

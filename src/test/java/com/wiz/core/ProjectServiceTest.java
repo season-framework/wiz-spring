@@ -40,13 +40,15 @@ class ProjectServiceTest {
         assertTrue(Files.exists(project.sourceRoot().resolve("portal/post/app/list/api.java")));
         assertTrue(Files.isDirectory(project.sourceRoot().resolve("controller")));
         assertTrue(Files.exists(project.configRoot().resolve("database.yml")));
-        assertFalse(Files.exists(project.root().resolve("migration-report.json")));
         assertEquals(java.util.List.of("main"), service.listProjects());
     }
 
     @Test
-    void packagesDefaultJavaProjectTemplateAsResource() throws Exception {
-        try (var input = ProjectService.class.getResourceAsStream("/wiz/templates/default-project-java.zip")) {
+    void packagesDefaultJavaProjectTemplateAsDirectoryResource() throws Exception {
+        try (var input = ProjectService.class.getResourceAsStream("/wiz/templates/default-project-java.files")) {
+            assertTrue(input != null);
+        }
+        try (var input = ProjectService.class.getResourceAsStream("/wiz/templates/default-project-java/src/app/page.access/api.java")) {
             assertTrue(input != null);
         }
     }
@@ -70,36 +72,34 @@ class ProjectServiceTest {
         Path source = tempDir.resolve("source");
         Files.createDirectories(source.resolve("src/app/page.local"));
         Files.writeString(source.resolve("src/app/page.local/app.json"), "{}\n");
-        Files.writeString(source.resolve("src/app/page.local/api.py"), "def api():\n    pass\n");
+        Files.writeString(source.resolve("src/app/page.local/readme.txt"), "local source\n");
         new WorkspaceService().createWorkspace(workspace);
 
         ProjectService service = new ProjectService(new PathService(workspace));
         ProjectContext project = service.createProject("copy", null, source);
 
         assertTrue(Files.exists(project.appRoot().resolve("page.local/app.json")));
-        assertTrue(Files.exists(project.root().resolve("migration-report.json")));
-        assertTrue(Files.readString(project.root().resolve("migration-report.md")).contains("api.py"));
+        assertTrue(Files.exists(project.appRoot().resolve("page.local/readme.txt")));
         assertTrue(Files.exists(project.sourceRoot().resolve("controller")));
         assertTrue(Files.exists(project.modelRoot()));
         assertTrue(Files.exists(project.routeRoot()));
     }
 
     @Test
-    void importsZipProjectSourceAndCanGenerateJavaStubs() throws Exception {
+    void importsZipProjectSourceAsJavaProjectSource() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         Path archive = tempDir.resolve("source.wizproject");
         try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
             zipEntry(output, "src/app/page.local/app.json", "{\"id\":\"page.local\"}\n");
-            zipEntry(output, "src/app/page.local/api.py", "def status():\n    pass\n");
+            zipEntry(output, "src/app/page.local/readme.txt", "zip source\n");
         }
         new WorkspaceService().createWorkspace(workspace);
 
         ProjectService service = new ProjectService(new PathService(workspace));
-        ProjectContext project = service.createProject("zipcopy", null, archive, true);
+        ProjectContext project = service.createProject("zipcopy", null, archive);
 
         assertTrue(Files.exists(project.appRoot().resolve("page.local/app.json")));
-        assertTrue(Files.exists(project.appRoot().resolve("page.local/api.java.stub")));
-        assertTrue(Files.readString(project.root().resolve("migration-report.json")).contains("generatedStubFiles"));
+        assertTrue(Files.exists(project.appRoot().resolve("page.local/readme.txt")));
     }
 
     @Test
@@ -114,7 +114,6 @@ class ProjectServiceTest {
         Files.writeString(project.bundleRoot().resolve("project-api.jar"), "generated\n");
         Files.createDirectories(project.root().resolve(".git"));
         Files.writeString(project.root().resolve(".git/config"), "ignored\n");
-        Files.writeString(project.root().resolve("migration-report.json"), "{}\n");
 
         Path archive = service.exportProject("main", tempDir.resolve("main-export"));
 
@@ -125,7 +124,6 @@ class ProjectServiceTest {
         assertFalse(entries.stream().anyMatch(entry -> entry.startsWith("build/")));
         assertFalse(entries.stream().anyMatch(entry -> entry.startsWith("bundle/")));
         assertFalse(entries.stream().anyMatch(entry -> entry.startsWith(".git/")));
-        assertFalse(entries.contains("migration-report.json"));
 
         ProjectContext imported = service.createProject("imported", null, archive);
         assertTrue(Files.exists(imported.appRoot().resolve("page.access/api.java")));

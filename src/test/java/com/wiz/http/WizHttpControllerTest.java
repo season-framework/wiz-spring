@@ -7,9 +7,7 @@ import java.nio.charset.StandardCharsets;
 import com.wiz.runtime.WizRequest;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
 
 class WizHttpControllerTest {
@@ -43,13 +41,4 @@ class WizHttpControllerTest {
         assertEquals("{\"text\":\"json-value\"}", wizRequest.body());
     }
 
-    @Test
-    void serviceWorkerRouteReturnsEmptyJavascript() {
-        ResponseEntity<String> response = new WizHttpController(null, null).serviceWorker(new MockHttpServletRequest("GET", "/sw.js"));
-
-        assertEquals(200, response.getStatusCode().value());
-        assertEquals(MediaType.parseMediaType("text/javascript; charset=UTF-8"), response.getHeaders().getContentType());
-        assertEquals("no-cache", response.getHeaders().getFirst(HttpHeaders.CACHE_CONTROL));
-        assertEquals("", response.getBody());
-    }
 }

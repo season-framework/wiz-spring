@@ -30,7 +30,7 @@ public class ProjectRegistry {
             PathService pathService,
             @Value("${wiz.project.cookie-name:" + DEFAULT_PROJECT_COOKIE_NAME + "}") String projectCookieName,
             @Value("${wiz.project.devmode-cookie-name:" + DEFAULT_DEVMODE_COOKIE_NAME + "}") String devModeCookieName,
-            @Value("${wiz.project.default-name:" + DEFAULT_PROJECT_NAME + "}") String defaultProjectName) {
+            @Value("${wiz.project.default-name:${wiz.default-project:" + DEFAULT_PROJECT_NAME + "}}") String defaultProjectName) {
         this.pathService = pathService;
         this.projectCookieName = projectCookieName;
         this.devModeCookieName = devModeCookieName;

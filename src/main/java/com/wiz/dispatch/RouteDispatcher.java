@@ -3,15 +3,13 @@ package com.wiz.dispatch;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.net.URLClassLoader;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.net.URL;
-import java.net.URLClassLoader;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
+import com.wiz.runtime.ProjectClassPath;
 import com.wiz.runtime.WizContext;
 import com.wiz.runtime.WizRequest;
 import com.wiz.runtime.WizResult;
@@ -69,7 +67,7 @@ public class RouteDispatcher {
             return context.response().status(404, Map.of("error", "route handler not found"));
         }
         ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
-        try (URLClassLoader loader = new URLClassLoader(projectApiUrls(context), previousLoader)) {
+        try (URLClassLoader loader = new URLClassLoader(ProjectClassPath.apiUrls(context.project()), previousLoader)) {
             Thread.currentThread().setContextClassLoader(loader);
             Class<?> handlerType = Class.forName(definition.handlerClass(), true, loader);
             Object handler = handlerType.getDeclaredConstructor().newInstance();
@@ -106,16 +104,4 @@ public class RouteDispatcher {
         return null;
     }
 
-    private URL[] projectApiUrls(WizContext context) throws IOException {
-        java.util.ArrayList<URL> urls = new java.util.ArrayList<>();
-        Path classes = context.project().bundleRoot().resolve("classes");
-        Path jar = context.project().bundleRoot().resolve("project-api.jar");
-        if (Files.isDirectory(classes)) {
-            urls.add(classes.toUri().toURL());
-        }
-        if (Files.isRegularFile(jar)) {
-            urls.add(jar.toUri().toURL());
-        }
-        return urls.toArray(URL[]::new);
-    }
 }

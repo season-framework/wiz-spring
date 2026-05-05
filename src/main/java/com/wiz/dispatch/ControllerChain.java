@@ -3,11 +3,7 @@ package com.wiz.dispatch;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.net.URL;
 import java.net.URLClassLoader;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -15,18 +11,16 @@ import java.util.Optional;
 import java.util.Set;
 
 import com.wiz.core.ProjectJavaNaming;
+import com.wiz.runtime.ProjectClassPath;
 import com.wiz.runtime.WizBadRequestException;
 import com.wiz.runtime.WizContext;
 import com.wiz.runtime.WizResult;
-import com.wiz.session.AuthService;
-
 import org.springframework.stereotype.Service;
 
 @Service
 public class ControllerChain {
 
     public static final String DEFAULT_CONTROLLER_NAME = "base";
-    private final AuthService auth = new AuthService();
 
     public Optional<WizResult> before(WizContext context, Map<String, Object> appMetadata) {
         List<String> controllerNames = controllerNames(appMetadata);
@@ -34,7 +28,7 @@ public class ControllerChain {
             return Optional.empty();
         }
 
-        try (URLClassLoader loader = new URLClassLoader(projectApiUrls(context), Thread.currentThread().getContextClassLoader())) {
+        try (URLClassLoader loader = new URLClassLoader(ProjectClassPath.apiUrls(context.project()), Thread.currentThread().getContextClassLoader())) {
             ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
             Thread.currentThread().setContextClassLoader(loader);
             try {
@@ -65,11 +59,11 @@ public class ControllerChain {
         }
         if (normalized.equals("user")) {
             context.response().data("session", context.session().toMap());
-            return Optional.ofNullable(auth.requireUser(context));
+            return Optional.ofNullable(context.auth().requireUser(context));
         }
         if (normalized.equals("admin")) {
             context.response().data("session", context.session().toMap());
-            return Optional.ofNullable(auth.requireAdmin(context));
+            return Optional.ofNullable(context.auth().requireAdmin(context));
         }
         return Optional.empty();
     }
@@ -149,19 +143,6 @@ public class ControllerChain {
 
     private String controllerClass(WizContext context, String controllerName) {
         return ProjectJavaNaming.controllerHookClass(context.project().name(), controllerName);
-    }
-
-    private URL[] projectApiUrls(WizContext context) throws IOException {
-        ArrayList<URL> urls = new ArrayList<>();
-        Path classes = context.project().bundleRoot().resolve("classes");
-        Path jar = context.project().bundleRoot().resolve("project-api.jar");
-        if (Files.isDirectory(classes)) {
-            urls.add(classes.toUri().toURL());
-        }
-        if (Files.isRegularFile(jar)) {
-            urls.add(jar.toUri().toURL());
-        }
-        return urls.toArray(URL[]::new);
     }
 
 }

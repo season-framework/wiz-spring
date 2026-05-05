@@ -5,11 +5,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 
 import com.wiz.build.ProjectBuildService;
 import com.wiz.core.ProjectService;
 import com.wiz.core.WorkspaceService;
-import com.wiz.session.SeasonConfig;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -20,18 +20,15 @@ class ConfigServiceTest {
     Path tempDir;
 
     @Test
-    void loadsSeasonDefaultsAndYamlOverridesFromBundle() throws Exception {
+    void loadsSeasonYamlWithoutCorePortalDefaults() throws Exception {
         ProjectContext project = createProject();
         Files.writeString(project.configRoot().resolve("season.yml"), "auth_baseuri: /custom-auth\nsmtp_port: 2525\n");
         new ProjectBuildService().build(project, true, "bundle");
 
-        SeasonConfig config = new ConfigService(project).get("season", SeasonConfig.class);
+        ConfigNamespace config = new ConfigService(project).namespace("season");
 
-        assertEquals("/custom-auth", config.authBaseUri());
-        assertEquals(2525, config.smtpPort());
-        assertEquals("WIZ Project", config.pwaTitle());
-        assertEquals("JSESSIONID", config.sessionCookieName());
-        assertEquals("Lax", config.sessionCookieSameSite());
+        assertEquals("/custom-auth", config.get("auth_baseuri"));
+        assertEquals("2525", String.valueOf(config.get("smtp_port")));
     }
 
     @Test
@@ -40,9 +37,9 @@ class ConfigServiceTest {
         Files.writeString(project.configRoot().resolve("season.yml"), "auth-base-uri: /legacy-auth\n");
         new ProjectBuildService().build(project, true, "bundle");
 
-        SeasonConfig config = new ConfigService(project).get("season", SeasonConfig.class);
+        ConfigNamespace config = new ConfigService(project).namespace("season");
 
-        assertEquals("/legacy-auth", config.authBaseUri());
+        assertEquals("/legacy-auth", config.get("auth_baseuri"));
     }
 
     @Test
@@ -53,20 +50,21 @@ class ConfigServiceTest {
         Files.writeString(project.configRoot().resolve("season.yml"), "auth_baseuri: /project-auth\nsmtp_port: 2525\n");
         new ProjectBuildService().build(project, true, "bundle");
 
-        SeasonConfig config = new ConfigService(project).get("season", SeasonConfig.class);
+        ConfigNamespace config = new ConfigService(project).namespace("season");
 
-        assertEquals("Workspace Title", config.pwaTitle());
-        assertEquals("/project-auth", config.authBaseUri());
-        assertEquals(2525, config.smtpPort());
+        assertEquals("Workspace Title", config.get("pwa_title"));
+        assertEquals("/project-auth", config.get("auth_baseuri"));
+        assertEquals("2525", String.valueOf(config.get("smtp_port")));
     }
 
     @Test
-    void rejectsUnknownSeasonConfigKeys() throws Exception {
+    void validatesKeysOnlyWhenCallerProvidesDefaults() throws Exception {
         ProjectContext project = createProject();
         Files.writeString(project.configRoot().resolve("season.yml"), "unknown_key: true\n");
         new ProjectBuildService().build(project, true, "bundle");
 
-        assertThrows(IllegalArgumentException.class, () -> new ConfigService(project).get("season", SeasonConfig.class));
+        assertThrows(IllegalArgumentException.class,
+                () -> new ConfigService(project).namespace("season", Map.of("auth_baseuri", "/auth")));
     }
 
     @Test
@@ -76,9 +74,9 @@ class ConfigServiceTest {
         Files.writeString(project.configRoot().resolve("season.py"), "raise RuntimeError('must not execute')\n");
         new ProjectBuildService().build(project, true, "bundle");
 
-        SeasonConfig config = new ConfigService(project).get("season", SeasonConfig.class);
+        ConfigNamespace config = new ConfigService(project).namespace("season", Map.of("auth_baseuri", "/auth"));
 
-        assertEquals("/auth", config.authBaseUri());
+        assertEquals("/auth", config.get("auth_baseuri"));
     }
 
     @Test
@@ -87,7 +85,7 @@ class ConfigServiceTest {
         new ProjectBuildService().build(project, true, "bundle");
 
         try (WizContext context = new WizContext(WizRequest.builder().build(), new WizResponse(), project)) {
-            assertEquals("/auth", context.config().get("season", SeasonConfig.class).authBaseUri());
+            assertEquals("/auth", context.config().namespace("season").get("auth_baseuri"));
         }
     }
 

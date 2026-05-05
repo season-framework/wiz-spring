@@ -26,7 +26,7 @@ class RouteRegistryTest {
         new WorkspaceService().createWorkspace(workspace);
         ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
         Files.createDirectories(project.sourceRoot().resolve("portal/season"));
-        Files.writeString(project.sourceRoot().resolve("portal/season/portal.json"), "{\"use_route\":true}\n");
+        Files.writeString(project.sourceRoot().resolve("portal/season/portal.json"), "{\"use_route\":true,\"use_model\":true}\n");
         Path routeRoot = project.sourceRoot().resolve("portal/season/route/auth");
         Files.createDirectories(routeRoot);
         Files.writeString(routeRoot.resolve("app.json"), "{\n"

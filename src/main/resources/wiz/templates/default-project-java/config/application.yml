@@ -1,0 +1,10 @@
+# Project-local Spring Boot and WIZ runtime overrides.
+#
+# These values are loaded by `wiz run` after the workspace config and before
+# command-line options such as `--port`.
+server:
+  port: 3000
+
+wiz:
+  project:
+    default-name: main

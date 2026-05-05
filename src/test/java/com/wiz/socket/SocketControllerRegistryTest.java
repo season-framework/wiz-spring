@@ -16,7 +16,7 @@ class SocketControllerRegistryTest {
     void dispatchesEventsToAppControllerMethods() {
         SocketNamespace namespace = new SocketNamespace("main", "page.xyz");
         SocketSession session = new SocketSession("sid-1", namespace);
-        SocketNamespaceRegistry registry = new SocketNamespaceRegistry(List.of(new PageXyzSocketController()), new SocketRoomRegistry());
+        SocketNamespaceRegistry registry = new SocketNamespaceRegistry(List.of(new TestPageSocketController()), new SocketRoomRegistry());
 
         assertTrue(registry.dispatch(session, "connect", Map.of()).accepted());
         assertTrue(registry.dispatch(session, "join", Map.of("namespace", "room-1")).accepted());
@@ -28,7 +28,7 @@ class SocketControllerRegistryTest {
 
     @Test
     void reportsUnknownControllerOrEvent() {
-        SocketNamespaceRegistry registry = new SocketNamespaceRegistry(List.of(new PageXyzSocketController()), new SocketRoomRegistry());
+        SocketNamespaceRegistry registry = new SocketNamespaceRegistry(List.of(new TestPageSocketController()), new SocketRoomRegistry());
 
         assertFalse(registry.dispatch(new SocketSession("sid-1", new SocketNamespace("main", "missing")), "connect", Map.of()).accepted());
         assertFalse(registry.dispatch(new SocketSession("sid-1", new SocketNamespace("main", "page.xyz")), "custom", Map.of()).accepted());
@@ -37,7 +37,7 @@ class SocketControllerRegistryTest {
     @Test
     void emitsToExplicitRoomAndNamespaceRecipients() {
         SocketNamespace namespace = new SocketNamespace("main", "page.xyz");
-        SocketNamespaceRegistry registry = new SocketNamespaceRegistry(List.of(new PageXyzSocketController()), new SocketRoomRegistry());
+        SocketNamespaceRegistry registry = new SocketNamespaceRegistry(List.of(new TestPageSocketController()), new SocketRoomRegistry());
         registry.dispatch(new SocketSession("sid-1", namespace), "join", Map.of("namespace", "room-1"));
 
         SocketOutboundEvent outbound = registry.emitToRoom(namespace, "room-1", "refresh", Map.of("ok", true));
@@ -50,7 +50,7 @@ class SocketControllerRegistryTest {
 
     @Test
     void lifecycleExposesRegistryWithoutAutoStartingNetworkServer() {
-        SocketNamespaceRegistry registry = new SocketNamespaceRegistry(List.of(new PageXyzSocketController()), new SocketRoomRegistry());
+        SocketNamespaceRegistry registry = new SocketNamespaceRegistry(List.of(new TestPageSocketController()), new SocketRoomRegistry());
         SocketServerLifecycle lifecycle = new SocketServerLifecycle(registry);
 
         assertFalse(lifecycle.isAutoStartup());

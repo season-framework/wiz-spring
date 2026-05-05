@@ -14,7 +14,7 @@ class SocketContractTest {
     void baselinePageXyzSocketContractWorksWithStandardEventMessages() {
         SocketNamespace namespace = SocketNamespace.parse("/wiz/ws/app/main/page.xyz").orElseThrow();
         SocketSession session = new SocketSession("sid-1", namespace);
-        SocketNamespaceRegistry registry = new SocketNamespaceRegistry(List.of(new PageXyzSocketController()), new SocketRoomRegistry());
+        SocketNamespaceRegistry registry = new SocketNamespaceRegistry(List.of(new TestPageSocketController()), new SocketRoomRegistry());
 
         assertEquals("/wiz/app/main/page.xyz", namespace.socketIoPath());
         assertTrue(registry.dispatch(session, "connect", Map.of()).accepted());

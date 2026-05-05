@@ -7,6 +7,7 @@ import java.nio.file.LinkOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -29,6 +30,7 @@ import javax.tools.ToolProvider;
 
 import com.wiz.core.ProjectJavaNaming;
 import com.wiz.runtime.BuildMarkerService;
+import com.wiz.runtime.ProjectClassPath;
 import com.wiz.runtime.ProjectContext;
 import com.wiz.runtime.SafePath;
 
@@ -95,6 +97,10 @@ public class ProjectBuildService {
                 reconstructProjectJava(project);
                 return null;
             });
+            timed(buildLogger, "project-dependencies", () -> {
+                resolveProjectDependencies(project, buildLogger);
+                return null;
+            });
             BuildResult compile = timed(buildLogger, "java-compile", () -> compileProjectJava(project, buildLogger));
             if (!compile.success() || requestedPhase.equals("compile")) {
                 return finish(buildLogger, totalStarted, compile);
@@ -102,7 +108,7 @@ public class ProjectBuildService {
 
             FrontendBuildResult frontend = timed(buildLogger, "frontend", () -> angularBuildService.build(project, buildLogger));
             if (!frontend.success()) {
-                return finish(buildLogger, totalStarted, new BuildResult(1, List.of("reconstruct", "java-compile", frontend.phase()), frontend.message()));
+                return finish(buildLogger, totalStarted, new BuildResult(1, List.of("reconstruct", "java-source", "project-dependencies", "java-compile", frontend.phase()), frontend.message()));
             }
             timed(buildLogger, "bundle", () -> {
                 bundle(project);
@@ -114,7 +120,7 @@ public class ProjectBuildService {
                     return null;
                 });
             }
-            List<String> phases = List.of("reconstruct", "java-compile", frontend.phase(), "bundle");
+            List<String> phases = List.of("reconstruct", "java-source", "project-dependencies", "java-compile", frontend.phase(), "bundle");
             buildMarkerService.write(project, phases, frontend.built() ? "real" : "fallback", startedAt, Instant.now());
             return finish(buildLogger, totalStarted, new BuildResult(0, phases, "Generated Java WIZ bundle"));
         } finally {
@@ -190,6 +196,8 @@ public class ProjectBuildService {
 
         Path controllerRoot = project.buildRoot().resolve("src/controller");
         reconstructJavaTree(project, controllerRoot, ProjectJavaNaming.packageRoot(project.name()) + ".controller");
+        reconstructJavaTree(project, project.buildRoot().resolve("src/auth"), ProjectJavaNaming.packageRoot(project.name()) + ".auth");
+        reconstructJavaTree(project, project.buildRoot().resolve("src/session"), ProjectJavaNaming.packageRoot(project.name()) + ".session");
     }
 
     private void reconstructRouteJava(ProjectContext project) throws IOException {
@@ -261,7 +269,7 @@ public class ProjectBuildService {
         Path sourceRoot = project.buildRoot().resolve("main/java");
         if (!Files.isDirectory(sourceRoot)) {
             logger.info("[java-compile] No Java project sources");
-            return new BuildResult(0, List.of("reconstruct", "java-compile"), "No Java project sources");
+            return new BuildResult(0, List.of("reconstruct", "java-source", "project-dependencies", "java-compile"), "No Java project sources");
         }
 
         List<Path> sources;
@@ -270,12 +278,12 @@ public class ProjectBuildService {
         }
         if (sources.isEmpty()) {
             logger.info("[java-compile] No Java project sources");
-            return new BuildResult(0, List.of("reconstruct", "java-compile"), "No Java project sources");
+            return new BuildResult(0, List.of("reconstruct", "java-source", "project-dependencies", "java-compile"), "No Java project sources");
         }
 
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         if (compiler == null) {
-            return new BuildResult(1, List.of("reconstruct", "java-compile"), "JDK compiler is required to build Java project APIs");
+            return new BuildResult(1, List.of("reconstruct", "java-source", "project-dependencies", "java-compile"), "JDK compiler is required to build Java project APIs");
         }
 
         Path classesRoot = project.buildRoot().resolve("classes");
@@ -302,13 +310,13 @@ public class ProjectBuildService {
                 logger.output(text + System.lineSeparator());
             }
             if (!success) {
-                return new BuildResult(1, List.of("reconstruct", "java-compile"), text);
+                return new BuildResult(1, List.of("reconstruct", "java-source", "project-dependencies", "java-compile"), text);
             }
         }
 
         packageProjectJar(project, classesRoot);
         logger.info("[java-compile] packaged " + project.buildRoot().resolve("project-api.jar"));
-        return new BuildResult(0, List.of("reconstruct", "java-compile"), "Compiled Java project APIs");
+        return new BuildResult(0, List.of("reconstruct", "java-source", "project-dependencies", "java-compile"), "Compiled Java project APIs");
     }
 
     private String compilerClasspath(ProjectContext project) throws IOException {
@@ -325,7 +333,50 @@ public class ProjectBuildService {
                 }
             }
         }
+        for (Path dependency : ProjectClassPath.dependencyJars(project)) {
+            entries.add(dependency.toString());
+        }
         return String.join(File.pathSeparator, entries);
+    }
+
+    private void resolveProjectDependencies(ProjectContext project, BuildLogger logger) throws IOException {
+        Path pom = project.root().resolve("pom.xml");
+        if (!Files.isRegularFile(pom)) {
+            logger.info("[project-dependencies] no project pom.xml");
+            return;
+        }
+        Path output = project.root().resolve("target/dependency");
+        Files.createDirectories(output);
+        logger.info("[project-dependencies] pom: " + pom);
+        logger.info("[project-dependencies] output: " + output);
+        CommandResult result;
+        try {
+            result = new CommandExecutor().run(
+                    "maven-dependencies",
+                    project.root(),
+                    project.root(),
+                    List.of(
+                            "mvn",
+                            "--batch-mode",
+                            "-f", pom.toString(),
+                            "dependency:copy-dependencies",
+                            "-DincludeScope=runtime",
+                            "-DoutputDirectory=" + output),
+                    Duration.ofMinutes(10),
+                    1024 * 1024,
+                    logger);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Project Maven dependency resolution was interrupted", exception);
+        }
+        logger.info("[project-dependencies] exitCode=" + result.exitCode()
+                + " duration=" + formatDuration(result.durationMillis())
+                + " timedOut=" + result.timedOut()
+                + " cappedOutput=" + result.cappedOutput());
+        if (result.exitCode() != 0) {
+            throw new IOException("Project Maven dependency resolution failed with exit code " + result.exitCode()
+                    + System.lineSeparator() + result.output());
+        }
     }
 
     private boolean isBootJar(Path jarPath) {
@@ -386,8 +437,11 @@ public class ProjectBuildService {
         copyIfExists(project.buildRoot().resolve("src/route"), project.bundleRoot().resolve("src/route"));
         copyIfExists(project.configRoot(), project.bundleRoot().resolve("config"));
         copyIfExists(project.buildRoot().resolve("src/app"), project.bundleRoot().resolve("src/app"));
+        copyIfExists(project.root().resolve("target/dependency"), project.bundleRoot().resolve("lib"));
+        copyIfExists(project.root().resolve("lib"), project.bundleRoot().resolve("lib"));
         copyIfExists(project.buildRoot().resolve("classes"), project.bundleRoot().resolve("classes"));
         copyFileIfExists(project.buildRoot().resolve("project-api.jar"), project.bundleRoot().resolve("project-api.jar"));
+        copyFileIfExists(project.root().resolve("pom.xml"), project.bundleRoot().resolve("pom.xml"));
     }
 
     private String handlerClass(ProjectContext project, String appId, Path appJson) throws IOException {

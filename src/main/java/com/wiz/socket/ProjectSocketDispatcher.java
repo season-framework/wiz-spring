@@ -2,17 +2,16 @@ package com.wiz.socket;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
-import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
 import com.wiz.core.ProjectJavaNaming;
 import com.wiz.runtime.PathService;
+import com.wiz.runtime.ProjectClassPath;
 import com.wiz.runtime.ProjectContext;
 import com.wiz.runtime.SafePath;
 
@@ -77,7 +76,7 @@ public class ProjectSocketDispatcher {
     }
 
     private SocketEventResult dispatchProjectSocket(ProjectContext project, SocketSession session, String handlerClass, String event, Map<String, Object> payload) {
-        try (URLClassLoader loader = new URLClassLoader(projectApiUrls(project), Thread.currentThread().getContextClassLoader())) {
+        try (URLClassLoader loader = new URLClassLoader(ProjectClassPath.apiUrls(project), Thread.currentThread().getContextClassLoader())) {
             ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
             Thread.currentThread().setContextClassLoader(loader);
             try {
@@ -101,19 +100,6 @@ public class ProjectSocketDispatcher {
         } catch (ReflectiveOperationException | IOException exception) {
             return new SocketEventResult(false, event, "socket dispatch failed");
         }
-    }
-
-    private URL[] projectApiUrls(ProjectContext project) throws IOException {
-        ArrayList<URL> urls = new ArrayList<>();
-        Path classes = project.bundleRoot().resolve("classes");
-        Path jar = project.bundleRoot().resolve("project-api.jar");
-        if (Files.isDirectory(classes)) {
-            urls.add(classes.toUri().toURL());
-        }
-        if (Files.isRegularFile(jar)) {
-            urls.add(jar.toUri().toURL());
-        }
-        return urls.toArray(URL[]::new);
     }
 
     static Map<String, Object> payload(Object data) {

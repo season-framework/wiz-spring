@@ -73,18 +73,14 @@ public class PathService {
     }
 
     public boolean isWorkspaceRoot(Path candidate) {
-        return isJavaWorkspace(candidate) || isLegacyPythonWorkspace(candidate);
+        return isJavaWorkspace(candidate);
     }
 
     public boolean isJavaWorkspace(Path candidate) {
-        return Files.isRegularFile(candidate.resolve("config/wiz.yml"))
+        return (Files.isRegularFile(candidate.resolve("config/application.yml"))
+                || Files.isRegularFile(candidate.resolve("config/application.yaml"))
+                || Files.isRegularFile(candidate.resolve("config/wiz.yml")))
                 && Files.isDirectory(candidate.resolve("project"));
-    }
-
-    public boolean isLegacyPythonWorkspace(Path candidate) {
-        return Files.isRegularFile(candidate.resolve("config/boot.py"))
-                && Files.isRegularFile(candidate.resolve("config/ide.py"))
-                && Files.isRegularFile(candidate.resolve("config/service.py"));
     }
 
     public String validateProjectName(String projectName) {

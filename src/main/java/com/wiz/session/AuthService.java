@@ -21,7 +21,7 @@ public class AuthService {
 
     public WizResult logout(WizContext context) {
         String returnTo = context.request().query("returnTo", context.request().query("redirect", "/"));
-        SessionCookieOptions cookie = SessionCookieOptions.from(context.config().namespace("season", SeasonConfig.defaults()));
+        SessionCookieOptions cookie = SessionCookieOptions.from(context.config().namespace("season"));
         context.session().invalidate();
         return context.response()
                 .header(HttpHeaders.SET_COOKIE, expiredCookie(cookie).toString())

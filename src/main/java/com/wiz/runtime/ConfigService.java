@@ -7,8 +7,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
 
-import com.wiz.session.SeasonConfig;
-
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.beans.factory.config.YamlPropertiesFactoryBean;
 
@@ -45,9 +43,6 @@ public class ConfigService {
     }
 
     public <T> T get(String name, Class<T> type) {
-        if (type.equals(SeasonConfig.class) && name.equals("season")) {
-            return type.cast(SeasonConfig.from(namespace(name, SeasonConfig.defaults())));
-        }
         return get(name, type, Map.of());
     }
 

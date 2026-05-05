@@ -42,16 +42,13 @@ public class ProjectCommand implements Callable<Integer> {
         @Option(names = "--path", description = "Local source path to copy.")
         private java.nio.file.Path path;
 
-        @Option(names = "--java-stubs", description = "Generate api.java.stub files for imported api.py files.")
-        private boolean javaStubs;
-
         @Option(names = "--skip-build", description = "Create the project without running the default clean build.")
         private boolean skipBuild;
 
         @Override
         public Integer call() throws Exception {
             com.wiz.core.ProjectService service = projectService(root);
-            com.wiz.runtime.ProjectContext context = service.createProject(project, uri, path, javaStubs);
+            com.wiz.runtime.ProjectContext context = service.createProject(project, uri, path);
             System.out.println("Project created: " + context.name());
             System.out.println("Path: " + context.root());
             if (skipBuild) {

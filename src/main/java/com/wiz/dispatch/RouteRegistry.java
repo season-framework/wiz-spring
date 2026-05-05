@@ -35,9 +35,6 @@ public class RouteRegistry {
 
     public List<RouteDefinition> definitions(ProjectContext project) {
         ArrayList<RouteDefinition> definitions = new ArrayList<>(bundleDefinitions(project));
-        if (definitions.stream().noneMatch(definition -> definition.id().equals("portal.season.auth"))) {
-            definitions.add(new RouteDefinition("portal.season.auth", "/auth/<path:path>", "/auth/<path:path>", ControllerChain.DEFAULT_CONTROLLER_NAME, List.of(), null));
-        }
         return definitions.stream()
                 .sorted(Comparator.comparingInt((RouteDefinition definition) -> definition.route().length()).reversed())
                 .toList();
