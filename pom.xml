@@ -10,7 +10,7 @@
 	</parent>
 	<groupId>com.wiz</groupId>
 	<artifactId>wiz-spring</artifactId>
-	<version>0.0.2</version>
+	<version>0.0.3</version>
 	<name>wiz-spring</name>
 	<description>WIZ Spring runtime</description>
 	<url/>

@@ -16,7 +16,7 @@ cd /root/workspace/wiz-java/wiz-spring
 실행 파일은 `target/wiz-spring-*.jar`에 생성됩니다.
 
 ```bash
-jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.0.2.jar
+jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.0.3.jar
 workspace=/tmp/wiz-spring-demo
 
 rm -rf "$workspace"
@@ -41,7 +41,7 @@ java -jar "$jar" project create --root "$workspace" --project main --skip-build
 자주 쓸 때는 shell alias를 두면 편합니다.
 
 ```bash
-alias wiz-spring='java -jar /root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.0.2.jar'
+alias wiz-spring='java -jar /root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.0.3.jar'
 
 wiz-spring create ./demo
 wiz-spring project create --root ./demo --project main
@@ -288,7 +288,7 @@ WIZ Spring Runtime is a Java Spring port based on the Python WIZ `2.5.2` runtime
 cd /root/workspace/wiz-java/wiz-spring
 ./mvnw clean package
 
-jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.0.2.jar
+jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.0.3.jar
 workspace=/tmp/wiz-spring-demo
 
 rm -rf "$workspace"
