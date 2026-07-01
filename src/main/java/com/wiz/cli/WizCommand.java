@@ -5,9 +5,9 @@ import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
 
 @Command(
-        name = "wiz-java",
+        name = "wiz-spring",
         mixinStandardHelpOptions = true,
-        version = "wiz-java 0.0.2",
+        version = "wiz-spring 0.0.2",
         description = "Java Spring runtime and CLI for WIZ workspaces.",
         subcommands = {
                 CreateCommand.class,

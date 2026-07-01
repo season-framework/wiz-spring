@@ -37,7 +37,7 @@ public class KillCommand implements Callable<Integer> {
     private boolean matches(ProcessHandle process) {
         String command = process.info().commandLine().orElse("");
         String normalized = " " + command + " ";
-        boolean wizProcess = normalized.contains("wiz-spring") || normalized.contains("wiz-java");
+        boolean wizProcess = normalized.contains("wiz-spring");
         return wizProcess && normalized.contains(" run ");
     }
 }

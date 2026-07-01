@@ -141,6 +141,31 @@ class ProjectBuildServiceTest {
     }
 
     @Test
+    void packagesStandaloneProjectJarWithEmbeddedWorkspaceBundle() throws Exception {
+        Path workspace = tempDir.resolve("standalone-workspace");
+        new WorkspaceService().createWorkspace(workspace);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        removeAngularSource(project);
+        BuildResult result = new ProjectBuildService().build(project, true, "bundle");
+        assertTrue(result.success(), result.message());
+
+        Path runtimeJar = tempDir.resolve("runtime.jar");
+        writeFakeRuntimeJar(runtimeJar);
+        Path output = tempDir.resolve("main.jar");
+
+        Path jar = new StandaloneProjectJarService().packageJar(workspace, project, runtimeJar, output);
+
+        assertTrue(Files.exists(jar));
+        try (java.util.jar.JarFile packaged = new java.util.jar.JarFile(jar.toFile())) {
+            assertTrue(packaged.getEntry("BOOT-INF/classes/wiz/embedded-workspace.properties") != null);
+            assertTrue(packaged.getEntry("BOOT-INF/classes/wiz/embedded-workspace.files") != null);
+            assertTrue(packaged.getEntry("BOOT-INF/classes/wiz/embedded-workspace/config/application.yml") != null);
+            assertTrue(packaged.getEntry("BOOT-INF/classes/wiz/embedded-workspace/project/main/config/application.yml") != null);
+            assertTrue(packaged.getEntry("BOOT-INF/classes/wiz/embedded-workspace/project/main/bundle/classes/com/wiz/project/main/api/PageDashboardApi.class") != null);
+        }
+    }
+
+    @Test
     void compilesProjectControllerJavaSources() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
@@ -219,6 +244,14 @@ class ProjectBuildServiceTest {
         assertTrue(Files.exists(project.buildRoot().resolve("classes/com/wiz/project/main/model/struct/UserStruct.class")));
         assertTrue(Files.exists(project.buildRoot().resolve("classes/com/wiz/project/main/portal/post/model/PostStruct.class")));
         assertTrue(Files.exists(project.bundleRoot().resolve("classes/com/wiz/project/main/portal/post/model/struct/PostService.class")));
+    }
+
+    private void writeFakeRuntimeJar(Path jar) throws Exception {
+        try (java.util.jar.JarOutputStream output = new java.util.jar.JarOutputStream(Files.newOutputStream(jar))) {
+            output.putNextEntry(new java.util.jar.JarEntry("META-INF/MANIFEST.MF"));
+            output.write("Manifest-Version: 1.0\nMain-Class: com.wiz.WizSpringApplication\n\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            output.closeEntry();
+        }
     }
 
     private void removeJavaSources(ProjectContext project) throws Exception {

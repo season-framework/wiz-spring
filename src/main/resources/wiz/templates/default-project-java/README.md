@@ -59,7 +59,7 @@ Database access is project-local. This sample uses Spring ORM with JPA/Hibernate
 cd /root/workspace/wiz-java
 ./wiz-spring/mvnw -f wiz-spring/pom.xml test
 
-tmp=/tmp/wiz-java-sample
+tmp=/tmp/wiz-spring-sample
 rm -rf "$tmp"
 java -jar wiz-spring/target/wiz-spring-*.jar create "$tmp"
 java -jar wiz-spring/target/wiz-spring-*.jar project create --root "$tmp" --project main

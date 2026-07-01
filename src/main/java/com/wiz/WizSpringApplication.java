@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Properties;
 
 import com.wiz.cli.WizCommand;
+import com.wiz.runtime.EmbeddedWorkspace;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -19,6 +20,19 @@ import picocli.CommandLine;
 public class WizSpringApplication {
 
 	public static void main(String[] args) {
+		if (args.length == 0) {
+			try {
+				var embedded = EmbeddedWorkspace.extractIfPresent();
+				if (embedded.isPresent()) {
+					EmbeddedWorkspace.Launch launch = embedded.get();
+					runServer(launch.root().toString(), null, null, launch.project(), true, null);
+					return;
+				}
+			} catch (Exception exception) {
+				System.err.println("Failed to start embedded WIZ project: " + exception.getMessage());
+				System.exit(1);
+			}
+		}
 		int exitCode = new CommandLine(new WizCommand()).execute(args);
 		if (exitCode != 0) {
 			System.exit(exitCode);

@@ -12,6 +12,7 @@ import picocli.CommandLine.Option;
         subcommands = {
                 ProjectCommand.Create.class,
                 ProjectCommand.Build.class,
+                ProjectCommand.Jar.class,
                 ProjectCommand.ListProjects.class,
                 ProjectCommand.Delete.class,
                 ProjectCommand.Export.class,
@@ -85,6 +86,47 @@ public class ProjectCommand implements Callable<Integer> {
             System.out.println(result.message());
             System.out.println("Phases: " + String.join(",", result.phases()));
             return result.exitCode();
+        }
+    }
+
+    @Command(name = "jar", mixinStandardHelpOptions = true, description = "Package a WIZ project as one executable Spring Boot jar.")
+    static class Jar implements Callable<Integer> {
+        @Option(names = "--root", description = "WIZ workspace root. Defaults to auto-detecting from the current directory.")
+        private java.nio.file.Path root;
+
+        @Option(names = "--project", description = "Project name.")
+        private String project = "main";
+
+        @Option(names = "--output", description = "Output jar path. Defaults to project/<name>/target/<name>.jar.")
+        private java.nio.file.Path output;
+
+        @Option(names = "--runtime-jar", description = "wiz-spring executable jar path. Defaults to the currently running jar.")
+        private java.nio.file.Path runtimeJar;
+
+        @Option(names = "--clean", description = "Clean generated build and bundle directories before packaging.")
+        private boolean clean;
+
+        @Option(names = "--skip-build", description = "Package the existing bundle without running project build.")
+        private boolean skipBuild;
+
+        @Override
+        public Integer call() throws Exception {
+            com.wiz.runtime.PathService paths = pathService(root);
+            com.wiz.runtime.ProjectContext context = paths.projectContext(project);
+            if (!skipBuild) {
+                com.wiz.build.BuildResult result = new com.wiz.build.ProjectBuildService()
+                        .build(context, clean, "bundle", com.wiz.build.BuildLogger.console());
+                if (!result.success()) {
+                    System.out.println(result.message());
+                    System.out.println("Phases: " + String.join(",", result.phases()));
+                    return result.exitCode();
+                }
+            }
+            java.nio.file.Path jar = new com.wiz.build.StandaloneProjectJarService()
+                    .packageJar(paths.root(), context, runtimeJar == null ? currentRuntimePath() : runtimeJar, output);
+            System.out.println("Executable project jar created: " + jar);
+            System.out.println("Run: java -jar " + jar);
+            return 0;
         }
     }
 
@@ -546,5 +588,22 @@ public class ProjectCommand implements Callable<Integer> {
                         .orElseThrow(() -> new IllegalArgumentException("WIZ workspace root not found"))
                 : root.toAbsolutePath().normalize();
         return new com.wiz.runtime.PathService(workspaceRoot);
+    }
+
+    private static java.nio.file.Path currentRuntimePath() {
+        String classPath = System.getProperty("java.class.path", "");
+        if (!classPath.isBlank() && !classPath.contains(java.io.File.pathSeparator)) {
+            java.nio.file.Path candidate = java.nio.file.Path.of(classPath).toAbsolutePath().normalize();
+            if (java.nio.file.Files.isRegularFile(candidate)) {
+                return candidate;
+            }
+        }
+        try {
+            return java.nio.file.Path.of(ProjectCommand.class.getProtectionDomain().getCodeSource().getLocation().toURI())
+                    .toAbsolutePath()
+                    .normalize();
+        } catch (java.net.URISyntaxException exception) {
+            throw new IllegalStateException("Failed to resolve current runtime jar path", exception);
+        }
     }
 }

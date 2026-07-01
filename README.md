@@ -25,6 +25,13 @@ java -jar "$jar" project create --root "$workspace" --project main
 java -jar "$jar" run --root "$workspace" --port 3000
 ```
 
+프로젝트를 외부 workspace 없이 실행되는 단일 jar로 묶으려면 `project jar`를 사용합니다. 생성된 jar는 내장된 project bundle을 사용자 cache에 풀고 바로 서버를 시작하므로, 배포 시 외부에 필요한 jar는 하나입니다.
+
+```bash
+java -jar "$jar" project jar --root "$workspace" --project main --output /tmp/wiz-main.jar
+java -jar /tmp/wiz-main.jar
+```
+
 `project create`는 기본적으로 jar에 내장된 Java sample project를 생성한 뒤 clean bundle build까지 수행합니다. 생성만 하고 싶으면 `--skip-build`를 붙입니다.
 
 ```bash
@@ -40,6 +47,8 @@ wiz-spring create ./demo
 wiz-spring project create --root ./demo --project main
 wiz-spring run --root ./demo --port 3000
 ```
+
+alias로 사용할 때 `wiz-spring --help`와 `wiz-spring --version`도 `wiz-spring` 이름을 기준으로 표시됩니다.
 
 ## 요구 버전
 
@@ -65,35 +74,35 @@ Python WIZ의 `pip install season`처럼 runtime 자체를 Python package로 설
 | 대상 | 정의 파일 | 설치/반영 방법 |
 | --- | --- | --- |
 | WIZ Spring runtime Java/Spring dependency | `wiz-spring/pom.xml` | dependency를 추가한 뒤 `./mvnw clean package`로 jar를 다시 빌드합니다. |
-| Project frontend/npm dependency | `project/<name>/src/angular/package.json` | `wiz project npm install --project=<name> --package=<pkg>` 또는 직접 `package.json` 수정 후 `wiz project build`를 실행합니다. |
-| Project Java API/model/controller dependency | `project/<name>/pom.xml` | `wiz project build`가 `mvn dependency:copy-dependencies`를 실행해 `target/dependency` jar를 준비하고, Java compile/runtime classpath에 포함합니다. 직접 jar를 둘 경우 `project/<name>/lib`도 인식합니다. |
-| Project Spring/runtime config | `project/<name>/config/application.yml` | `wiz run` 시작 시 workspace `config/application.yml` 다음으로 로드됩니다. `server.port`, datasource, project extension class 등 project별 설정을 여기에 둡니다. |
+| Project frontend/npm dependency | `project/<name>/src/angular/package.json` | `wiz-spring project npm install --project=<name> --package=<pkg>` 또는 직접 `package.json` 수정 후 `wiz-spring project build`를 실행합니다. |
+| Project Java API/model/controller dependency | `project/<name>/pom.xml` | `wiz-spring project build`가 `mvn dependency:copy-dependencies`를 실행해 `target/dependency` jar를 준비하고, Java compile/runtime classpath에 포함합니다. 직접 jar를 둘 경우 `project/<name>/lib`도 인식합니다. |
+| Project Spring/runtime config | `project/<name>/config/application.yml` | `wiz-spring run` 시작 시 workspace `config/application.yml` 다음으로 로드됩니다. `server.port`, datasource, project extension class 등 project별 설정을 여기에 둡니다. |
 
 runtime의 핵심 정의 파일은 [`pom.xml`](pom.xml)입니다. 여기에는 Spring Boot, WebMVC, WebSocket, picocli 같은 core runtime dependency만 둡니다. JPA/Hibernate, SMTP, project별 SDK처럼 app/package마다 달라지는 dependency는 각 project의 `pom.xml`에 둡니다. Angular sample dependency는 내장 sample의 `src/angular/package.json`에 있고, build 시 `npm ci` 또는 `npm install` 후 Angular CLI `ng build`를 실행합니다.
 
 ## CLI 지원 범위
 
-현재 실행 command 이름은 `wiz-java`입니다. jar 실행 시에는 `java -jar target/wiz-spring-*.jar ...` 형태로 호출합니다.
+현재 CLI command 이름은 `wiz-spring`입니다. shell alias 없이 jar를 직접 실행할 때는 `java -jar target/wiz-spring-*.jar ...` 형태로 호출합니다.
 
-| 기존 WIZ 흐름 | Spring port 지원 |
+| 기능 | Spring port 지원 |
 | --- | --- |
-| `wiz create [name]` | 지원. `create PATH`가 workspace를 만들고 `config/`, `project/`를 생성합니다. 웹 IDE용 `public/`, `ide/`, `plugin/` root는 만들지 않습니다. |
-| `wiz project create` | 지원. `project create --project main`, local path import, git URI clone, `.wizproject` zip import를 지원합니다. 기본 생성 후 clean build가 자동 실행됩니다. |
-| `wiz project build` | 지원. `project build --clean --phase bundle` 형태로 Java compile, Pug/Angular build, bundle 생성을 수행합니다. Java 버전, npm install, Angular build 로그와 단계별 시간을 그대로 출력합니다. |
-| `wiz project list` | 지원. workspace의 project 목록을 출력합니다. |
-| `wiz project delete` | 지원. 지정 project를 삭제합니다. |
-| `wiz project export` | 지원. project를 `.wizproject` archive로 내보냅니다. |
-| `wiz run` | 지원. `run --root --host --port --project`로 Spring server를 시작합니다. 기본 host는 `0.0.0.0`, 기본 포트는 `3000`이며, `--host`/`--port`가 없으면 workspace/project `application.yml` 값으로 override할 수 있습니다. `--bundle`, `--log` compatibility option도 받습니다. |
-| `wiz bundle` | 지원. 이미 build된 project bundle을 deploy/runtime bundle directory로 묶습니다. |
-| `wiz kill` | 지원. Spring WIZ `run` process만 대상으로 종료하며 `--dry-run`을 지원합니다. |
-| `wiz project app list/create/delete` | 지원. `src/app` 및 portal app skeleton을 생성/삭제합니다. |
-| `wiz project controller list/create/delete` | 지원. Java controller hook skeleton을 생성/삭제합니다. |
-| `wiz project route list/create/delete` | 지원. `route.java` skeleton을 생성/삭제합니다. |
-| `wiz project package list/create/delete` | 지원. portal package를 생성/삭제하고 목록을 출력합니다. |
-| `wiz project npm list/install/uninstall` | 지원. `src/angular/package.json` 기준 npm dependency를 조회/설치/삭제합니다. |
-| `wiz service list/regist/unregist/status/start/stop/restart` | 지원. Linux/systemd service command입니다. `regist --dry-run`으로 생성물을 미리 볼 수 있습니다. |
-| `wiz server` | 별도 CLI command로는 미지원. Spring server 실행은 `run`으로 통합했습니다. |
-| `wiz ide`, plugin 관리 | 미지원. 현재 포팅 범위는 IDE가 아니라 runtime/build/run입니다. |
+| `wiz-spring create [path]` | 지원. workspace를 만들고 `config/`, `project/`를 생성합니다. 웹 IDE용 `public/`, `ide/`, `plugin/` root는 만들지 않습니다. |
+| `wiz-spring project create` | 지원. `--project main`, local path import, git URI clone, `.wizproject` zip import를 지원합니다. 기본 생성 후 clean build가 자동 실행됩니다. |
+| `wiz-spring project build` | 지원. `--clean --phase bundle` 형태로 Java compile, Pug/Angular build, bundle 생성을 수행합니다. Java 버전, npm install, Angular build 로그와 단계별 시간을 그대로 출력합니다. |
+| `wiz-spring project list` | 지원. workspace의 project 목록을 출력합니다. |
+| `wiz-spring project delete` | 지원. 지정 project를 삭제합니다. |
+| `wiz-spring project export` | 지원. project를 `.wizproject` archive로 내보냅니다. |
+| `wiz-spring run` | 지원. `--root --host --port --project`로 Spring server를 시작합니다. 기본 host는 `0.0.0.0`, 기본 포트는 `3000`이며, `--host`/`--port`가 없으면 workspace/project `application.yml` 값으로 override할 수 있습니다. `--bundle`, `--log` compatibility option도 받습니다. |
+| `wiz-spring bundle` | 지원. 이미 build된 project bundle을 deploy/runtime bundle directory로 묶습니다. |
+| `wiz-spring kill` | 지원. Spring WIZ `run` process만 대상으로 종료하며 `--dry-run`을 지원합니다. |
+| `wiz-spring project app list/create/delete` | 지원. `src/app` 및 portal app skeleton을 생성/삭제합니다. |
+| `wiz-spring project controller list/create/delete` | 지원. Java controller hook skeleton을 생성/삭제합니다. |
+| `wiz-spring project route list/create/delete` | 지원. `route.java` skeleton을 생성/삭제합니다. |
+| `wiz-spring project package list/create/delete` | 지원. portal package를 생성/삭제하고 목록을 출력합니다. |
+| `wiz-spring project npm list/install/uninstall` | 지원. `src/angular/package.json` 기준 npm dependency를 조회/설치/삭제합니다. |
+| `wiz-spring service list/regist/unregist/status/start/stop/restart` | 지원. Linux/systemd service command입니다. `regist --dry-run`으로 생성물을 미리 볼 수 있습니다. |
+| `wiz-spring server` | 별도 CLI command로는 미지원. Spring server 실행은 `run`으로 통합했습니다. |
+| IDE/plugin 관리 | 미지원. 현재 포팅 범위는 IDE가 아니라 runtime/build/run입니다. |
 | Python backend 자동 실행/자동 변환 | 미지원. WIZ Spring은 Java project source를 실행 대상으로 하며 Python source migration/stub 생성은 포함하지 않습니다. |
 
 ## Runtime 지원 범위
@@ -198,7 +207,7 @@ package declaration이 없으면 build 중 `com.wiz.project.{project}.api.PageXy
 
 ## Project-local 설정과 확장
 
-`wiz run`은 다음 순서로 Spring 설정을 읽습니다.
+`wiz-spring run`은 다음 순서로 Spring 설정을 읽습니다.
 
 1. core jar의 기본 `application.yml`
 2. workspace `config/application.yml`
@@ -288,6 +297,13 @@ java -jar "$jar" project create --root "$workspace" --project main
 java -jar "$jar" run --root "$workspace" --port 3000
 ```
 
+To package a project as a single externally deployed jar, use `project jar`. The packaged jar extracts its embedded project bundle to the user cache and starts the server when launched without arguments.
+
+```bash
+java -jar "$jar" project jar --root "$workspace" --project main --output /tmp/wiz-main.jar
+java -jar /tmp/wiz-main.jar
+```
+
 `project create` uses the Java sample project embedded in the jar and runs an initial clean bundle build by default. Use `--skip-build` to scaffold/import sources only.
 
 ### Requirements
@@ -303,11 +319,11 @@ java -jar "$jar" run --root "$workspace" --port 3000
 
 ### Dependencies
 
-WIZ Spring is distributed as a Spring Boot jar, not as a Python package. Core runtime dependencies live in `wiz-spring/pom.xml`; add Java/Spring libraries there only when the runtime itself needs them. Project Java dependencies live in `project/<name>/pom.xml` and are resolved into `target/dependency` during `wiz project build`. Frontend dependencies live in each project at `project/<name>/src/angular/package.json`; use `wiz project npm install` or edit the file and run `wiz project build`. Project Spring/runtime settings live in `project/<name>/config/application.yml` and are loaded by `wiz run` after workspace config.
+WIZ Spring is distributed as a Spring Boot jar, not as a Python package. Core runtime dependencies live in `wiz-spring/pom.xml`; add Java/Spring libraries there only when the runtime itself needs them. Project Java dependencies live in `project/<name>/pom.xml` and are resolved into `target/dependency` during `wiz-spring project build`. Frontend dependencies live in each project at `project/<name>/src/angular/package.json`; use `wiz-spring project npm install` or edit the file and run `wiz-spring project build`. Project Spring/runtime settings live in `project/<name>/config/application.yml` and are loaded by `wiz-spring run` after workspace config.
 
 ### Command Coverage
 
-Supported commands are `create`, `run`, `bundle`, `kill`, `service`, `project create`, `project build`, `project list`, `project delete`, `project export`, `project app`, `project controller`, `project route`, `project package`, and `project npm`. Separate `wiz server`, web IDE, plugin management, and Python backend auto-conversion/execution are outside the Spring port scope.
+With the `wiz-spring` alias, supported commands are `create`, `run`, `bundle`, `kill`, `service`, `project create`, `project build`, `project list`, `project delete`, `project export`, `project app`, `project controller`, `project route`, `project package`, and `project npm`. Separate `wiz-spring server`, web IDE, plugin management, and Python backend auto-conversion/execution are outside the Spring port scope.
 
 ### Runtime Coverage
 

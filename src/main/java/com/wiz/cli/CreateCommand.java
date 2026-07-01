@@ -20,7 +20,7 @@ public class CreateCommand implements Callable<Integer> {
         WorkspaceService.CreatedWorkspace workspace = service.createWorkspace(path);
         System.out.println("Workspace created: " + workspace.root());
         System.out.println("Port: " + workspace.port());
-        System.out.println("Run: wiz-java run --root " + workspace.root() + " --port " + workspace.port());
+        System.out.println("Run: wiz-spring run --root " + workspace.root() + " --port " + workspace.port());
         return 0;
     }
 }

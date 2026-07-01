@@ -1,8 +1,11 @@
 package com.wiz.cli;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -18,8 +21,18 @@ class WizCommandTest {
 
     @Test
     void exposesHelpAndVersion() {
-        assertEquals(0, new CommandLine(new WizCommand()).execute("--version"));
-        assertEquals(0, new CommandLine(new WizCommand()).execute("--help"));
+        StringWriter output = new StringWriter();
+        CommandLine command = new CommandLine(new WizCommand());
+        command.setOut(new PrintWriter(output));
+
+        assertEquals(0, command.execute("--version"));
+        assertTrue(output.toString().contains("wiz-spring 0.0.2"));
+
+        output.getBuffer().setLength(0);
+        assertEquals(0, command.execute("--help"));
+        String help = output.toString();
+        assertTrue(help.contains("Usage: wiz-spring"));
+        assertFalse(help.contains("wiz-java"));
     }
 
     @Test
@@ -32,6 +45,7 @@ class WizCommandTest {
     void projectCommandShellAcceptsExpectedOptions() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         assertEquals(0, new CommandLine(new WizCommand()).execute("project", "create", "--help"));
+        assertEquals(0, new CommandLine(new WizCommand()).execute("project", "jar", "--help"));
         assertEquals(0, new CommandLine(new WizCommand()).execute("bundle", "--help"));
         assertEquals(0, new CommandLine(new WizCommand()).execute("kill", "--help"));
         assertEquals(0, new CommandLine(new WizCommand()).execute("service", "--help"));
@@ -52,6 +66,11 @@ class WizCommandTest {
         assertEquals(0, new CommandLine(new WizCommand()).execute("project", "build", "--root", workspace.toString(), "--project", "main", "--clean"));
         assertTrue(Files.exists(workspace.resolve("project/main/build/src/app/page.dashboard/api.java")));
         assertTrue(Files.exists(workspace.resolve("project/main/bundle/project-api.jar")));
+        Path runtimeJar = tempDir.resolve("wiz-runtime.jar");
+        writeFakeRuntimeJar(runtimeJar);
+        Path projectJar = tempDir.resolve("main.jar");
+        assertEquals(0, new CommandLine(new WizCommand()).execute("project", "jar", "--root", workspace.toString(), "--project", "main", "--skip-build", "--runtime-jar", runtimeJar.toString(), "--output", projectJar.toString()));
+        assertTrue(Files.exists(projectJar));
         Path bundle = workspace.resolve("deploy-bundle");
         assertEquals(0, new CommandLine(new WizCommand()).execute("bundle", "--root", workspace.toString(), "--project", "main", "--output", bundle.toString()));
         assertTrue(Files.exists(bundle.resolve("project/main/bundle/project-api.jar")));
@@ -75,6 +94,14 @@ class WizCommandTest {
             for (Path item : paths.sorted(java.util.Comparator.reverseOrder()).toList()) {
                 Files.deleteIfExists(item);
             }
+        }
+    }
+
+    private void writeFakeRuntimeJar(Path jar) throws Exception {
+        try (java.util.jar.JarOutputStream output = new java.util.jar.JarOutputStream(Files.newOutputStream(jar))) {
+            output.putNextEntry(new java.util.jar.JarEntry("META-INF/MANIFEST.MF"));
+            output.write("Manifest-Version: 1.0\nMain-Class: com.wiz.WizSpringApplication\n\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            output.closeEntry();
         }
     }
 }
