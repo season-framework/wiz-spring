@@ -5,6 +5,8 @@
 | 버전 | 상태 | 기준 |
 |------|------|------|
 | [`0.0.1`](0.0.1.md) | tagged | 최초 Spring Boot 포팅 태그 |
-| [`0.0.2`](0.0.2.md) | ready | CLI parity, project-local runtime boundary, embedded Java sample project |
+| [`0.0.2`](0.0.2.md) | tagged | CLI parity, project-local runtime boundary, embedded Java sample project |
+| [`0.0.3`](0.0.3.md) | tagged | wiz-spring CLI rename, standalone project jar packaging |
+| [`0.0.4`](0.0.4.md) | tagged | runtime config hardening, project runtime cache, supply-chain manifests |
 
 릴리즈를 실제로 배포할 때는 `pom.xml`의 `<version>`과 Git tag, GitHub/GitLab release note가 이 로그와 일치해야 한다.
