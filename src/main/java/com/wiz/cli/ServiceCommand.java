@@ -2,7 +2,6 @@ package com.wiz.cli;
 
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -13,6 +12,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.stream.Stream;
+
+import com.wiz.WizSpringApplication;
 
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
@@ -80,7 +81,10 @@ public class ServiceCommand implements Callable<Integer> {
         @Option(names = "--root", description = "WIZ workspace root.")
         private Path root = Path.of(".");
 
-        @Option(names = "--jar", description = "wiz-spring jar path.")
+        @Option(names = "--command", description = "Command used to launch wiz-spring in the generated service script.")
+        private String command = "wiz-spring";
+
+        @Option(names = "--jar", description = "Deprecated compatibility option; generated services use --command.")
         private Path jar;
 
         @Option(names = "--log", description = "Log file path.")
@@ -103,13 +107,13 @@ public class ServiceCommand implements Callable<Integer> {
             ensureLinux();
             String serviceName = serviceName(name);
             String shortName = shortServiceName(serviceName);
-            Path jarPath = jar == null ? currentRuntimePath() : jar.toAbsolutePath().normalize();
+            String commandName = shellCommand(command);
             Path rootPath = root.toAbsolutePath().normalize();
             Path logPath = log == null ? logDir.resolve(shortName) : log.toAbsolutePath().normalize();
             Path commandPath = binDir.resolve(serviceName);
             Path servicePath = systemdDir.resolve(serviceName + ".service");
             ServiceRunArgs parsed = parseRunArgs(runArgs);
-            String script = script(serviceName, jarPath, rootPath, parsed.port(), parsed.bundle(), logPath);
+            String script = script(serviceName, commandName, rootPath, parsed.port(), parsed.bundle(), logPath);
             String unit = unit(serviceName, commandPath);
             if (dryRun) {
                 var out = spec.commandLine().getOut();
@@ -287,24 +291,31 @@ public class ServiceCommand implements Callable<Integer> {
         return new ServiceRunArgs(port, bundle);
     }
 
-    private static Path currentRuntimePath() {
-        try {
-            return Path.of(ServiceCommand.class.getProtectionDomain().getCodeSource().getLocation().toURI()).toAbsolutePath().normalize();
-        } catch (URISyntaxException exception) {
-            throw new IllegalStateException("Failed to resolve current runtime path", exception);
+    private static String shellCommand(String command) {
+        if (command == null || command.isBlank()) {
+            throw new IllegalArgumentException("Service command is required");
         }
+        String normalized = command.trim();
+        if (!normalized.matches("[A-Za-z0-9_./+~-]+")) {
+            throw new IllegalArgumentException("Service command contains unsupported shell characters: " + command);
+        }
+        return normalized;
     }
 
-    private static String script(String serviceName, Path jar, Path root, Integer port, boolean bundle, Path log) {
-        return "#!/bin/sh\n"
+    private static String script(String serviceName, String command, Path root, Integer port, boolean bundle, Path log) {
+        return "#!/bin/bash\n"
                 + "# wiz.service.name=" + shortServiceName(serviceName) + "\n"
                 + "# wiz.service.root=" + root + "\n"
                 + "# wiz.service.port=" + (port == null ? "config" : port) + "\n"
                 + "# wiz.service.bundle=" + bundle + "\n"
                 + "# wiz.service.log=" + log + "\n"
-                + "exec java -jar " + shell(jar.toString())
-                + " run --root " + shell(root.toString())
-                + " --host 0.0.0.0"
+                + "# wiz.service.command=" + command + "\n"
+                + "export PS1=${PS1:-wiz-service}\n"
+                + "shopt -s expand_aliases\n"
+                + "source /root/.bashrc\n"
+                + "cd " + shell(root.toString()) + "\n"
+                + "type " + shell(command) + " >/dev/null 2>&1 || { echo " + shell(command + " command not found after sourcing /root/.bashrc") + " >&2; exit 127; }\n"
+                + command + " run"
                 + (port == null ? "" : " --port " + port)
                 + (bundle ? " --bundle" : "")
                 + " --log " + shell(log.toString())
@@ -359,10 +370,35 @@ public class ServiceCommand implements Callable<Integer> {
         Path binary = binDir.resolve(serviceName);
         Map<String, String> metadata = metadata(binary);
         String root = metadata.getOrDefault("root", "-");
-        String port = metadata.getOrDefault("port", "config");
-        String bundle = metadata.getOrDefault("bundle", "-");
+        String port = displayPort(metadata.getOrDefault("port", "config"), root);
         String log = metadata.getOrDefault("log", logDir.resolve(name).toString());
-        return new ServiceDescriptor(name, servicePath, binary, root, port, bundle, log);
+        return new ServiceDescriptor(name, servicePath, binary, root, port, log);
+    }
+
+    private static String displayPort(String port, String root) {
+        if (port == null || port.isBlank()) {
+            return "config";
+        }
+        if (!"config".equalsIgnoreCase(port.trim())) {
+            return port.trim();
+        }
+        if (root == null || root.isBlank() || "-".equals(root)) {
+            return port.trim();
+        }
+        try {
+            WizSpringApplication.RunSettings settings = WizSpringApplication.resolveRunSettings(
+                    root,
+                    null,
+                    null,
+                    null,
+                    false,
+                    null,
+                    WizSpringApplication.DEFAULT_RUN_PROFILE,
+                    false);
+            return String.valueOf(settings.requestedPort());
+        } catch (RuntimeException exception) {
+            return port.trim();
+        }
     }
 
     private static Map<String, String> metadata(Path binary) {
@@ -392,8 +428,12 @@ public class ServiceCommand implements Callable<Integer> {
     }
 
     private static void printServices(List<ServiceDescriptor> services, PrintWriter out) {
+        if (services.isEmpty()) {
+            out.println("(no WIZ services found)");
+            return;
+        }
         ArrayList<String[]> rows = new ArrayList<>();
-        rows.add(new String[] {"name", "systemd", "binary", "root", "port", "bundle", "log"});
+        rows.add(new String[] {"name", "systemd", "binary", "root", "port", "log"});
         for (ServiceDescriptor service : services) {
             rows.add(new String[] {
                     service.name(),
@@ -401,7 +441,6 @@ public class ServiceCommand implements Callable<Integer> {
                     service.binary().toString(),
                     service.root(),
                     service.port(),
-                    service.bundle(),
                     service.log()
             });
         }
@@ -411,19 +450,31 @@ public class ServiceCommand implements Callable<Integer> {
                 widths[i] = Math.max(widths[i], row[i].length());
             }
         }
-        for (String[] row : rows) {
-            StringBuilder line = new StringBuilder();
-            for (int i = 0; i < row.length; i++) {
-                if (i > 0) {
-                    line.append("  ");
-                }
-                line.append(pad(row[i], widths[i]));
+        String border = tableBorder(widths);
+        out.println(border);
+        for (int rowIndex = 0; rowIndex < rows.size(); rowIndex++) {
+            out.println(tableRow(rows.get(rowIndex), widths));
+            if (rowIndex == 0) {
+                out.println(border);
             }
-            out.println(line);
         }
-        if (services.isEmpty()) {
-            out.println("(no WIZ services found)");
+        out.println(border);
+    }
+
+    private static String tableBorder(int[] widths) {
+        StringBuilder line = new StringBuilder("+");
+        for (int width : widths) {
+            line.append("-".repeat(width + 2)).append("+");
         }
+        return line.toString();
+    }
+
+    private static String tableRow(String[] row, int[] widths) {
+        StringBuilder line = new StringBuilder("|");
+        for (int i = 0; i < row.length; i++) {
+            line.append(' ').append(pad(row[i], widths[i])).append(" |");
+        }
+        return line.toString();
     }
 
     private static String pad(String value, int width) {
@@ -433,6 +484,6 @@ public class ServiceCommand implements Callable<Integer> {
     record ServiceRunArgs(Integer port, boolean bundle) {
     }
 
-    record ServiceDescriptor(String name, Path systemd, Path binary, String root, String port, String bundle, String log) {
+    record ServiceDescriptor(String name, Path systemd, Path binary, String root, String port, String log) {
     }
 }

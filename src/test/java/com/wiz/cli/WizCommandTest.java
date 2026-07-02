@@ -75,12 +75,16 @@ class WizCommandTest {
         Files.createDirectories(systemd);
         Files.createDirectories(bin);
         Files.createDirectories(log);
+        Path workspace = tempDir.resolve("workspace");
+        Files.createDirectories(workspace.resolve("config"));
+        Files.writeString(workspace.resolve("config/application.yml"), "server:\n  port: 19191\nwiz:\n  project:\n    default-name: main\n");
         Files.writeString(systemd.resolve("wiz.demo.service"), "[Unit]\nDescription=wiz.demo\n");
         Files.writeString(bin.resolve("wiz.demo"), "#!/bin/sh\n"
                 + "# wiz.service.name=demo\n"
-                + "# wiz.service.root=" + tempDir.resolve("workspace") + "\n"
-                + "# wiz.service.port=19090\n"
+                + "# wiz.service.root=" + workspace + "\n"
+                + "# wiz.service.port=config\n"
                 + "# wiz.service.bundle=true\n"
+                + "# wiz.service.command=wiz-spring\n"
                 + "# wiz.service.log=" + log.resolve("demo") + "\n");
 
         CommandLine command = new CommandLine(new WizCommand());
@@ -96,9 +100,13 @@ class WizCommandTest {
         assertTrue(list.contains("name"));
         assertTrue(list.contains("systemd"));
         assertTrue(list.contains("binary"));
+        assertTrue(list.contains("| demo "));
         assertTrue(list.contains("demo"));
-        assertTrue(list.contains("19090"));
-        assertTrue(list.contains("true"));
+        assertTrue(list.contains("19191"));
+        assertFalse(list.contains(" config "));
+        assertFalse(list.contains("bundle"));
+        assertFalse(list.contains("command"));
+        assertFalse(list.contains("wiz-spring"));
 
         Path runtimeJar = tempDir.resolve("wiz-runtime.jar");
         writeFakeRuntimeJar(runtimeJar);
@@ -112,8 +120,21 @@ class WizCommandTest {
                 "--bin-dir", bin.toString(),
                 "--log-dir", log.toString()));
         String dryRun = output.toString();
+        assertTrue(dryRun.contains("#!/bin/bash"));
+        assertTrue(dryRun.contains("export PS1=${PS1:-wiz-service}"));
+        assertTrue(dryRun.contains("shopt -s expand_aliases"));
+        assertTrue(dryRun.contains("source /root/.bashrc"));
+        assertTrue(dryRun.contains("cd '" + tempDir.resolve("workspace") + "'"));
+        assertTrue(dryRun.contains("type 'wiz-spring' >/dev/null 2>&1"));
+        assertTrue(dryRun.contains("wiz-spring run"));
         assertTrue(dryRun.contains("# wiz.service.port=config"));
+        assertTrue(dryRun.contains("# wiz.service.command=wiz-spring"));
         assertTrue(dryRun.contains("--bundle"));
+        assertTrue(dryRun.contains("--log '" + log.resolve("demo") + "'"));
+        assertFalse(dryRun.contains("java -jar"));
+        assertFalse(dryRun.contains(runtimeJar.toString()));
+        assertFalse(dryRun.contains(" run --root "));
+        assertFalse(dryRun.contains("--host 0.0.0.0"));
         assertFalse(dryRun.contains("--port 3000"));
 
         output.getBuffer().setLength(0);
