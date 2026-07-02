@@ -32,7 +32,7 @@ public class RunCommand implements Callable<Integer> {
     @Option(names = "--bundle", description = "Run in bundle compatibility mode.")
     private boolean bundle;
 
-    @Option(names = "--log", description = "Write Spring logs to the given file.")
+    @Option(names = "--log", description = "Write server stdout/stderr logs to the given file.")
     private Path log;
 
     @Override

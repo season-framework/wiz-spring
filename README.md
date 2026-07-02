@@ -16,7 +16,7 @@ cd /root/workspace/wiz-java/wiz-spring
 실행 파일은 `target/wiz-spring-*.jar`에 생성됩니다.
 
 ```bash
-jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.0.5.jar
+jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.0.6.jar
 workspace=/tmp/wiz-spring-demo
 
 rm -rf "$workspace"
@@ -43,7 +43,7 @@ java -jar "$jar" project create --root "$workspace" --project main --skip-build
 자주 쓸 때는 shell alias를 두면 편합니다.
 
 ```bash
-alias wiz-spring='java -jar /root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.0.5.jar'
+alias wiz-spring='java -jar /root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.0.6.jar'
 
 wiz-spring create ./demo
 wiz-spring project create --root ./demo --project main
@@ -76,11 +76,11 @@ Python WIZ의 `pip install season`처럼 runtime 자체를 Python package로 설
 | 대상 | 정의 파일 | 설치/반영 방법 |
 | --- | --- | --- |
 | WIZ Spring runtime Java/Spring dependency | `wiz-spring/pom.xml` | dependency를 추가한 뒤 `./mvnw clean package`로 jar를 다시 빌드합니다. |
-| Project frontend/npm dependency | `project/<name>/src/angular/package.json` | `wiz-spring project npm install --project=<name> --package=<pkg>` 또는 직접 `package.json` 수정 후 `wiz-spring project build`를 실행합니다. |
+| Project frontend/npm dependency | `project/<name>/src/angular/package.json` | `wiz-spring project npm install --project=<name> --package=<pkg>` 또는 직접 `package.json` 수정 후 `wiz-spring project build --clean`으로 npm dependency를 다시 설치합니다. |
 | Project Java API/model/controller dependency | `project/<name>/pom.xml` | `wiz-spring project build`가 `mvn dependency:copy-dependencies`를 실행해 `target/dependency` jar를 준비하고, Java compile/runtime classpath에 포함합니다. 직접 jar를 둘 경우 `project/<name>/lib`도 인식합니다. |
 | Project Spring/runtime config | `project/<name>/config/application.yml`, `application-dev.yml`, `application-prod.yml` | `wiz-spring run` 시작 시 workspace `config/application.yml` 다음으로 로드됩니다. `server.port`, datasource, project extension class, dev/prod profile 설정 등 project별 설정을 여기에 둡니다. |
 
-runtime의 핵심 정의 파일은 [`pom.xml`](pom.xml)입니다. 여기에는 Spring Boot, WebMVC, WebSocket, picocli 같은 core runtime dependency만 둡니다. JPA/Hibernate, SMTP, project별 SDK처럼 app/package마다 달라지는 dependency는 각 project의 `pom.xml`에 둡니다. Angular sample dependency는 내장 sample의 `src/angular/package.json`에 있고, build 시 `npm ci` 또는 `npm install` 후 Angular CLI `ng build`를 실행합니다.
+runtime의 핵심 정의 파일은 [`pom.xml`](pom.xml)입니다. 여기에는 Spring Boot, WebMVC, WebSocket, picocli 같은 core runtime dependency만 둡니다. JPA/Hibernate, SMTP, project별 SDK처럼 app/package마다 달라지는 dependency는 각 project의 `pom.xml`에 둡니다. Angular sample dependency는 내장 sample의 `src/angular/package.json`에 있고, clean build 시 `npm ci` 또는 `npm install` 후 Angular CLI `ng build`를 실행합니다. normal build는 기존 `build/src/angular/node_modules`를 보존하고 npm install을 건너뜁니다.
 
 ## CLI 지원 범위
 
@@ -90,11 +90,11 @@ runtime의 핵심 정의 파일은 [`pom.xml`](pom.xml)입니다. 여기에는 S
 | --- | --- |
 | `wiz-spring create [path]` | 지원. workspace를 만들고 `config/`, `project/`를 생성합니다. 웹 IDE용 `public/`, `ide/`, `plugin/` root는 만들지 않습니다. |
 | `wiz-spring project create` | 지원. `--project main`, local path import, git URI clone, `.wizproject` zip import를 지원합니다. 기본 생성 후 clean build가 자동 실행됩니다. |
-| `wiz-spring project build` | 지원. `--clean --phase bundle` 형태로 Java compile, Pug/Angular build, bundle 생성을 수행합니다. Java 버전, npm install, Angular build 로그와 단계별 시간을 그대로 출력합니다. |
+| `wiz-spring project build` | 지원. `--clean --phase bundle` 형태로 Java compile, Pug/Angular build, bundle 생성을 수행합니다. Java 버전, frontend install/build 로그와 단계별 시간을 그대로 출력합니다. normal build는 npm install을 건너뜁니다. |
 | `wiz-spring project list` | 지원. workspace의 project 목록을 출력합니다. |
 | `wiz-spring project delete` | 지원. 지정 project를 삭제합니다. |
 | `wiz-spring project export` | 지원. project를 `.wizproject` archive로 내보냅니다. |
-| `wiz-spring run` | 지원. `--root --host --port --project --profile`로 Spring server를 시작합니다. 기본 profile은 `dev`, 기본 host는 `0.0.0.0`, 기본 포트는 `3000`이며, `--host`/`--port`가 없으면 workspace/project `application.yml` 값으로 override할 수 있습니다. `--bundle`, `--log` compatibility option도 받습니다. |
+| `wiz-spring run` | 지원. `--root --host --port --project --profile`로 Spring server를 시작합니다. 기본 profile은 `dev`, 기본 host는 `0.0.0.0`, 기본 포트는 `3000`이며, `--host`/`--port`가 없으면 workspace/project `application.yml` 값으로 override할 수 있습니다. `--bundle`, `--log` compatibility option도 받습니다. `--log`는 서버 stdout/stderr를 지정 파일에 함께 기록하므로 project API의 `System.out.println`도 확인할 수 있습니다. |
 | `wiz-spring bundle` | 지원. 이미 build된 project bundle을 deploy/runtime bundle directory로 묶습니다. |
 | `wiz-spring kill` | 지원. Spring WIZ `run` process만 대상으로 종료하며 `--dry-run`을 지원합니다. |
 | `wiz-spring project app list/create/delete` | 지원. `src/app` 및 portal app skeleton을 생성/삭제합니다. |
@@ -114,17 +114,17 @@ runtime의 핵심 정의 파일은 [`pom.xml`](pom.xml)입니다. 여기에는 S
 WIZ Spring MCP 서버는 `wiz-vscode` 확장 코드와 분리된 Spring runtime jar 내부 기능입니다. backend source는 `api.java`, `route.java`, `socket.java`, `src/controller`, `src/portal` 규칙으로 처리합니다. Python virtualenv/pip 관리 도구는 Spring 프로젝트에서 사용하지 않으므로 도구 목록에 노출하지 않고, 대신 standalone `project jar`, Java controller 생성/삭제, portal package 삭제, project dependency 위치 확인 도구를 제공합니다. 상태 파일은 기본적으로 workspace의 `.wiz/mcp-state.json`에 저장하며, `--state`로 명시 위치를 지정할 수 있습니다.
 
 ```bash
-java -jar target/wiz-spring-0.0.5.jar mcp --root /path/to/workspace --project main
+java -jar target/wiz-spring-0.0.6.jar mcp --root /path/to/workspace --project main
 ```
 
-MCP client 설정에서는 서버 이름을 `wiz-spring`으로 두고, `command`를 `java`, `args`를 `["-jar", "/path/to/wiz-spring-0.0.5.jar", "mcp", "--root", "/path/to/workspace"]`처럼 지정합니다. VS Code에서 사용할 경우에도 별도 extension code가 아니라 이 jar 명령을 직접 가리키면 됩니다.
+MCP client 설정에서는 서버 이름을 `wiz-spring`으로 두고, `command`를 `java`, `args`를 `["-jar", "/path/to/wiz-spring-0.0.6.jar", "mcp", "--root", "/path/to/workspace"]`처럼 지정합니다. VS Code에서 사용할 경우에도 별도 extension code가 아니라 이 jar 명령을 직접 가리키면 됩니다.
 
 Codex 설정은 `wiz-spring codex`로 생성할 수 있습니다. 기존 `.codex/config.toml` 또는 `.codex/AGENTS.md`가 생성 기준과 다르면 기본적으로 경고와 종료 코드 `2`를 반환하고, `--force`를 주면 덮어씁니다.
 
 ```bash
-java -jar target/wiz-spring-0.0.5.jar codex --root /path/to/workspace --project main
-java -jar target/wiz-spring-0.0.5.jar codex --root /path/to/workspace --project main --force
-java -jar target/wiz-spring-0.0.5.jar codex --root /path/to/workspace --project main --check
+java -jar target/wiz-spring-0.0.6.jar codex --root /path/to/workspace --project main
+java -jar target/wiz-spring-0.0.6.jar codex --root /path/to/workspace --project main --force
+java -jar target/wiz-spring-0.0.6.jar codex --root /path/to/workspace --project main --check
 ```
 
 ## Runtime 지원 범위
@@ -206,7 +206,7 @@ bundle build가 성공하면 공급망 추적 산출물이 함께 생성됩니�
 | `project/<name>/target/bom.json` | bundle runtime dependency 기준 CycloneDX JSON SBOM |
 | `project/<name>/target/<name>.jar.sha256` | `project jar`로 만든 standalone jar checksum |
 
-`src/angular/package.json`이 있으면 project-local Angular CLI package로 판단합니다. lockfile이 있으면 `npm ci`, 없으면 `npm install`을 실행한 뒤 `node_modules/.bin/ng build`를 실행합니다. Angular 21 sample은 별도 `ngc-esbuild` pipeline이 아니라 Angular CLI 내장 esbuild builder(`@angular-devkit/build-angular:browser-esbuild`)를 사용합니다. Angular 입력이 없거나 real build가 불가능하면 `frontend-fallback`으로 최소 web bundle을 생성합니다.
+`src/angular/package.json`이 있으면 project-local Angular CLI package로 판단합니다. clean build는 lockfile이 있으면 `npm ci`, 없으면 `npm install`을 실행한 뒤 `node_modules/.bin/ng build`를 실행합니다. normal build는 `build/src/angular/node_modules`를 보존하고 npm install을 건너뛰며, dependency가 없으면 `--clean` build를 요구합니다. Angular 21 sample은 별도 `ngc-esbuild` pipeline이 아니라 Angular CLI 내장 esbuild builder(`@angular-devkit/build-angular:browser-esbuild`)를 사용합니다. Angular 입력이 없거나 real build가 불가능하면 `frontend-fallback`으로 최소 web bundle을 생성합니다.
 
 ## App-local Java API
 
@@ -234,7 +234,7 @@ public final class PageXyzApi {
 }
 ```
 
-package declaration이 없으면 build 중 `com.wiz.project.{project}.api.PageXyzApi` 형태로 rewrite됩니다. `app.json.api.handler`에 명시적인 handler class를 지정할 수도 있습니다.
+package declaration이 없으면 build 중 `com.wiz.project.{project}.api.PageXyzApi` 형태로 rewrite됩니다. 기본 파일명은 `api.java`이지만 `PageXyzApi.java`처럼 handler class 이름의 app-local Java 파일도 컴파일 대상으로 인식합니다. `app.json.api.handler`에 명시적인 handler class를 지정할 수도 있습니다.
 
 ## Project-local 설정과 확장
 
@@ -327,7 +327,7 @@ cd /root/workspace/wiz-java/wiz-spring
 
 최근 검증 기준:
 
-- `./mvnw test`: 157 tests
+- `./mvnw test`: 161 tests
 - `scripts/contract-spring-http.sh`: 15 contract tests
 - `scripts/e2e-spring-smoke.sh`: Java sample create/build/run smoke
 
@@ -349,7 +349,7 @@ WIZ Spring Runtime is a Java Spring port based on the Python WIZ `2.5.2` runtime
 cd /root/workspace/wiz-java/wiz-spring
 ./mvnw clean package
 
-jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.0.5.jar
+jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.0.6.jar
 workspace=/tmp/wiz-spring-demo
 
 rm -rf "$workspace"
@@ -382,7 +382,7 @@ java -jar /tmp/wiz-main.jar
 
 ### Dependencies
 
-WIZ Spring is distributed as a Spring Boot jar, not as a Python package. Core runtime dependencies live in `wiz-spring/pom.xml`; add Java/Spring libraries there only when the runtime itself needs them. Project Java dependencies live in `project/<name>/pom.xml` and are resolved into `target/dependency` during `wiz-spring project build`. Frontend dependencies live in each project at `project/<name>/src/angular/package.json`; use `wiz-spring project npm install` or edit the file and run `wiz-spring project build`. Project Spring/runtime settings live in `project/<name>/config/application.yml`, `application-dev.yml`, and `application-prod.yml`; `wiz-spring run` defaults to the `dev` profile, while standalone project jars default to `prod`.
+WIZ Spring is distributed as a Spring Boot jar, not as a Python package. Core runtime dependencies live in `wiz-spring/pom.xml`; add Java/Spring libraries there only when the runtime itself needs them. Project Java dependencies live in `project/<name>/pom.xml` and are resolved into `target/dependency` during `wiz-spring project build`. Frontend dependencies live in each project at `project/<name>/src/angular/package.json`; use `wiz-spring project npm install` or edit the file and run `wiz-spring project build --clean` when dependencies need to be installed again. Normal project builds preserve `build/src/angular/node_modules` and skip npm install. Project Spring/runtime settings live in `project/<name>/config/application.yml`, `application-dev.yml`, and `application-prod.yml`; `wiz-spring run` defaults to the `dev` profile, while standalone project jars default to `prod`.
 
 Successful project bundle builds also write `bundle/.wiz-dependencies.json`, `bundle/.wiz-build.json` dependency digest fields, and `target/bom.json` CycloneDX metadata. `project jar` writes `<name>.jar.sha256` next to the standalone jar. Runtime Maven package builds write `target/bom.json` through the CycloneDX Maven plugin. Archive-handling dependencies such as `commons-compress` should be treated as security-priority updates.
 
@@ -390,8 +390,8 @@ Successful project bundle builds also write `bundle/.wiz-dependencies.json`, `bu
 
 With the `wiz-spring` alias, supported commands are `create`, `run`, `bundle`, `kill`, `service`, `mcp`, `codex`, `project create`, `project build`, `project list`, `project delete`, `project export`, `project app`, `project controller`, `project route`, `project package`, and `project npm`. Separate `wiz-spring server`, web IDE, plugin management, and Python backend auto-conversion/execution are outside the Spring port scope.
 
-`wiz-spring mcp` runs the standalone Spring MCP server. MCP client settings should use the server name `wiz-spring` and run `java -jar /path/to/wiz-spring-0.0.5.jar mcp --root /path/to/workspace --project main`. `wiz-spring codex --root /path/to/workspace --project main` generates `.codex/config.toml` and `.codex/AGENTS.md`; it warns with exit code `2` when existing files differ, and `--force` overwrites them. `wiz-spring service list` prints systemd services as a table and resolves configured ports when possible.
+`wiz-spring mcp` runs the standalone Spring MCP server. MCP client settings should use the server name `wiz-spring` and run `java -jar /path/to/wiz-spring-0.0.6.jar mcp --root /path/to/workspace --project main`. `wiz-spring codex --root /path/to/workspace --project main` generates `.codex/config.toml` and `.codex/AGENTS.md`; it warns with exit code `2` when existing files differ, and `--force` overwrites them. `wiz-spring service list` prints systemd services as a table and resolves configured ports when possible. `wiz-spring run --log <file>` tees server stdout/stderr into the file, including project API `System.out.println` output.
 
 ### Runtime Coverage
 
-The runtime supports static SPA serving from `bundle/www`, app-local Java APIs, Java route handlers, controller hooks, config/session/auth facades, project-local model conventions, build markers, and Socket.IO-client-compatible `wiz.socket()` connections over HTTP(S) namespace URLs such as `/wiz/app/{project}/{app_id}` using Engine.IO HTTP long-polling. JPA/Hibernate/PWA/SMTP-style portal package backends belong to project source, not the core jar. Auth/session implementations can be supplied by project classes under `src/model/AuthService.java`, `src/model/SessionService.java`, or configured in project `application.yml`. Socket handlers are loaded from the current bundle for each dispatch, so rebuilding a changed `socket.java` is enough for the next message/connection to use the new handler without restarting the Spring server.
+The runtime supports static SPA serving from `bundle/www`, app-local Java APIs, Java route handlers, controller hooks, config/session/auth facades, project-local model conventions, build markers, and Socket.IO-client-compatible `wiz.socket()` connections over HTTP(S) namespace URLs such as `/wiz/app/{project}/{app_id}` using Engine.IO HTTP long-polling. App-local Java APIs can use either the conventional `api.java` file or a handler-named source file such as `PageAccessApi.java`. JPA/Hibernate/PWA/SMTP-style portal package backends belong to project source, not the core jar. Auth/session implementations can be supplied by project classes under `src/model/AuthService.java`, `src/model/SessionService.java`, or configured in project `application.yml`. Socket handlers are loaded from the current bundle for each dispatch, so rebuilding a changed `socket.java` is enough for the next message/connection to use the new handler without restarting the Spring server.

@@ -50,14 +50,7 @@ class AngularBuildServiceTest {
     void buildsReadyAngularPackageAndCopiesDist() throws Exception {
         ProjectContext project = newProject();
         Path angularRoot = project.buildRoot().resolve("src/angular");
-        Files.createDirectories(angularRoot.resolve("src"));
-        Files.createDirectories(angularRoot.resolve("node_modules/.bin"));
-        Files.writeString(angularRoot.resolve("package.json"), "{\"scripts\":{\"build\":\"ng build\"}}\n");
-        Files.writeString(angularRoot.resolve("angular.json"), minimalAngularJson());
-        Files.writeString(angularRoot.resolve("src/index.html"), "<app-root></app-root>\n");
-        Files.writeString(angularRoot.resolve("src/main.ts"), "console.log('main');\n");
-        Files.writeString(angularRoot.resolve("tsconfig.app.json"), "{}\n");
-        Files.writeString(angularRoot.resolve("node_modules/.bin/ng"), "#!/usr/bin/env node\n");
+        writeReadyAngularPackage(angularRoot);
 
         FakeCommandExecutor executor = new FakeCommandExecutor();
         FrontendBuildResult result = new AngularBuildService(executor).build(project);
@@ -66,6 +59,36 @@ class AngularBuildServiceTest {
         assertTrue(result.built());
         assertEquals(List.of("frontend-install", "frontend-build"), executor.phases);
         assertTrue(Files.exists(project.buildRoot().resolve("dist/build/index.html")));
+    }
+
+    @Test
+    void normalBuildSkipsNpmInstallWhenDependenciesExist() throws Exception {
+        ProjectContext project = newProject();
+        Path angularRoot = project.buildRoot().resolve("src/angular");
+        writeReadyAngularPackage(angularRoot);
+        Files.createDirectories(angularRoot.resolve("node_modules/pug"));
+
+        FakeCommandExecutor executor = new FakeCommandExecutor();
+        FrontendBuildResult result = new AngularBuildService(executor).build(project, false, BuildLogger.quiet());
+
+        assertTrue(result.success());
+        assertTrue(result.built());
+        assertEquals(List.of("frontend-build"), executor.phases);
+    }
+
+    @Test
+    void normalBuildFailsWithoutInstallingWhenDependenciesAreMissing() throws Exception {
+        ProjectContext project = newProject();
+        Path angularRoot = project.buildRoot().resolve("src/angular");
+        writeReadyAngularPackage(angularRoot);
+        delete(angularRoot.resolve("node_modules"));
+
+        FakeCommandExecutor executor = new FakeCommandExecutor();
+        FrontendBuildResult result = new AngularBuildService(executor).build(project, false, BuildLogger.quiet());
+
+        assertFalse(result.success());
+        assertTrue(result.message().contains("--clean"));
+        assertTrue(executor.phases.isEmpty());
     }
 
     @Test
@@ -100,6 +123,28 @@ class AngularBuildServiceTest {
         Path workspace = tempDir.resolve("workspace-" + java.util.UUID.randomUUID());
         new WorkspaceService().createWorkspace(workspace);
         return new ProjectService(new PathService(workspace)).createProject("main", null, null);
+    }
+
+    private void writeReadyAngularPackage(Path angularRoot) throws Exception {
+        Files.createDirectories(angularRoot.resolve("src"));
+        Files.createDirectories(angularRoot.resolve("node_modules/.bin"));
+        Files.writeString(angularRoot.resolve("package.json"), "{\"scripts\":{\"build\":\"ng build\"}}\n");
+        Files.writeString(angularRoot.resolve("angular.json"), minimalAngularJson());
+        Files.writeString(angularRoot.resolve("src/index.html"), "<app-root></app-root>\n");
+        Files.writeString(angularRoot.resolve("src/main.ts"), "console.log('main');\n");
+        Files.writeString(angularRoot.resolve("tsconfig.app.json"), "{}\n");
+        Files.writeString(angularRoot.resolve("node_modules/.bin/ng"), "#!/usr/bin/env node\n");
+    }
+
+    private void delete(Path path) throws IOException {
+        if (!Files.exists(path)) {
+            return;
+        }
+        try (var paths = Files.walk(path)) {
+            for (Path item : paths.sorted(java.util.Comparator.reverseOrder()).toList()) {
+                Files.deleteIfExists(item);
+            }
+        }
     }
 
     private String minimalAngularJson() {

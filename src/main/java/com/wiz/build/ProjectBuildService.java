@@ -86,7 +86,7 @@ public class ProjectBuildService {
                 });
             }
             timed(buildLogger, "reconstruct", () -> {
-                reconstruct(project);
+                reconstruct(project, !clean);
                 return null;
             });
             if (requestedPhase.equals("reconstruct")) {
@@ -106,7 +106,7 @@ public class ProjectBuildService {
                 return finish(buildLogger, totalStarted, compile);
             }
 
-            FrontendBuildResult frontend = timed(buildLogger, "frontend", () -> angularBuildService.build(project, buildLogger));
+            FrontendBuildResult frontend = timed(buildLogger, "frontend", () -> angularBuildService.build(project, clean, buildLogger));
             if (!frontend.success()) {
                 return finish(buildLogger, totalStarted, new BuildResult(1, List.of("reconstruct", "java-source", "project-dependencies", "java-compile", frontend.phase()), frontend.message()));
             }
@@ -136,12 +136,37 @@ public class ProjectBuildService {
     }
 
     public void reconstruct(ProjectContext project) throws IOException {
+        reconstruct(project, false);
+    }
+
+    private void reconstruct(ProjectContext project, boolean preserveFrontendDependencies) throws IOException {
         SafePath root = new SafePath(project.root());
         Path buildSourceRoot = root.resolveForWrite("build/src");
+        if (preserveFrontendDependencies) {
+            deleteBuildSourceRootExceptFrontendDependencies(buildSourceRoot);
+        } else {
+            delete(buildSourceRoot);
+        }
         Files.createDirectories(buildSourceRoot);
         copyIfExists(project.sourceRoot(), buildSourceRoot);
         flattenPortals(project.sourceRoot().resolve("portal"), buildSourceRoot);
         new AppMetadataNormalizer(objectMapper).normalize(project, buildSourceRoot);
+    }
+
+    private void deleteBuildSourceRootExceptFrontendDependencies(Path buildSourceRoot) throws IOException {
+        Path nodeModules = buildSourceRoot.resolve("angular/node_modules");
+        if (!Files.exists(nodeModules)) {
+            delete(buildSourceRoot);
+            return;
+        }
+        try (Stream<Path> paths = Files.walk(buildSourceRoot)) {
+            for (Path item : paths.sorted(Comparator.reverseOrder()).toList()) {
+                if (item.equals(buildSourceRoot) || item.equals(nodeModules) || item.startsWith(nodeModules) || nodeModules.startsWith(item)) {
+                    continue;
+                }
+                Files.deleteIfExists(item);
+            }
+        }
     }
 
     private <T> T timed(BuildLogger logger, String phase, BuildStep<T> step) throws IOException {
@@ -180,19 +205,22 @@ public class ProjectBuildService {
     }
 
     private void reconstructProjectJava(ProjectContext project) throws IOException {
+        delete(project.buildRoot().resolve("main/java"));
         Path appRoot = project.buildRoot().resolve("src/app");
         if (Files.isDirectory(appRoot)) {
             try (Stream<Path> apps = Files.list(appRoot)) {
                 for (Path app : apps.filter(Files::isDirectory).toList()) {
                     String appId = app.getFileName().toString();
                     Path appJson = app.resolve("app.json");
-                    Path apiSource = app.resolve("api.java");
-                    if (Files.isRegularFile(apiSource)) {
-                        writeJavaSource(project, handlerClass(project, appId, appJson), apiSource);
+                    String apiHandlerClass = handlerClass(project, appId, appJson);
+                    Optional<Path> apiSource = appJavaSource(app, "api.java", apiHandlerClass);
+                    if (apiSource.isPresent()) {
+                        writeJavaSource(project, apiHandlerClass, apiSource.get());
                     }
-                    Path socketSource = app.resolve("socket.java");
-                    if (Files.isRegularFile(socketSource)) {
-                        writeJavaSource(project, socketHandlerClass(project, appId, appJson), socketSource);
+                    String socketHandlerClass = socketHandlerClass(project, appId, appJson);
+                    Optional<Path> socketSource = appJavaSource(app, "socket.java", socketHandlerClass);
+                    if (socketSource.isPresent()) {
+                        writeJavaSource(project, socketHandlerClass, socketSource.get());
                     }
                 }
             }
@@ -207,6 +235,19 @@ public class ProjectBuildService {
         // New projects should place auth/session implementations under src/model.
         reconstructJavaTree(project, project.buildRoot().resolve("src/auth"), ProjectJavaNaming.packageRoot(project.name()) + ".auth");
         reconstructJavaTree(project, project.buildRoot().resolve("src/session"), ProjectJavaNaming.packageRoot(project.name()) + ".session");
+    }
+
+    private Optional<Path> appJavaSource(Path app, String conventionalName, String handlerClass) {
+        Path conventional = app.resolve(conventionalName);
+        if (Files.isRegularFile(conventional)) {
+            return Optional.of(conventional);
+        }
+        String handlerFileName = handlerClass.substring(handlerClass.lastIndexOf('.') + 1) + ".java";
+        Path handlerNamed = app.resolve(handlerFileName);
+        if (Files.isRegularFile(handlerNamed)) {
+            return Optional.of(handlerNamed);
+        }
+        return Optional.empty();
     }
 
     private void reconstructRouteJava(ProjectContext project) throws IOException {

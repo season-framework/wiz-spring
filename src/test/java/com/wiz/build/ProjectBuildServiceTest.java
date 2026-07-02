@@ -1,6 +1,7 @@
 package com.wiz.build;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -148,6 +149,50 @@ class ProjectBuildServiceTest {
         assertTrue(dependencies.contains("\"dependencies\""));
         String bom = Files.readString(project.root().resolve("target").resolve(SupplyChainManifestService.CYCLONEDX_BOM_FILE));
         assertTrue(bom.contains("\"bomFormat\" : \"CycloneDX\""));
+    }
+
+    @Test
+    void normalBuildRecreatesGeneratedApiFromHandlerNamedAppJavaFile() throws Exception {
+        Path workspace = tempDir.resolve("handler-named-workspace");
+        new WorkspaceService().createWorkspace(workspace);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        removeAngularSource(project);
+
+        BuildResult initial = new ProjectBuildService().build(project, true, "bundle");
+        assertTrue(initial.success(), initial.message());
+
+        Files.delete(project.appRoot().resolve("page.access/api.java"));
+        Files.writeString(project.appRoot().resolve("page.access/PageAccessApi.java"), handlerNamedAccessApi());
+        BuildResult rebuild = new ProjectBuildService().build(project, false, "bundle");
+
+        assertTrue(rebuild.success(), rebuild.message());
+        Path generated = project.buildRoot().resolve("main/java/com/wiz/project/main/api/PageAccessApi.java");
+        String generatedSource = Files.readString(generated);
+        assertTrue(generatedSource.contains("handler-named-api"));
+        assertFalse(generatedSource.contains("authenticate"));
+        assertTrue(Files.exists(project.bundleRoot().resolve("classes/com/wiz/project/main/api/PageAccessApi.class")));
+        String appJson = Files.readString(project.bundleRoot().resolve("src/app/page.access/app.json"));
+        assertTrue(appJson.contains("\"handler\" : \"com.wiz.project.main.api.PageAccessApi\""));
+    }
+
+    @Test
+    void normalReconstructPreservesFrontendDependenciesAndRemovesStaleInputs() throws Exception {
+        Path workspace = tempDir.resolve("normal-reconstruct-workspace");
+        new WorkspaceService().createWorkspace(workspace);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        Path nodeModuleBinary = project.buildRoot().resolve("src/angular/node_modules/.bin/ng");
+        Path staleApp = project.buildRoot().resolve("src/app/stale/app.json");
+        Files.createDirectories(nodeModuleBinary.getParent());
+        Files.createDirectories(staleApp.getParent());
+        Files.writeString(nodeModuleBinary, "#!/usr/bin/env node\n");
+        Files.writeString(staleApp, "{}\n");
+
+        BuildResult result = new ProjectBuildService().build(project, false, "reconstruct");
+
+        assertTrue(result.success(), result.message());
+        assertTrue(Files.exists(nodeModuleBinary));
+        assertTrue(Files.notExists(staleApp));
+        assertTrue(Files.exists(project.buildRoot().resolve("src/app/page.access/app.json")));
     }
 
     @Test
@@ -323,6 +368,14 @@ class ProjectBuildServiceTest {
                 Files.delete(path);
             }
         }
+    }
+
+    private String handlerNamedAccessApi() {
+        return "public final class PageAccessApi {\n"
+                + "    public Object login() {\n"
+                + "        return java.util.Map.of(\"message\", \"handler-named-api\");\n"
+                + "    }\n"
+                + "}\n";
     }
 
     private String guardControllerJava() {

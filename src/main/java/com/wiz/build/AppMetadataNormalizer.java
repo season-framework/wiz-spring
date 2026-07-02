@@ -47,15 +47,25 @@ final class AppMetadataNormalizer {
                 putDefault(metadata, "name", ProjectJavaNaming.componentName(appId));
                 putNgBuild(metadata, appId);
                 putNg(metadata, appId);
-                if (Files.isRegularFile(app.resolve("api.java"))) {
-                    putNestedDefault(metadata, "api", "handler", ProjectJavaNaming.appApiHandlerClass(project.name(), appId));
+                String apiHandlerClass = nestedString(metadata, "api", "handler", ProjectJavaNaming.appApiHandlerClass(project.name(), appId));
+                if (appJavaSourceExists(app, "api.java", apiHandlerClass)) {
+                    putNestedDefault(metadata, "api", "handler", apiHandlerClass);
                 }
-                if (Files.isRegularFile(app.resolve("socket.java"))) {
-                    putNestedDefault(metadata, "socket", "handler", ProjectJavaNaming.appSocketHandlerClass(project.name(), appId));
+                String socketHandlerClass = nestedString(metadata, "socket", "handler", ProjectJavaNaming.appSocketHandlerClass(project.name(), appId));
+                if (appJavaSourceExists(app, "socket.java", socketHandlerClass)) {
+                    putNestedDefault(metadata, "socket", "handler", socketHandlerClass);
                 }
                 writeMetadata(appJson, metadata);
             }
         }
+    }
+
+    private boolean appJavaSourceExists(Path app, String conventionalName, String handlerClass) {
+        if (Files.isRegularFile(app.resolve(conventionalName))) {
+            return true;
+        }
+        String handlerFileName = handlerClass.substring(handlerClass.lastIndexOf('.') + 1) + ".java";
+        return Files.isRegularFile(app.resolve(handlerFileName));
     }
 
     private void normalizeRoutes(ProjectContext project, Path routeRoot) throws IOException {
@@ -186,5 +196,16 @@ final class AppMetadataNormalizer {
     private String string(Map<String, Object> metadata, String key) {
         Object value = metadata.get(key);
         return value == null ? "" : value.toString().trim();
+    }
+
+    private String nestedString(Map<String, Object> metadata, String key, String nestedKey, String fallback) {
+        Object value = metadata.get(key);
+        if (value instanceof Map<?, ?> map) {
+            Object nested = map.get(nestedKey);
+            if (nested != null && !nested.toString().isBlank()) {
+                return nested.toString().trim();
+            }
+        }
+        return fallback;
     }
 }

@@ -40,10 +40,14 @@ public class AngularBuildService {
     }
 
     public FrontendBuildResult build(ProjectContext project) throws IOException {
-        return build(project, BuildLogger.quiet());
+        return build(project, true, BuildLogger.quiet());
     }
 
     public FrontendBuildResult build(ProjectContext project, BuildLogger logger) throws IOException {
+        return build(project, true, logger);
+    }
+
+    public FrontendBuildResult build(ProjectContext project, boolean clean, BuildLogger logger) throws IOException {
         BuildLogger buildLogger = logger == null ? BuildLogger.quiet() : logger;
         Path angularRoot = project.buildRoot().resolve("src/angular");
         if (!Files.isRegularFile(angularRoot.resolve("package.json"))) {
@@ -61,19 +65,26 @@ public class AngularBuildService {
 
         ArrayList<CommandResult> commands = new ArrayList<>();
         try {
-            buildLogger.info("[frontend-install] command: npm " + installCommand(angularRoot));
-            CommandResult install = commandExecutor.run(
-                    "frontend-install",
-                    project.root(),
-                    angularRoot,
-                    List.of("npm", installCommand(angularRoot)),
-                    INSTALL_TIMEOUT,
-                    OUTPUT_CAP_BYTES,
-                    buildLogger);
-            commands.add(install);
-            logCommandResult(buildLogger, install);
-            if (!install.success()) {
-                return FrontendBuildResult.failed(install.summary(), commands);
+            if (clean) {
+                buildLogger.info("[frontend-install] command: npm " + installCommand(angularRoot));
+                CommandResult install = commandExecutor.run(
+                        "frontend-install",
+                        project.root(),
+                        angularRoot,
+                        List.of("npm", installCommand(angularRoot)),
+                        INSTALL_TIMEOUT,
+                        OUTPUT_CAP_BYTES,
+                        buildLogger);
+                commands.add(install);
+                logCommandResult(buildLogger, install);
+                if (!install.success()) {
+                    return FrontendBuildResult.failed(install.summary(), commands);
+                }
+            } else {
+                buildLogger.info("[frontend-install] skipped for normal build");
+                if (!frontendDependenciesPresent(angularRoot)) {
+                    return FrontendBuildResult.failed("Frontend dependencies are missing; run project build with --clean to install npm packages", commands);
+                }
             }
 
             buildLogger.info("[frontend-stage] staging WIZ sources for Angular CLI");
@@ -116,6 +127,11 @@ public class AngularBuildService {
         } catch (IllegalArgumentException exception) {
             return FrontendBuildResult.failed(exception.getMessage(), commands);
         }
+    }
+
+    private boolean frontendDependenciesPresent(Path angularRoot) {
+        return Files.exists(angularRoot.resolve("node_modules/.bin/ng"))
+                && Files.isDirectory(angularRoot.resolve("node_modules/pug"));
     }
 
     private Optional<BuildReadiness> buildReadiness(Path angularRoot) throws IOException {
