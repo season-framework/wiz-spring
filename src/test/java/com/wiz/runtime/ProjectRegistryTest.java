@@ -42,4 +42,22 @@ class ProjectRegistryTest {
 
         assertThrows(IllegalStateException.class, () -> new ProjectRegistry(new PathService(workspace)).currentProject(Map.of()));
     }
+
+    @Test
+    void ignoresProjectCookieWhenCookieSelectionIsDisabled() throws Exception {
+        Path workspace = tempDir.resolve("prod-workspace");
+        new WorkspaceService().createWorkspace(workspace);
+        ProjectService projects = new ProjectService(new PathService(workspace));
+        projects.createProject("main", null, null);
+        projects.createProject("sample", null, null);
+        ProjectRegistry registry = new ProjectRegistry(
+                new PathService(workspace),
+                ProjectRegistry.DEFAULT_PROJECT_COOKIE_NAME,
+                ProjectRegistry.DEFAULT_DEVMODE_COOKIE_NAME,
+                ProjectRegistry.DEFAULT_PROJECT_NAME,
+                false);
+
+        assertEquals(false, registry.cookieSelectionEnabled());
+        assertEquals("main", registry.currentProject(Map.of(ProjectRegistry.DEFAULT_PROJECT_COOKIE_NAME, "sample")).name());
+    }
 }

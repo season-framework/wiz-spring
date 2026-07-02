@@ -9,9 +9,11 @@ import com.wiz.runtime.WizContext;
 
 import jakarta.persistence.EntityManagerFactory;
 
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
@@ -23,16 +25,27 @@ import org.springframework.transaction.support.TransactionTemplate;
 @EnableTransactionManagement
 public class JpaConfig {
 
-    @Bean
+    @Bean(destroyMethod = "close")
     public DataSource dataSource(WizContext wiz) {
         Map<String, Object> values = applicationValues(wiz);
         String url = datasourceUrl(wiz, values);
-        DriverManagerDataSource dataSource = new DriverManagerDataSource();
-        dataSource.setDriverClassName(value(values.get("sample.datasource.driver-class-name"), driverFor(url)));
-        dataSource.setUrl(url);
-        optional(values.get("sample.datasource.username"), dataSource::setUsername);
-        optional(values.get("sample.datasource.password"), dataSource::setPassword);
-        return dataSource;
+        int maximumPoolSize = positiveInt(values.get("sample.datasource.maximum-pool-size"), defaultMaximumPoolSize(url));
+        HikariConfig config = new HikariConfig();
+        config.setPoolName("wiz-" + safePoolName(wiz.project().name()) + "-sample");
+        config.setDriverClassName(value(values.get("sample.datasource.driver-class-name"), driverFor(url)));
+        config.setJdbcUrl(url);
+        config.setMaximumPoolSize(maximumPoolSize);
+        config.setMinimumIdle(Math.min(maximumPoolSize, positiveInt(values.get("sample.datasource.minimum-idle"), defaultMinimumIdle(url, maximumPoolSize))));
+        config.setConnectionTimeout(positiveLong(values.get("sample.datasource.connection-timeout-millis"), 30_000));
+        config.setIdleTimeout(positiveLong(values.get("sample.datasource.idle-timeout-millis"), 600_000));
+        config.setMaxLifetime(positiveLong(values.get("sample.datasource.max-lifetime-millis"), 1_800_000));
+        optional(values.get("sample.datasource.username"), config::setUsername);
+        optional(values.get("sample.datasource.password"), config::setPassword);
+        if (isSqlite(url)) {
+            config.addDataSourceProperty("busy_timeout", String.valueOf(positiveLong(values.get("sample.datasource.sqlite-busy-timeout-millis"), 5_000)));
+            config.addDataSourceProperty("journal_mode", value(values.get("sample.datasource.sqlite-journal-mode"), "WAL"));
+        }
+        return new HikariDataSource(config);
     }
 
     @Bean
@@ -117,6 +130,18 @@ public class JpaConfig {
         return "org.hibernate.community.dialect.SQLiteDialect";
     }
 
+    private boolean isSqlite(String url) {
+        return url.startsWith("jdbc:sqlite:");
+    }
+
+    private int defaultMaximumPoolSize(String url) {
+        return isSqlite(url) ? 1 : 10;
+    }
+
+    private int defaultMinimumIdle(String url, int maximumPoolSize) {
+        return isSqlite(url) ? 1 : Math.min(maximumPoolSize, 2);
+    }
+
     private String projectPackageRoot() {
         String packageName = getClass().getPackageName();
         int marker = packageName.indexOf(".portal.season.");
@@ -128,6 +153,32 @@ public class JpaConfig {
             return defaultValue;
         }
         return value.toString();
+    }
+
+    private int positiveInt(Object value, int defaultValue) {
+        if (value == null || value.toString().isBlank()) {
+            return defaultValue;
+        }
+        try {
+            return Math.max(1, Integer.parseInt(value.toString()));
+        } catch (NumberFormatException exception) {
+            return defaultValue;
+        }
+    }
+
+    private long positiveLong(Object value, long defaultValue) {
+        if (value == null || value.toString().isBlank()) {
+            return defaultValue;
+        }
+        try {
+            return Math.max(1, Long.parseLong(value.toString()));
+        } catch (NumberFormatException exception) {
+            return defaultValue;
+        }
+    }
+
+    private String safePoolName(String value) {
+        return value(value, "project").replaceAll("[^A-Za-z0-9_.-]", "-");
     }
 
     private void optional(Object value, java.util.function.Consumer<String> setter) {

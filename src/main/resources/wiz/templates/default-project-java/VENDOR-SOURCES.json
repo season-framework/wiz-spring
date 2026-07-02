@@ -1,0 +1,40 @@
+{
+  "manifestVersion": 1,
+  "projectTemplate": "default-project-java",
+  "entries": [
+    {
+      "name": "CKEditor 5 custom classic editor build",
+      "path": "src/portal/season/libs/ckeditor",
+      "version": "bundled 2022 build; exact upstream package version was not recorded in the legacy source snapshot",
+      "source": "https://ckeditor.com/ckeditor-5/",
+      "license": "See upstream LICENSE.md; the bundled ckeditor.js header references LICENSE.md but the license text is not present in this legacy source snapshot",
+      "licenseEvidence": [
+        "src/portal/season/libs/ckeditor/ckeditor.js header: Copyright (c) 2003-2022, CKSource - Frederico Knabben"
+      ]
+    },
+    {
+      "name": "ngx-sortablejs",
+      "path": "src/portal/season/libs/ngx-sortablejs",
+      "version": "legacy source snapshot; package.json does not declare a version",
+      "source": "https://github.com/sortablejs/ngx-sortablejs",
+      "license": "MIT",
+      "licenseEvidence": [
+        "src/portal/season/libs/ngx-sortablejs/package.json"
+      ]
+    },
+    {
+      "name": "SUIT font",
+      "path": "src/assets/font/SUIT",
+      "version": "legacy source snapshot; exact upstream version was not recorded",
+      "source": "https://sunn.us/suit/",
+      "license": "SIL-OFL-1.1",
+      "licenseEvidence": [
+        "src/assets/font/SUIT/LICENSE"
+      ]
+    }
+  ],
+  "notes": [
+    "Angular package dependencies stay in src/angular/package.json and are intentionally not rewritten by this manifest.",
+    "When replacing vendored source, update this file with the upstream version, source URL, and license evidence."
+  ]
+}

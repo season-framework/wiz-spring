@@ -1,0 +1,8 @@
+# WIZ Spring 개발 profile 설정입니다.
+# `wiz-spring run`은 profile을 지정하지 않으면 dev profile을 기본으로 사용합니다.
+
+wiz:
+  project:
+    # 개발 중에는 browser cookie로 project를 전환할 수 있습니다.
+    # 기본값: true
+    cookie-selection-enabled: true

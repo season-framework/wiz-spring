@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.wiz.config.WizRedirectProperties;
 import com.wiz.domain.ModelAccessor;
 import com.wiz.domain.ModelRegistry;
 import com.wiz.session.AuthService;
@@ -19,18 +20,34 @@ public class WizContext implements AutoCloseable {
     private final SessionService session;
     private final AuthService auth;
     private final ModelRegistry models;
+    private final WizRedirectProperties redirectProperties;
+    private final ProjectRuntimeCache runtimeCache;
     private final Map<String, Object> modelRegistry;
     private final List<Runnable> cleanupHooks;
 
     public WizContext(WizRequest request, WizResponse response, ProjectContext project) {
-        this(request, response, project, new ModelRegistry());
+        this(request, response, project, new ProjectRuntimeCache(), new WizRedirectProperties());
+    }
+
+    private WizContext(WizRequest request, WizResponse response, ProjectContext project, ProjectRuntimeCache runtimeCache, WizRedirectProperties redirectProperties) {
+        this(request, response, project, new ModelRegistry(runtimeCache), redirectProperties, runtimeCache);
     }
 
     public WizContext(WizRequest request, WizResponse response, ProjectContext project, ModelRegistry models) {
+        this(request, response, project, models, new WizRedirectProperties());
+    }
+
+    public WizContext(WizRequest request, WizResponse response, ProjectContext project, ModelRegistry models, WizRedirectProperties redirectProperties) {
+        this(request, response, project, models, redirectProperties, new ProjectRuntimeCache());
+    }
+
+    public WizContext(WizRequest request, WizResponse response, ProjectContext project, ModelRegistry models, WizRedirectProperties redirectProperties, ProjectRuntimeCache runtimeCache) {
         this.request = request;
         this.response = response;
         this.project = project;
         this.models = models;
+        this.redirectProperties = redirectProperties == null ? new WizRedirectProperties() : redirectProperties;
+        this.runtimeCache = runtimeCache == null ? new ProjectRuntimeCache() : runtimeCache;
         this.modelRegistry = new LinkedHashMap<>();
         this.cleanupHooks = new ArrayList<>();
         this.config = new ConfigService(project);
@@ -60,6 +77,14 @@ public class WizContext implements AutoCloseable {
 
     public AuthService auth() {
         return auth;
+    }
+
+    public WizRedirectProperties redirectProperties() {
+        return redirectProperties;
+    }
+
+    public ProjectRuntimeCache runtimeCache() {
+        return runtimeCache;
     }
 
     public ModelAccessor models() {

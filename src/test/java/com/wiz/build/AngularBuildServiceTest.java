@@ -80,6 +80,13 @@ class AngularBuildServiceTest {
         String source = Files.readString(component);
         assertTrue(source.indexOf("import { OnInit } from '@angular/core';") < source.indexOf("@Component({"));
         assertTrue(source.indexOf("@Component({") < source.indexOf("export class PageAccessComponent"));
+        assertTrue(source.contains("apiPrefix: (window as any).__WIZ_CONFIG__?.apiPrefix || '/wiz/api'"));
+
+        String declarations = Files.readString(project.buildRoot().resolve("src/angular/src/types.d.ts"));
+        assertTrue(declarations.contains("__WIZ_CONFIG__?: { apiPrefix?: string;"));
+
+        String index = Files.readString(project.buildRoot().resolve("src/angular/src/index.pug"));
+        assertTrue(index.contains("script(src=\"/wiz/config.js\")"));
 
         String routing = Files.readString(project.buildRoot().resolve("src/angular/src/app/app-routing.module.ts"));
         assertTrue(routing.contains("data: { app_id: \"page.access\" }"));

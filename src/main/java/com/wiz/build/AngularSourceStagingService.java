@@ -110,7 +110,7 @@ final class AngularSourceStagingService {
                 + "import Wiz from '../../wiz';\n"
                 + split.imports()
                 + "declare const WizRoute: any;\n"
-                + "let wiz = new Wiz('/wiz').app('" + escapeTs(component.appId()) + "');\n"
+                + "let wiz = new Wiz({ baseuri: '/wiz', apiPrefix: (window as any).__WIZ_CONFIG__?.apiPrefix || '/wiz/api' }).app('" + escapeTs(component.appId()) + "');\n"
                 + "@Component({\n"
                 + "    selector: '" + escapeTs(component.selector()) + "',\n"
                 + "    templateUrl: './view.html',\n"
@@ -319,7 +319,7 @@ final class AngularSourceStagingService {
 
     private void writeTypeDeclarations(Path angularSrc) throws IOException {
         Files.writeString(angularSrc.resolve("types.d.ts"), "declare global {\n"
-                + "  interface Window { WizRoute?: any; MonacoEnvironment?: any; }\n"
+                + "  interface Window { WizRoute?: any; MonacoEnvironment?: any; __WIZ_CONFIG__?: { apiPrefix?: string; baseuri?: string; baseUri?: string }; }\n"
                 + "  interface Navigator { userLanguage?: string; }\n"
                 + "}\n"
                 + "declare const WizRoute: any;\n"

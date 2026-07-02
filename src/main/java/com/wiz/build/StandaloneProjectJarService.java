@@ -46,7 +46,13 @@ public class StandaloneProjectJarService {
         List<EmbeddedFile> files = embeddedFiles(workspaceRoot, project);
         String id = "wiz-" + project.name() + "-" + digest(files);
         writeEmbeddedWorkspace(target, project.name(), id, files);
+        writeChecksum(target);
         return target;
+    }
+
+    public Path checksumPath(Path jar) {
+        Path absolute = jar.toAbsolutePath().normalize();
+        return absolute.resolveSibling(absolute.getFileName() + ".sha256");
     }
 
     private Path outputPath(ProjectContext project, Path output) {
@@ -97,6 +103,23 @@ public class StandaloneProjectJarService {
             digest.update((byte) 0);
         }
         return HexFormat.of().formatHex(digest.digest()).substring(0, 16);
+    }
+
+    private void writeChecksum(Path jar) throws IOException {
+        String digest = fileDigest(jar);
+        Files.writeString(checksumPath(jar), digest + "  " + jar.getFileName() + "\n");
+    }
+
+    private String fileDigest(Path path) throws IOException {
+        MessageDigest digest = sha256();
+        try (var input = Files.newInputStream(path)) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = input.read(buffer)) >= 0) {
+                digest.update(buffer, 0, read);
+            }
+        }
+        return HexFormat.of().formatHex(digest.digest());
     }
 
     private MessageDigest sha256() {

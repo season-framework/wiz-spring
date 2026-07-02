@@ -1,14 +1,20 @@
 package com.wiz;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
+import com.wiz.config.WizProjectProperties;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ConfigurableApplicationContext;
 
 @SpringBootTest
 class WizSpringApplicationTests {
@@ -30,10 +36,53 @@ class WizSpringApplicationTests {
 		List<String> args = WizSpringApplication.serverArgs(workspace.toString(), null, null, null, false, null);
 
 		assertTrue(args.contains("--wiz.project.default-name=dev"));
+		assertTrue(args.contains("--spring.profiles.default=dev"));
 		assertTrue(args.stream().anyMatch(arg -> arg.startsWith("--spring.config.additional-location=")
 				&& arg.contains(workspace.resolve("config").toUri().toString())
 				&& arg.contains(workspace.resolve("project/dev/config").toUri().toString())));
 		assertTrue(args.stream().noneMatch(arg -> arg.startsWith("--server.port=")));
+	}
+
+	@Test
+	void serverArgsCanActivateExplicitProfile() throws Exception {
+		Path workspace = tempDir.resolve("profile-workspace");
+		Files.createDirectories(workspace.resolve("config"));
+		Files.createDirectories(workspace.resolve("project/main/config"));
+
+		List<String> args = WizSpringApplication.serverArgs(workspace.toString(), null, null, null, false, null, "prod");
+
+		assertTrue(args.contains("--spring.profiles.active=prod"));
+		assertTrue(args.stream().noneMatch(arg -> arg.startsWith("--spring.profiles.default=")));
+	}
+
+	@Test
+	void embeddedServerArgsUseProdDefaultProfile() throws Exception {
+		Path workspace = tempDir.resolve("embedded-workspace");
+		Files.createDirectories(workspace.resolve("config"));
+		Files.createDirectories(workspace.resolve("project/main/config"));
+
+		List<String> args = WizSpringApplication.serverArgs(workspace.toString(), null, null, "main", true, null, WizSpringApplication.DEFAULT_EMBEDDED_PROFILE, false);
+
+		assertTrue(args.contains("--spring.profiles.default=prod"));
+		assertTrue(args.contains("--wiz.bundle=true"));
+	}
+
+	@Test
+	void profileSpecificApplicationFilesOverrideProjectCookieSelectionDefault() {
+		try (ConfigurableApplicationContext dev = applicationContext("dev")) {
+			assertTrue(dev.getBean(WizProjectProperties.class).isCookieSelectionEnabled());
+		}
+		try (ConfigurableApplicationContext prod = applicationContext("prod")) {
+			assertFalse(prod.getBean(WizProjectProperties.class).isCookieSelectionEnabled());
+		}
+	}
+
+	private ConfigurableApplicationContext applicationContext(String profile) {
+		SpringApplication application = new SpringApplication(WizSpringApplication.class);
+		application.setWebApplicationType(WebApplicationType.NONE);
+		return application.run(
+				"--spring.profiles.active=" + profile,
+				"--wiz.root=" + tempDir.resolve("profile-" + profile));
 	}
 
 }

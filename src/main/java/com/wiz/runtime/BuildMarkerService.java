@@ -20,6 +20,10 @@ public class BuildMarkerService {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public void write(ProjectContext project, List<String> phases, String frontendMode, Instant startedAt, Instant finishedAt) throws IOException {
+        write(project, phases, frontendMode, startedAt, finishedAt, null);
+    }
+
+    public void write(ProjectContext project, List<String> phases, String frontendMode, Instant startedAt, Instant finishedAt, DependencySummary dependencySummary) throws IOException {
         Files.createDirectories(project.bundleRoot());
         LinkedHashMap<String, Object> marker = new LinkedHashMap<>();
         marker.put("projectName", project.name());
@@ -30,6 +34,14 @@ public class BuildMarkerService {
         marker.put("buildFinishedAt", finishedAt.toString());
         marker.put("frontendMode", frontendMode);
         marker.put("bundleArtifactMtime", bundleArtifactMtime(project.bundleRoot()));
+        if (dependencySummary != null) {
+            marker.put("dependencyManifest", dependencySummary.manifestPath());
+            marker.put("dependencyDigest", Map.of(
+                    "algorithm", dependencySummary.digestAlgorithm(),
+                    "value", dependencySummary.digest()));
+            marker.put("dependencyCount", dependencySummary.dependencyCount());
+            marker.put("cycloneDxBom", dependencySummary.cycloneDxBomPath());
+        }
         Files.writeString(project.bundleRoot().resolve(MARKER_FILE), objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(marker) + "\n");
     }
 
@@ -83,5 +95,8 @@ public class BuildMarkerService {
     private String string(Map<String, Object> marker, String key) {
         Object value = marker.get(key);
         return value == null ? "" : value.toString();
+    }
+
+    public record DependencySummary(String manifestPath, String digestAlgorithm, String digest, int dependencyCount, String cycloneDxBomPath) {
     }
 }

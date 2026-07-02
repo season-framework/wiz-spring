@@ -1,17 +1,14 @@
 package com.wiz.dispatch;
 
-import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.net.URLClassLoader;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Map;
 import java.util.Optional;
 
 import com.wiz.core.ProjectJavaNaming;
-import com.wiz.runtime.ProjectClassPath;
-import com.wiz.runtime.SafePath;
+import com.wiz.runtime.ProjectRuntimeCache;
+import com.wiz.runtime.ProjectRuntimeCache.ProjectApiHandler;
+import com.wiz.runtime.ProjectRuntimeCache.ProjectClassNotFoundException;
+import com.wiz.runtime.ProjectRuntimeCache.ProjectReflectionException;
 import com.wiz.runtime.WizBadRequestException;
 import com.wiz.runtime.WizContext;
 import com.wiz.runtime.WizRequest;
@@ -21,33 +18,44 @@ import com.wiz.runtime.WizRuntime;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 @Service
 public class AppApiDispatcher {
 
     private final WizRuntime runtime;
-    private final ObjectMapper objectMapper;
     private final ControllerChain controllerChain;
+    private final ProjectRuntimeCache runtimeCache;
 
     @Autowired
     public AppApiDispatcher(WizRuntime runtime, ControllerChain controllerChain) {
-        this(runtime, new ObjectMapper(), controllerChain);
+        this(runtime, controllerChain, runtimeCache(runtime));
     }
 
     public AppApiDispatcher(WizRuntime runtime) {
-        this(runtime, new ObjectMapper(), new ControllerChain());
+        this(runtime, runtimeCache(runtime));
     }
 
     public AppApiDispatcher(WizRuntime runtime, ObjectMapper objectMapper) {
-        this(runtime, objectMapper, new ControllerChain());
+        this(runtime, runtimeCache(runtime));
     }
 
     public AppApiDispatcher(WizRuntime runtime, ObjectMapper objectMapper, ControllerChain controllerChain) {
+        this(runtime, controllerChain, runtimeCache(runtime));
+    }
+
+    private AppApiDispatcher(WizRuntime runtime, ProjectRuntimeCache runtimeCache) {
+        this(runtime, new ControllerChain(runtimeCache), runtimeCache);
+    }
+
+    private AppApiDispatcher(WizRuntime runtime, ControllerChain controllerChain, ProjectRuntimeCache runtimeCache) {
         this.runtime = runtime;
-        this.objectMapper = objectMapper;
         this.controllerChain = controllerChain;
+        this.runtimeCache = runtimeCache == null ? new ProjectRuntimeCache() : runtimeCache;
+    }
+
+    private static ProjectRuntimeCache runtimeCache(WizRuntime runtime) {
+        return runtime == null ? new ProjectRuntimeCache() : runtime.runtimeCache();
     }
 
     public WizResult dispatch(WizRequest request, String appId, String function, String path) {
@@ -67,46 +75,37 @@ public class AppApiDispatcher {
     }
 
     private Optional<Map<String, Object>> appMetadata(WizContext context, String appId) {
-        try {
-            Path appRoot = context.project().bundleRoot().resolve("src/app");
-            Path appJson = new SafePath(appRoot).resolveExisting(appId + "/app.json");
-            Map<String, Object> metadata = objectMapper.readValue(Files.readAllBytes(appJson), new TypeReference<>() {
-            });
-            return Optional.of(metadata);
-        } catch (IllegalArgumentException | IOException exception) {
-            return Optional.empty();
-        }
+        return runtimeCache.get(context.project()).appMetadata(appId);
     }
 
     private WizResult dispatchProjectJavaApi(WizContext context, String handlerClass, String function) {
-        try (URLClassLoader loader = new URLClassLoader(ProjectClassPath.apiUrls(context.project()), Thread.currentThread().getContextClassLoader())) {
-            ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
-            Thread.currentThread().setContextClassLoader(loader);
-            try {
-                Class<?> handlerType = Class.forName(handlerClass, true, loader);
-                Object handler = handlerType.getDeclaredConstructor().newInstance();
-                Method method = findMethod(handlerType, function);
-                if (method == null) {
-                    return context.response().status(404, Map.of("error", "function not found"));
-                }
-                method.setAccessible(true);
-                Object value = method.getParameterCount() == 1 ? method.invoke(handler, context) : method.invoke(handler);
-                if (value instanceof WizResult result) {
-                    return result;
-                }
-                return context.response().ok(value);
-            } finally {
-                Thread.currentThread().setContextClassLoader(previousLoader);
+        ProjectRuntimeCache.CachedProjectRuntime projectRuntime = runtimeCache.get(context.project());
+        ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
+        Thread.currentThread().setContextClassLoader(projectRuntime.classLoader());
+        try {
+            ProjectApiHandler apiHandler = projectRuntime.apiHandler(handlerClass, function).orElse(null);
+            if (apiHandler == null) {
+                return context.response().status(404, Map.of("error", "function not found"));
             }
-        } catch (ClassNotFoundException exception) {
+            Object handler = apiHandler.constructor().newInstance();
+            Object value = apiHandler.method().getParameterCount() == 1
+                    ? apiHandler.method().invoke(handler, context)
+                    : apiHandler.method().invoke(handler);
+            if (value instanceof WizResult result) {
+                return result;
+            }
+            return context.response().ok(value);
+        } catch (ProjectClassNotFoundException exception) {
             return context.response().status(500, Map.of("error", "java api handler not found"));
         } catch (InvocationTargetException exception) {
             if (exception.getCause() instanceof WizBadRequestException badRequest) {
                 return context.response().status(400, badRequest.data());
             }
             return context.response().status(500, Map.of("error", "java api invocation failed"));
-        } catch (ReflectiveOperationException | IOException exception) {
+        } catch (ReflectiveOperationException | ProjectReflectionException exception) {
             return context.response().status(500, Map.of("error", "java api invocation failed"));
+        } finally {
+            Thread.currentThread().setContextClassLoader(previousLoader);
         }
     }
 
@@ -120,17 +119,6 @@ public class AppApiDispatcher {
             return Optional.empty();
         }
         return Optional.of(handler.toString());
-    }
-
-    private Method findMethod(Class<?> handlerType, String function) {
-        for (Method method : handlerType.getMethods()) {
-            if (method.getName().equals(function)
-                    && (method.getParameterCount() == 0
-                            || (method.getParameterCount() == 1 && method.getParameterTypes()[0].isAssignableFrom(WizContext.class)))) {
-                return method;
-            }
-        }
-        return null;
     }
 
     private String defaultHandlerClass(String projectName, String appId) {

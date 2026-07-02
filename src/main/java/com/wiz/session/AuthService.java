@@ -21,11 +21,12 @@ public class AuthService {
 
     public WizResult logout(WizContext context) {
         String returnTo = context.request().query("returnTo", context.request().query("redirect", "/"));
+        String redirectTo = context.redirectProperties().resolve(returnTo);
         SessionCookieOptions cookie = SessionCookieOptions.from(context.config().namespace("season"));
         context.session().invalidate();
         return context.response()
                 .header(HttpHeaders.SET_COOKIE, expiredCookie(cookie).toString())
-                .redirect(returnTo);
+                .redirect(redirectTo);
     }
 
     public WizResult oidcPlaceholder(WizContext context) {

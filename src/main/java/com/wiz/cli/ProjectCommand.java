@@ -122,9 +122,11 @@ public class ProjectCommand implements Callable<Integer> {
                     return result.exitCode();
                 }
             }
-            java.nio.file.Path jar = new com.wiz.build.StandaloneProjectJarService()
+            com.wiz.build.StandaloneProjectJarService jarService = new com.wiz.build.StandaloneProjectJarService();
+            java.nio.file.Path jar = jarService
                     .packageJar(paths.root(), context, runtimeJar == null ? currentRuntimePath() : runtimeJar, output);
             System.out.println("Executable project jar created: " + jar);
+            System.out.println("Checksum: " + jarService.checksumPath(jar));
             System.out.println("Run: java -jar " + jar);
             return 0;
         }

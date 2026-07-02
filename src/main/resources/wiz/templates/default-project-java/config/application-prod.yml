@@ -1,0 +1,8 @@
+# WIZ Spring 운영 profile 설정입니다.
+# `java -jar <standalone-project>.jar`는 profile을 지정하지 않으면 prod profile을 기본으로 사용합니다.
+
+wiz:
+  project:
+    # 운영에서는 cookie 기반 project 전환을 기본 비활성화합니다.
+    # 기본값: false
+    cookie-selection-enabled: false

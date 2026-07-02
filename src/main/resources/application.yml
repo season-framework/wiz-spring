@@ -14,5 +14,21 @@ management:
 
 wiz:
   root: .
+  api:
+    prefix: /wiz/api
+  http:
+    max-request-body-bytes: 0
+  socket:
+    allowed-origins:
+      - "*"
+    polling-session-ttl-millis: 120000
+    max-polling-sessions: 1024
+    polling-queue-capacity: 256
+  redirect:
+    policy: any
+    allowed-hosts: []
   project:
     default-name: main
+    cookie-name: season-wiz-project
+    devmode-cookie-name: season-wiz-devmode
+    cookie-selection-enabled: true

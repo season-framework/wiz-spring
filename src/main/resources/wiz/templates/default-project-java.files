@@ -1,6 +1,9 @@
 .gitignore
 README.md
+VENDOR-SOURCES.json
 config/application.yml
+config/application-dev.yml
+config/application-prod.yml
 config/database.yml
 config/season.yml
 devlog.md

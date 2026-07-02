@@ -32,6 +32,8 @@ java -jar "$jar" project jar --root "$workspace" --project main --output /tmp/wi
 java -jar /tmp/wiz-main.jar
 ```
 
+`project jar`는 실행 jar 옆에 `/tmp/wiz-main.jar.sha256` 형식의 SHA-256 checksum 파일도 생성합니다.
+
 `project create`는 기본적으로 jar에 내장된 Java sample project를 생성한 뒤 clean bundle build까지 수행합니다. 생성만 하고 싶으면 `--skip-build`를 붙입니다.
 
 ```bash
@@ -76,7 +78,7 @@ Python WIZ의 `pip install season`처럼 runtime 자체를 Python package로 설
 | WIZ Spring runtime Java/Spring dependency | `wiz-spring/pom.xml` | dependency를 추가한 뒤 `./mvnw clean package`로 jar를 다시 빌드합니다. |
 | Project frontend/npm dependency | `project/<name>/src/angular/package.json` | `wiz-spring project npm install --project=<name> --package=<pkg>` 또는 직접 `package.json` 수정 후 `wiz-spring project build`를 실행합니다. |
 | Project Java API/model/controller dependency | `project/<name>/pom.xml` | `wiz-spring project build`가 `mvn dependency:copy-dependencies`를 실행해 `target/dependency` jar를 준비하고, Java compile/runtime classpath에 포함합니다. 직접 jar를 둘 경우 `project/<name>/lib`도 인식합니다. |
-| Project Spring/runtime config | `project/<name>/config/application.yml` | `wiz-spring run` 시작 시 workspace `config/application.yml` 다음으로 로드됩니다. `server.port`, datasource, project extension class 등 project별 설정을 여기에 둡니다. |
+| Project Spring/runtime config | `project/<name>/config/application.yml`, `application-dev.yml`, `application-prod.yml` | `wiz-spring run` 시작 시 workspace `config/application.yml` 다음으로 로드됩니다. `server.port`, datasource, project extension class, dev/prod profile 설정 등 project별 설정을 여기에 둡니다. |
 
 runtime의 핵심 정의 파일은 [`pom.xml`](pom.xml)입니다. 여기에는 Spring Boot, WebMVC, WebSocket, picocli 같은 core runtime dependency만 둡니다. JPA/Hibernate, SMTP, project별 SDK처럼 app/package마다 달라지는 dependency는 각 project의 `pom.xml`에 둡니다. Angular sample dependency는 내장 sample의 `src/angular/package.json`에 있고, build 시 `npm ci` 또는 `npm install` 후 Angular CLI `ng build`를 실행합니다.
 
@@ -92,7 +94,7 @@ runtime의 핵심 정의 파일은 [`pom.xml`](pom.xml)입니다. 여기에는 S
 | `wiz-spring project list` | 지원. workspace의 project 목록을 출력합니다. |
 | `wiz-spring project delete` | 지원. 지정 project를 삭제합니다. |
 | `wiz-spring project export` | 지원. project를 `.wizproject` archive로 내보냅니다. |
-| `wiz-spring run` | 지원. `--root --host --port --project`로 Spring server를 시작합니다. 기본 host는 `0.0.0.0`, 기본 포트는 `3000`이며, `--host`/`--port`가 없으면 workspace/project `application.yml` 값으로 override할 수 있습니다. `--bundle`, `--log` compatibility option도 받습니다. |
+| `wiz-spring run` | 지원. `--root --host --port --project --profile`로 Spring server를 시작합니다. 기본 profile은 `dev`, 기본 host는 `0.0.0.0`, 기본 포트는 `3000`이며, `--host`/`--port`가 없으면 workspace/project `application.yml` 값으로 override할 수 있습니다. `--bundle`, `--log` compatibility option도 받습니다. |
 | `wiz-spring bundle` | 지원. 이미 build된 project bundle을 deploy/runtime bundle directory로 묶습니다. |
 | `wiz-spring kill` | 지원. Spring WIZ `run` process만 대상으로 종료하며 `--dry-run`을 지원합니다. |
 | `wiz-spring project app list/create/delete` | 지원. `src/app` 및 portal app skeleton을 생성/삭제합니다. |
@@ -123,7 +125,7 @@ Spring runtime은 다음 기능을 지원합니다.
 | Model/Struct | core는 `wiz.models()`와 `src/model`, `src/portal/{portal}/model` convention만 제공합니다. 기본 sample의 DB 공통 설정은 `src/portal/season/model/orm`, password helper는 `src/portal/season/model/security`에 숨겨져 있고, app/domain 쪽은 entity 내부 `Repository`를 가져와 쓰는 구조입니다. |
 | Portal package backend | PWA route, SMTP, ORM 같은 portal/package backend 구현은 core가 아니라 project source에 둡니다. 기본 sample은 `/sw.js` route와 JPA/Hibernate sample ORM을 project-local source와 `project pom.xml` dependency로 제공합니다. |
 | Socket | 기존 frontend 패턴처럼 `wiz.socket()`이 HTTP(S) namespace(`/wiz/app/{project}/{app_id}`)로 연결됩니다. Spring core는 Socket.IO v4 HTTP long-polling handshake(`/socket.io/`)를 받아 project-local `socket.java` handler로 dispatch합니다. socket handler는 message dispatch마다 현재 bundle을 읽으므로, `socket.java` 수정 후 `project build`가 끝나면 서버 재시작 없이 다음 메시지/연결부터 새 handler가 반영됩니다. |
-| Build marker | `bundle/.wiz-build.json`에 build phase, Java/runtime version, frontend mode, artifact mtime을 기록합니다. |
+| Build marker | `bundle/.wiz-build.json`에 build phase, Java/runtime version, frontend mode, artifact mtime, dependency digest를 기록합니다. |
 
 ## Project 생성과 import
 
@@ -175,6 +177,15 @@ build는 기본 `bundle` phase로 실행됩니다.
 | `java-compile` | `api.java`, `route.java`, `socket.java`, model/controller Java source를 컴파일합니다. |
 | `bundle` | frontend build/fallback 결과와 compiled Java artifact를 bundle로 묶습니다. |
 
+bundle build가 성공하면 공급망 추적 산출물이 함께 생성됩니다.
+
+| Artifact | 내용 |
+| --- | --- |
+| `project/<name>/bundle/.wiz-build.json` | runtime version, project name, build phases, dependency digest |
+| `project/<name>/bundle/.wiz-dependencies.json` | bundle `lib/*.jar`, `project-api.jar`, `pom.xml`의 SHA-256 manifest |
+| `project/<name>/target/bom.json` | bundle runtime dependency 기준 CycloneDX JSON SBOM |
+| `project/<name>/target/<name>.jar.sha256` | `project jar`로 만든 standalone jar checksum |
+
 `src/angular/package.json`이 있으면 project-local Angular CLI package로 판단합니다. lockfile이 있으면 `npm ci`, 없으면 `npm install`을 실행한 뒤 `node_modules/.bin/ng build`를 실행합니다. Angular 21 sample은 별도 `ngc-esbuild` pipeline이 아니라 Angular CLI 내장 esbuild builder(`@angular-devkit/build-angular:browser-esbuild`)를 사용합니다. Angular 입력이 없거나 real build가 불가능하면 `frontend-fallback`으로 최소 web bundle을 생성합니다.
 
 ## App-local Java API
@@ -212,24 +223,54 @@ package declaration이 없으면 build 중 `com.wiz.project.{project}.api.PageXy
 1. core jar의 기본 `application.yml`
 2. workspace `config/application.yml`
 3. 선택된 project의 `config/application.yml`
-4. CLI option `--host`, `--port`, `--project`
+4. 활성 profile에 맞는 `application-dev.yml` 또는 `application-prod.yml`
+5. CLI option `--host`, `--port`, `--project`, `--profile`
 
-따라서 포트, datasource, 외부 API key, auth/session 구현체 class 같은 값은 project마다 다르게 둘 수 있습니다.
+`wiz-spring run`은 기본 profile을 `dev`로 두고, standalone project jar를 인자 없이 실행하면 기본 profile을 `prod`로 둡니다. `wiz-spring run --profile prod`처럼 명시하면 해당 Spring profile이 active profile로 적용됩니다. 따라서 포트, datasource, 외부 API key, auth/session 구현체 class 같은 값은 project마다 다르게 둘 수 있습니다.
+
+`wiz.project.cookie-selection-enabled`는 dev profile에서 기본 `true`, prod/standalone jar profile에서 기본 `false`입니다. 운영에서 여러 project를 한 runtime에 노출해야 할 때는 cookie 전환을 켜는 대신 host/path 기반 routing과 project별 auth/tenant ACL을 별도 경계로 설계하세요.
 
 ```yaml
 server:
   port: 3001
+  tomcat:
+    threads:
+      max: 200
+      min-spare: 10
+    accept-count: 100
+    max-connections: 8192
 
-spring:
+sample:
   datasource:
     url: jdbc:postgresql://localhost:5432/example
+    driver-class-name: org.postgresql.Driver
+    username: wiz
+    password: change-me
+    maximum-pool-size: 10
+    minimum-idle: 2
+    connection-timeout-millis: 30000
 
 wiz:
   auth:
     service-class: com.example.project.auth.CustomAuthService
   session:
     service-class: com.example.project.session.CustomSessionService
+  socket:
+    allowed-origins:
+      - "*"
+    polling-session-ttl-millis: 120000
+    max-polling-sessions: 1024
+    polling-queue-capacity: 256
+  redirect:
+    policy: any # any | local-only | allowlist
+    allowed-hosts: []
 ```
+
+`wiz.socket.allowed-origins`는 기본값 `["*"]`로 개발 서버 호환성을 유지하며, 제한이 필요할 때 WebSocket과 `/socket.io/` polling origin을 같은 값으로 검사합니다. Socket.IO polling session은 idle TTL, 최대 session 수, session별 outbound queue 크기를 설정할 수 있어 장시간 미종료 연결이나 느린 consumer로 인한 메모리 누적을 제한합니다. `wiz.redirect.policy`도 기본값 `any`로 기존 logout redirect를 유지하고, 프로젝트가 원할 때만 `local-only` 또는 `allowlist`로 좁힙니다. Spring Security로 endpoint를 기본 차단하지 않으며, 운영 보안 경계는 nginx/apache2 같은 앞단 웹서버에서 통일하는 것을 권장합니다.
+
+기본 sample의 JPA helper는 project runtime cache와 연동해 project/config 단위로 `EntityManagerFactory`를 재사용합니다. bundle marker가 바뀌어 project runtime cache가 폐기되면 연결된 JPA context도 함께 닫히므로, 요청마다 Hibernate factory를 새로 만들지 않습니다.
+
+`wiz-spring`은 Spring Boot 내장 Tomcat의 worker thread가 요청을 처리하므로 단일 Flask 개발 서버처럼 CPU core 하나에 고정되는 구조가 아닙니다. JVM process 안의 여러 worker thread가 OS scheduler를 통해 여러 core에서 실행됩니다. 다만 동시 처리량은 Tomcat thread 수, DB connection pool 크기, 외부 I/O latency, project code의 lock 사용에 의해 제한됩니다. 기본 sample은 HikariCP를 사용하며 SQLite는 write lock 특성 때문에 기본 pool size를 1로 둡니다. 수십~수백 명 규모의 write-heavy 운영은 PostgreSQL/MySQL 같은 서버형 DB와 적정 pool size로 전환하세요.
 
 package declaration이 없는 기본 project source는 `src/model/AuthService.java`가 `com.wiz.project.{project}.model.AuthService`, `src/model/SessionService.java`가 `com.wiz.project.{project}.model.SessionService`로 build됩니다. 이 convention을 쓰면 `application.yml`에 class 이름을 쓰지 않아도 자동으로 로드됩니다. 기존 project 호환용으로 `src/model/auth`, `src/model/session`, `src/auth`, `src/session` 위치도 계속 fallback 로드됩니다.
 
@@ -304,6 +345,8 @@ java -jar "$jar" project jar --root "$workspace" --project main --output /tmp/wi
 java -jar /tmp/wiz-main.jar
 ```
 
+`project jar` also writes `/tmp/wiz-main.jar.sha256` next to the standalone jar.
+
 `project create` uses the Java sample project embedded in the jar and runs an initial clean bundle build by default. Use `--skip-build` to scaffold/import sources only.
 
 ### Requirements
@@ -319,7 +362,9 @@ java -jar /tmp/wiz-main.jar
 
 ### Dependencies
 
-WIZ Spring is distributed as a Spring Boot jar, not as a Python package. Core runtime dependencies live in `wiz-spring/pom.xml`; add Java/Spring libraries there only when the runtime itself needs them. Project Java dependencies live in `project/<name>/pom.xml` and are resolved into `target/dependency` during `wiz-spring project build`. Frontend dependencies live in each project at `project/<name>/src/angular/package.json`; use `wiz-spring project npm install` or edit the file and run `wiz-spring project build`. Project Spring/runtime settings live in `project/<name>/config/application.yml` and are loaded by `wiz-spring run` after workspace config.
+WIZ Spring is distributed as a Spring Boot jar, not as a Python package. Core runtime dependencies live in `wiz-spring/pom.xml`; add Java/Spring libraries there only when the runtime itself needs them. Project Java dependencies live in `project/<name>/pom.xml` and are resolved into `target/dependency` during `wiz-spring project build`. Frontend dependencies live in each project at `project/<name>/src/angular/package.json`; use `wiz-spring project npm install` or edit the file and run `wiz-spring project build`. Project Spring/runtime settings live in `project/<name>/config/application.yml`, `application-dev.yml`, and `application-prod.yml`; `wiz-spring run` defaults to the `dev` profile, while standalone project jars default to `prod`.
+
+Successful project bundle builds also write `bundle/.wiz-dependencies.json`, `bundle/.wiz-build.json` dependency digest fields, and `target/bom.json` CycloneDX metadata. `project jar` writes `<name>.jar.sha256` next to the standalone jar. Runtime Maven package builds write `target/bom.json` through the CycloneDX Maven plugin. Archive-handling dependencies such as `commons-compress` should be treated as security-priority updates.
 
 ### Command Coverage
 

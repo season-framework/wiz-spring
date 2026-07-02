@@ -135,9 +135,37 @@ class ProjectBuildServiceTest {
         assertTrue(Files.exists(project.bundleRoot().resolve("src/app/page.dashboard/api.java")));
         assertTrue(Files.exists(project.bundleWwwRoot().resolve("index.html")));
         assertTrue(Files.exists(project.bundleWwwRoot().resolve("app.js")));
+        assertTrue(Files.readString(project.bundleWwwRoot().resolve("index.html")).contains("/wiz/config.js"));
+        assertTrue(Files.exists(project.bundleRoot().resolve(SupplyChainManifestService.DEPENDENCY_MANIFEST_FILE)));
+        assertTrue(Files.exists(project.root().resolve("target").resolve(SupplyChainManifestService.CYCLONEDX_BOM_FILE)));
         String marker = Files.readString(project.bundleRoot().resolve(BuildMarkerService.MARKER_FILE));
         assertTrue(marker.contains("\"frontendMode\" : \"fallback\""));
         assertTrue(marker.contains("\"buildPhases\""));
+        assertTrue(marker.contains("\"dependencyDigest\""));
+        assertTrue(marker.contains("\"dependencyManifest\" : \"bundle/.wiz-dependencies.json\""));
+        String dependencies = Files.readString(project.bundleRoot().resolve(SupplyChainManifestService.DEPENDENCY_MANIFEST_FILE));
+        assertTrue(dependencies.contains("\"dependencyDigest\""));
+        assertTrue(dependencies.contains("\"dependencies\""));
+        String bom = Files.readString(project.root().resolve("target").resolve(SupplyChainManifestService.CYCLONEDX_BOM_FILE));
+        assertTrue(bom.contains("\"bomFormat\" : \"CycloneDX\""));
+    }
+
+    @Test
+    void fallbackDefaultApiScriptUsesRuntimeApiPrefixConfig() throws Exception {
+        Path workspace = tempDir.resolve("fallback-workspace");
+        new WorkspaceService().createWorkspace(workspace);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        removeAngularSource(project);
+        removeViewScripts(project);
+
+        BuildResult result = new ProjectBuildService().build(project, true, "bundle");
+
+        assertTrue(result.success());
+        String index = Files.readString(project.bundleWwwRoot().resolve("index.html"));
+        String script = Files.readString(project.bundleWwwRoot().resolve("app.js"));
+        assertTrue(index.contains("/wiz/config.js"));
+        assertTrue(script.contains("window.__WIZ_CONFIG__?.apiPrefix"));
+        assertTrue(script.contains("`${apiPrefix}/page.dashboard/overview`"));
     }
 
     @Test
@@ -156,6 +184,9 @@ class ProjectBuildServiceTest {
         Path jar = new StandaloneProjectJarService().packageJar(workspace, project, runtimeJar, output);
 
         assertTrue(Files.exists(jar));
+        Path checksum = jar.resolveSibling(jar.getFileName() + ".sha256");
+        assertTrue(Files.exists(checksum));
+        assertTrue(Files.readString(checksum).matches("[a-f0-9]{64}  main\\.jar\\R"));
         try (java.util.jar.JarFile packaged = new java.util.jar.JarFile(jar.toFile())) {
             assertTrue(packaged.getEntry("BOOT-INF/classes/wiz/embedded-workspace.properties") != null);
             assertTrue(packaged.getEntry("BOOT-INF/classes/wiz/embedded-workspace.files") != null);
@@ -270,6 +301,14 @@ class ProjectBuildServiceTest {
         try (var paths = Files.walk(angular)) {
             for (Path path : paths.sorted(java.util.Comparator.reverseOrder()).toList()) {
                 Files.deleteIfExists(path);
+            }
+        }
+    }
+
+    private void removeViewScripts(ProjectContext project) throws Exception {
+        try (var paths = Files.walk(project.sourceRoot())) {
+            for (Path path : paths.filter(item -> Files.isRegularFile(item) && item.getFileName().toString().equals("view.ts")).toList()) {
+                Files.delete(path);
             }
         }
     }

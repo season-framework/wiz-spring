@@ -11,13 +11,18 @@ import com.wiz.runtime.EmbeddedWorkspace;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.beans.factory.config.YamlPropertiesFactoryBean;
 
 import picocli.CommandLine;
 
 @SpringBootApplication
+@ConfigurationPropertiesScan
 public class WizSpringApplication {
+
+	public static final String DEFAULT_RUN_PROFILE = "dev";
+	public static final String DEFAULT_EMBEDDED_PROFILE = "prod";
 
 	public static void main(String[] args) {
 		if (args.length == 0) {
@@ -25,7 +30,7 @@ public class WizSpringApplication {
 				var embedded = EmbeddedWorkspace.extractIfPresent();
 				if (embedded.isPresent()) {
 					EmbeddedWorkspace.Launch launch = embedded.get();
-					runServer(launch.root().toString(), null, null, launch.project(), true, null);
+					runServer(launch.root().toString(), null, null, launch.project(), true, null, DEFAULT_EMBEDDED_PROFILE, false);
 					return;
 				}
 			} catch (Exception exception) {
@@ -48,18 +53,31 @@ public class WizSpringApplication {
 	}
 
 	public static void runServer(String root, String host, Integer port, String project, boolean bundle, String log) {
+		runServer(root, host, port, project, bundle, log, DEFAULT_RUN_PROFILE, false);
+	}
+
+	public static void runServer(String root, String host, Integer port, String project, boolean bundle, String log, String profile, boolean profileOverride) {
 		SpringApplication application = new SpringApplication(WizSpringApplication.class);
-		ArrayList<String> args = new ArrayList<>(serverArgs(root, host, port, project, bundle, log));
+		ArrayList<String> args = new ArrayList<>(serverArgs(root, host, port, project, bundle, log, profile, profileOverride));
 		application.run(args.toArray(String[]::new));
 	}
 
 	public static List<String> serverArgs(String root, String host, Integer port, String project, boolean bundle, String log) {
+		return serverArgs(root, host, port, project, bundle, log, DEFAULT_RUN_PROFILE, false);
+	}
+
+	public static List<String> serverArgs(String root, String host, Integer port, String project, boolean bundle, String log, String profile) {
+		return serverArgs(root, host, port, project, bundle, log, profile, true);
+	}
+
+	public static List<String> serverArgs(String root, String host, Integer port, String project, boolean bundle, String log, String profile, boolean profileOverride) {
 		Path workspace = Path.of(root == null || root.isBlank() ? "." : root).toAbsolutePath().normalize();
 		String projectName = project == null || project.isBlank() ? defaultProjectName(workspace) : project;
 		ArrayList<String> args = new ArrayList<>();
 		args.add("--wiz.root=" + workspace);
 		args.add("--wiz.project.default-name=" + projectName);
 		args.add("--spring.config.additional-location=" + additionalConfigLocations(workspace, projectName));
+		args.add((profileOverride ? "--spring.profiles.active=" : "--spring.profiles.default=") + normalizeProfile(profile));
 		if (host != null && !host.isBlank()) {
 			args.add("--server.address=" + host);
 		}
@@ -71,6 +89,14 @@ public class WizSpringApplication {
 			args.add("--logging.file.name=" + log);
 		}
 		return List.copyOf(args);
+	}
+
+	private static String normalizeProfile(String profile) {
+		String value = profile == null || profile.isBlank() ? DEFAULT_RUN_PROFILE : profile.trim();
+		if (!value.matches("[A-Za-z0-9][A-Za-z0-9_.-]*")) {
+			throw new IllegalArgumentException("Spring profile must be a single safe profile name");
+		}
+		return value;
 	}
 
 	private static String defaultProjectName(Path workspace) {

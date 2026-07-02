@@ -1,32 +1,91 @@
-# Project-local Spring Boot and WIZ runtime overrides.
+# WIZ Spring 프로젝트 공통 설정입니다.
+# 기본값을 바꾸고 싶을 때만 주석을 해제하세요.
 #
-# Load order:
-# 1. wiz-spring core defaults
+# 로드 순서:
+# 1. wiz-spring core 기본값
 # 2. workspace config/application.yml
-# 3. project/<name>/config/application.yml, this file
-# 4. CLI options such as `wiz-spring run --host --port`
+# 3. project/<name>/config/application.yml, 이 파일
+# 4. profile 파일(application-dev.yml 또는 application-prod.yml)
+# 5. CLI 옵션(wiz-spring run --host --port --profile)
 #
-# The sample project keeps DB/auth/session implementation in project source.
-# Change these values per project; wiz-spring core should not need edits.
+# sample project의 DB/auth/session 구현은 project source에 있습니다.
+# project마다 필요한 값만 바꾸고, wiz-spring core jar는 수정하지 않는 것을 권장합니다.
 server:
-  # Default WIZ port is 3000. `wiz-spring run --port` overrides this.
+  # HTTP 서버 포트입니다.
+  # 기본값: 3000
+  # `wiz-spring run --port`가 있으면 이 값보다 우선합니다.
   port: 3000
-  # Core default host is 0.0.0.0. Use 127.0.0.1 for local-only binding.
-  # `wiz-spring run --host` overrides this.
+  # HTTP bind host입니다. 로컬에서만 열려면 127.0.0.1을 사용하세요.
+  # 기본값: 0.0.0.0
+  # `wiz-spring run --host`가 있으면 이 값보다 우선합니다.
   # address: 0.0.0.0
+  # 내장 Tomcat worker thread/connections 설정입니다.
+  # CPU core 수, 요청 latency, DB pool 크기에 맞춰 조정하세요.
+  # tomcat:
+  #   threads:
+  #     max: 200
+  #     min-spare: 10
+  #   accept-count: 100
+  #   max-connections: 8192
 
 wiz:
-  project:
-    # Default project selected when the request has no project cookie.
-    default-name: main
-    # Cookie names can be changed when several WIZ runtimes share a domain.
-    # cookie-name: season-wiz-project
-    # devmode-cookie-name: season-wiz-devmode
+  api:
+    # 페이지 API prefix입니다. backend App API route와 frontend Wiz client가 같은 값을 사용합니다.
+    # 기본값: /wiz/api
+    # prefix: /wiz/api
 
-  # Auth/session services are auto-detected from:
+  http:
+    # JSON/form 요청 body 최대 크기(bytes)입니다.
+    # 기본값: 0
+    # 0이면 WIZ runtime에서 추가 제한을 두지 않습니다.
+    # max-request-body-bytes: 0
+
+  socket:
+    # WebSocket 및 Socket.IO polling allowed origins입니다.
+    # 기본값: ["*"]
+    # allowed-origins:
+    #   - "*"
+    # Socket.IO polling session idle TTL(ms)입니다.
+    # 기본값: 120000
+    # 0이면 TTL 정리를 비활성화합니다.
+    # polling-session-ttl-millis: 120000
+    # Socket.IO polling session 최대 개수입니다.
+    # 기본값: 1024
+    # 0이면 session 개수 제한을 두지 않습니다.
+    # max-polling-sessions: 1024
+    # session별 outbound queue 최대 packet 수입니다.
+    # 기본값: 256
+    # polling-queue-capacity: 256
+
+  redirect:
+    # logout redirect 검증 정책입니다.
+    # 기본값: any
+    # any: 기존처럼 요청 redirect 값을 그대로 사용합니다.
+    # local-only: /로 시작하는 local path만 허용하고 나머지는 /로 보냅니다.
+    # allowlist: local path 또는 allowed-hosts에 있는 외부 host만 허용합니다.
+    # policy: any
+    # allowed-hosts: []
+
+  project:
+    # 요청에 project cookie가 없을 때 선택하는 기본 project 이름입니다.
+    # 기본값: main
+    default-name: main
+    # 여러 WIZ runtime이 같은 domain을 공유할 때 cookie 이름을 바꿀 수 있습니다.
+    # 기본값: season-wiz-project
+    # cookie-name: season-wiz-project
+    # 기본값: season-wiz-devmode
+    # devmode-cookie-name: season-wiz-devmode
+    # cookie로 project를 전환할 수 있는지 여부입니다.
+    # 기본값: true
+    # dev profile은 true, prod profile은 false를 권장합니다.
+    # 운영 multi-project hosting은 cookie 전환 대신 host/path routing과 ACL로 분리하세요.
+    # cookie-selection-enabled: true
+
+  # Auth/session service는 아래 위치에서 자동 탐지됩니다.
   # - src/model/AuthService.java
   # - src/model/SessionService.java
-  # Set explicit class names only when you move them elsewhere.
+  # 다른 위치로 옮겼을 때만 명시 class 이름을 설정하세요.
+  # 기본값: convention 자동 탐지
   # auth:
   #   service-class: com.wiz.project.main.model.AuthService
   # session:
@@ -44,6 +103,17 @@ sample:
     # SQLite default:
     url: jdbc:sqlite:data/app.db
     driver-class-name: org.sqlite.JDBC
+    # HikariCP pool settings. SQLite defaults to a single connection because writes are serialized.
+    # For MySQL/PostgreSQL, set maximum-pool-size based on DB capacity and expected request latency.
+    # maximum-pool-size: 10
+    # minimum-idle: 2
+    # connection-timeout-millis: 30000
+    # idle-timeout-millis: 600000
+    # max-lifetime-millis: 1800000
+    # SQLite busy timeout/WAL reduce immediate "database is locked" failures under light concurrency.
+    # They do not make SQLite suitable for write-heavy multi-user production workloads.
+    # sqlite-busy-timeout-millis: 5000
+    # sqlite-journal-mode: WAL
     # username:
     # password:
 

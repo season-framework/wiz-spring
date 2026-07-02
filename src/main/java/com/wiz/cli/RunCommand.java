@@ -23,6 +23,9 @@ public class RunCommand implements Callable<Integer> {
     @Option(names = "--project", description = "Default project name for project-local application.yml.")
     private String project;
 
+    @Option(names = "--profile", description = "Spring profile to activate. Defaults to dev for wiz-spring run.")
+    private String profile;
+
     @Option(names = "--dry-run", description = "Print resolved run settings without starting the server.")
     private boolean dryRun;
 
@@ -41,12 +44,21 @@ public class RunCommand implements Callable<Integer> {
             System.out.println("host=" + (host == null || host.isBlank() ? "<application.yml/default 0.0.0.0>" : host));
             System.out.println("port=" + (port == null ? "<application.yml>" : port));
             System.out.println("bundle=" + bundle);
+            System.out.println("profile=" + (profile == null || profile.isBlank() ? WizSpringApplication.DEFAULT_RUN_PROFILE : profile.trim()));
             if (log != null) {
                 System.out.println("log=" + log.toAbsolutePath().normalize());
             }
             return 0;
         }
-        WizSpringApplication.runServer(resolvedRoot.toString(), host, port, project, bundle, log == null ? null : log.toAbsolutePath().normalize().toString());
+        WizSpringApplication.runServer(
+                resolvedRoot.toString(),
+                host,
+                port,
+                project,
+                bundle,
+                log == null ? null : log.toAbsolutePath().normalize().toString(),
+                profile == null || profile.isBlank() ? WizSpringApplication.DEFAULT_RUN_PROFILE : profile.trim(),
+                profile != null && !profile.isBlank());
         return 0;
     }
 }

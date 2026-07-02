@@ -1,13 +1,11 @@
 package com.wiz.runtime;
 
-import java.io.IOException;
-import java.lang.reflect.Constructor;
-import java.net.URLClassLoader;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import com.wiz.core.ProjectJavaNaming;
+import com.wiz.runtime.ProjectRuntimeCache.ProjectConstructor;
 import com.wiz.session.AuthService;
 import com.wiz.session.SessionService;
 
@@ -83,59 +81,22 @@ final class ProjectExtensionLoader {
     }
 
     private static <T> Optional<T> instantiate(WizContext context, String className, Class<T> type, Object preferredArgument, Class<?> preferredArgumentType) {
+        ProjectRuntimeCache.CachedProjectRuntime runtime = context.runtimeCache().get(context.project());
         ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
-        URLClassLoader loader;
+        Thread.currentThread().setContextClassLoader(runtime.classLoader());
         try {
-            loader = new URLClassLoader(ProjectClassPath.apiUrls(context.project()), previousLoader);
-        } catch (IOException exception) {
-            return Optional.empty();
-        }
-        try {
-            Thread.currentThread().setContextClassLoader(loader);
-            Class<?> candidate = Class.forName(className, true, loader);
-            if (!type.isAssignableFrom(candidate)) {
-                close(loader);
+            ProjectConstructor constructor = runtime.constructor(className, type, preferredArgumentType).orElse(null);
+            if (constructor == null) {
                 return Optional.empty();
             }
-            Object instance = construct(candidate, preferredArgument, preferredArgumentType);
-            context.onCleanup(() -> close(loader));
+            Object instance = constructor.argumentConstructor()
+                    ? constructor.constructor().newInstance(preferredArgument)
+                    : constructor.constructor().newInstance();
             return Optional.of(type.cast(instance));
-        } catch (ClassNotFoundException exception) {
-            close(loader);
-            return Optional.empty();
         } catch (ReflectiveOperationException exception) {
-            close(loader);
             throw new IllegalArgumentException("Failed to create project extension: " + className, exception);
         } finally {
             Thread.currentThread().setContextClassLoader(previousLoader);
-        }
-    }
-
-    private static Object construct(Class<?> type, Object preferredArgument, Class<?> preferredArgumentType) throws ReflectiveOperationException {
-        Constructor<?> constructor = findConstructor(type, preferredArgument == null ? preferredArgumentType : preferredArgument.getClass());
-        if (constructor != null) {
-            constructor.setAccessible(true);
-            return constructor.newInstance(preferredArgument);
-        }
-        Constructor<?> defaultConstructor = type.getDeclaredConstructor();
-        defaultConstructor.setAccessible(true);
-        return defaultConstructor.newInstance();
-    }
-
-    private static Constructor<?> findConstructor(Class<?> type, Class<?> argumentType) {
-        for (Constructor<?> constructor : type.getDeclaredConstructors()) {
-            if (constructor.getParameterCount() == 1 && constructor.getParameterTypes()[0].isAssignableFrom(argumentType)) {
-                return constructor;
-            }
-        }
-        return null;
-    }
-
-    private static void close(URLClassLoader loader) {
-        try {
-            loader.close();
-        } catch (IOException exception) {
-            throw new IllegalStateException("Failed to close project extension classloader", exception);
         }
     }
 }

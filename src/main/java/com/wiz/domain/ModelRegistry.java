@@ -1,14 +1,12 @@
 package com.wiz.domain;
 
-import java.io.IOException;
-import java.lang.reflect.Constructor;
-import java.net.URLClassLoader;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.wiz.runtime.ProjectClassPath;
+import com.wiz.runtime.ProjectRuntimeCache;
+import com.wiz.runtime.ProjectRuntimeCache.ProjectModelFactory;
 import com.wiz.runtime.WizContext;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,13 +17,23 @@ public class ModelRegistry {
 
     private final Map<String, ModelProvider<?>> providers = new LinkedHashMap<>();
     private final Map<String, Object> singletonInstances = new ConcurrentHashMap<>();
+    private final ProjectRuntimeCache runtimeCache;
 
     public ModelRegistry() {
-        this(List.of());
+        this(List.of(), new ProjectRuntimeCache());
+    }
+
+    public ModelRegistry(ProjectRuntimeCache runtimeCache) {
+        this(List.of(), runtimeCache);
+    }
+
+    public ModelRegistry(List<ModelProvider<?>> providers) {
+        this(providers, new ProjectRuntimeCache());
     }
 
     @Autowired
-    public ModelRegistry(List<ModelProvider<?>> providers) {
+    public ModelRegistry(List<ModelProvider<?>> providers, ProjectRuntimeCache runtimeCache) {
+        this.runtimeCache = runtimeCache == null ? new ProjectRuntimeCache() : runtimeCache;
         providers.forEach(provider -> this.providers.put(provider.namespace(), provider));
     }
 
@@ -51,64 +59,22 @@ public class ModelRegistry {
     }
 
     private Object instantiateProjectModel(WizContext context, String namespace) {
-        for (String className : classCandidates(context.project().name(), namespace)) {
+        ProjectRuntimeCache.CachedProjectRuntime runtime = runtimeCache.get(context.project());
+        ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
+        Thread.currentThread().setContextClassLoader(runtime.classLoader());
+        try {
+            ProjectModelFactory factory = runtime.modelFactory(namespace, classCandidates(context.project().name(), namespace))
+                    .orElseThrow(() -> new IllegalArgumentException("Unknown model namespace: " + namespace
+                            + ". Add a Java model under src/model or src/portal/{portal}/model; examples: struct, struct/user, db/user, portal/post/struct."));
             try {
-                Class<?> modelType = loadProjectClass(context, className);
-                return instantiate(modelType, context);
-            } catch (ClassNotFoundException exception) {
-                // Try the next convention candidate.
+                return factory.contextConstructor()
+                        ? factory.constructor().newInstance(context)
+                        : factory.constructor().newInstance();
             } catch (ReflectiveOperationException exception) {
                 throw new IllegalArgumentException("Failed to create model namespace: " + namespace, exception);
             }
-        }
-        throw new IllegalArgumentException("Unknown model namespace: " + namespace
-            + ". Add a Java model under src/model or src/portal/{portal}/model; examples: struct, struct/user, db/user, portal/post/struct.");
-    }
-
-    private Class<?> loadProjectClass(WizContext context, String className) throws ClassNotFoundException {
-        ClassLoader currentLoader = Thread.currentThread().getContextClassLoader();
-        try {
-            return Class.forName(className, true, currentLoader);
-        } catch (ClassNotFoundException exception) {
-            URLClassLoader loader = projectClassLoader(context, currentLoader);
-            context.onCleanup(() -> close(loader));
-            return Class.forName(className, true, loader);
-        }
-    }
-
-    private Object instantiate(Class<?> modelType, WizContext context) throws ReflectiveOperationException {
-        Constructor<?> contextConstructor = findConstructor(modelType, WizContext.class);
-        if (contextConstructor != null) {
-            contextConstructor.setAccessible(true);
-            return contextConstructor.newInstance(context);
-        }
-        Constructor<?> defaultConstructor = modelType.getDeclaredConstructor();
-        defaultConstructor.setAccessible(true);
-        return defaultConstructor.newInstance();
-    }
-
-    private Constructor<?> findConstructor(Class<?> type, Class<?> parameter) {
-        for (Constructor<?> constructor : type.getDeclaredConstructors()) {
-            if (constructor.getParameterCount() == 1 && constructor.getParameterTypes()[0].isAssignableFrom(parameter)) {
-                return constructor;
-            }
-        }
-        return null;
-    }
-
-    private URLClassLoader projectClassLoader(WizContext context, ClassLoader parent) {
-        try {
-            return new URLClassLoader(ProjectClassPath.apiUrls(context.project()), parent);
-        } catch (IOException exception) {
-            throw new IllegalArgumentException("Failed to create project model classloader", exception);
-        }
-    }
-
-    private void close(URLClassLoader loader) {
-        try {
-            loader.close();
-        } catch (IOException exception) {
-            throw new IllegalStateException("Failed to close project model classloader", exception);
+        } finally {
+            Thread.currentThread().setContextClassLoader(previousLoader);
         }
     }
 

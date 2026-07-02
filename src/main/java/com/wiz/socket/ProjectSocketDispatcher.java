@@ -1,24 +1,20 @@
 package com.wiz.socket;
 
-import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
-import java.net.URLClassLoader;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
 import com.wiz.core.ProjectJavaNaming;
 import com.wiz.runtime.PathService;
-import com.wiz.runtime.ProjectClassPath;
 import com.wiz.runtime.ProjectContext;
-import com.wiz.runtime.SafePath;
+import com.wiz.runtime.ProjectRuntimeCache;
+import com.wiz.runtime.ProjectRuntimeCache.ProjectReflectionException;
+import com.wiz.runtime.ProjectRuntimeCache.ProjectSocketController;
+import com.wiz.runtime.ProjectRuntimeCache.ProjectTypeMismatchException;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 @Service
@@ -26,17 +22,21 @@ public class ProjectSocketDispatcher {
 
     private final PathService paths;
     private final SocketRoomRegistry rooms;
-    private final ObjectMapper objectMapper;
+    private final ProjectRuntimeCache runtimeCache;
 
     @Autowired
+    public ProjectSocketDispatcher(PathService paths, SocketRoomRegistry rooms, ProjectRuntimeCache runtimeCache) {
+        this.paths = paths;
+        this.rooms = rooms;
+        this.runtimeCache = runtimeCache == null ? new ProjectRuntimeCache() : runtimeCache;
+    }
+
     public ProjectSocketDispatcher(PathService paths, SocketRoomRegistry rooms) {
-        this(paths, rooms, new ObjectMapper());
+        this(paths, rooms, new ProjectRuntimeCache());
     }
 
     ProjectSocketDispatcher(PathService paths, SocketRoomRegistry rooms, ObjectMapper objectMapper) {
-        this.paths = paths;
-        this.rooms = rooms;
-        this.objectMapper = objectMapper;
+        this(paths, rooms, new ProjectRuntimeCache(objectMapper));
     }
 
     public SocketEventResult dispatch(SocketSession session, String event, Map<String, Object> payload) {
@@ -52,15 +52,7 @@ public class ProjectSocketDispatcher {
     }
 
     private Optional<Map<String, Object>> appMetadata(ProjectContext project, String appId) {
-        try {
-            Path appRoot = project.bundleRoot().resolve("src/app");
-            Path appJson = new SafePath(appRoot).resolveExisting(appId + "/app.json");
-            Map<String, Object> metadata = objectMapper.readValue(Files.readAllBytes(appJson), new TypeReference<>() {
-            });
-            return Optional.of(metadata);
-        } catch (IllegalArgumentException | IOException exception) {
-            return Optional.empty();
-        }
+        return runtimeCache.get(project).appMetadata(appId);
     }
 
     private Optional<String> socketHandlerClass(Map<String, Object> metadata) {
@@ -76,29 +68,26 @@ public class ProjectSocketDispatcher {
     }
 
     private SocketEventResult dispatchProjectSocket(ProjectContext project, SocketSession session, String handlerClass, String event, Map<String, Object> payload) {
-        try (URLClassLoader loader = new URLClassLoader(ProjectClassPath.apiUrls(project), Thread.currentThread().getContextClassLoader())) {
-            ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
-            Thread.currentThread().setContextClassLoader(loader);
-            try {
-                Class<?> handlerType = Class.forName(handlerClass, true, loader);
-                Object handler = handlerType.getDeclaredConstructor().newInstance();
-                if (!(handler instanceof SocketController controller)) {
-                    return new SocketEventResult(false, event, "socket handler does not implement SocketController");
-                }
-                SocketEventHandler eventHandler = controller.handlers().get(event);
-                if (eventHandler == null) {
-                    return new SocketEventResult(false, event, "socket event handler not found");
-                }
-                return eventHandler.handle(session, payload == null ? Map.of() : payload, rooms);
-            } finally {
-                Thread.currentThread().setContextClassLoader(previousLoader);
+        ProjectRuntimeCache.CachedProjectRuntime projectRuntime = runtimeCache.get(project);
+        ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
+        Thread.currentThread().setContextClassLoader(projectRuntime.classLoader());
+        try {
+            ProjectSocketController socketController = projectRuntime.socketController(handlerClass).orElse(null);
+            if (socketController == null) {
+                return new SocketEventResult(false, event, "socket handler not found");
             }
-        } catch (ClassNotFoundException exception) {
-            return new SocketEventResult(false, event, "socket handler not found");
-        } catch (InvocationTargetException exception) {
-            return new SocketEventResult(false, event, "socket event handler failed");
-        } catch (ReflectiveOperationException | IOException exception) {
+            SocketController controller = (SocketController) socketController.constructor().newInstance();
+            SocketEventHandler eventHandler = controller.handlers().get(event);
+            if (eventHandler == null) {
+                return new SocketEventResult(false, event, "socket event handler not found");
+            }
+            return eventHandler.handle(session, payload == null ? Map.of() : payload, rooms);
+        } catch (ProjectTypeMismatchException exception) {
+            return new SocketEventResult(false, event, exception.getMessage());
+        } catch (ReflectiveOperationException | ProjectReflectionException exception) {
             return new SocketEventResult(false, event, "socket dispatch failed");
+        } finally {
+            Thread.currentThread().setContextClassLoader(previousLoader);
         }
     }
 

@@ -9,8 +9,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+import com.wiz.config.WizProjectProperties;
+
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -24,21 +25,31 @@ public class ProjectRegistry {
     private final String projectCookieName;
     private final String devModeCookieName;
     private final String defaultProjectName;
+    private final boolean cookieSelectionEnabled;
 
     @Autowired
-    public ProjectRegistry(
-            PathService pathService,
-            @Value("${wiz.project.cookie-name:" + DEFAULT_PROJECT_COOKIE_NAME + "}") String projectCookieName,
-            @Value("${wiz.project.devmode-cookie-name:" + DEFAULT_DEVMODE_COOKIE_NAME + "}") String devModeCookieName,
-            @Value("${wiz.project.default-name:${wiz.default-project:" + DEFAULT_PROJECT_NAME + "}}") String defaultProjectName) {
+    public ProjectRegistry(PathService pathService, WizProjectProperties properties) {
+        this(pathService,
+                properties.getCookieName(),
+                properties.getDevmodeCookieName(),
+                properties.getDefaultName(),
+                properties.isCookieSelectionEnabled());
+    }
+
+    public ProjectRegistry(PathService pathService, String projectCookieName, String devModeCookieName, String defaultProjectName) {
+        this(pathService, projectCookieName, devModeCookieName, defaultProjectName, true);
+    }
+
+    public ProjectRegistry(PathService pathService, String projectCookieName, String devModeCookieName, String defaultProjectName, boolean cookieSelectionEnabled) {
         this.pathService = pathService;
-        this.projectCookieName = projectCookieName;
-        this.devModeCookieName = devModeCookieName;
-        this.defaultProjectName = defaultProjectName;
+        this.projectCookieName = blankDefault(projectCookieName, DEFAULT_PROJECT_COOKIE_NAME);
+        this.devModeCookieName = blankDefault(devModeCookieName, DEFAULT_DEVMODE_COOKIE_NAME);
+        this.defaultProjectName = blankDefault(defaultProjectName, DEFAULT_PROJECT_NAME);
+        this.cookieSelectionEnabled = cookieSelectionEnabled;
     }
 
     public ProjectRegistry(PathService pathService) {
-        this(pathService, DEFAULT_PROJECT_COOKIE_NAME, DEFAULT_DEVMODE_COOKIE_NAME, DEFAULT_PROJECT_NAME);
+        this(pathService, DEFAULT_PROJECT_COOKIE_NAME, DEFAULT_DEVMODE_COOKIE_NAME, DEFAULT_PROJECT_NAME, true);
     }
 
     public String projectCookieName() {
@@ -47,6 +58,10 @@ public class ProjectRegistry {
 
     public String devModeCookieName() {
         return devModeCookieName;
+    }
+
+    public boolean cookieSelectionEnabled() {
+        return cookieSelectionEnabled;
     }
 
     public boolean devMode(Map<String, String> cookies) {
@@ -88,9 +103,11 @@ public class ProjectRegistry {
     }
 
     public ProjectContext currentProject(Optional<String> projectCookieValue) {
-        Optional<ProjectContext> cookieProject = projectCookieValue
-                .filter(value -> !value.isBlank())
-                .flatMap(this::findProjectSafely);
+        Optional<ProjectContext> cookieProject = cookieSelectionEnabled
+                ? projectCookieValue
+                        .filter(value -> !value.isBlank())
+                        .flatMap(this::findProjectSafely)
+                : Optional.empty();
         if (cookieProject.isPresent()) {
             return cookieProject.get();
         }
@@ -115,5 +132,9 @@ public class ProjectRegistry {
         } catch (IllegalArgumentException exception) {
             return false;
         }
+    }
+
+    private String blankDefault(String value, String defaultValue) {
+        return value == null || value.isBlank() ? defaultValue : value.trim();
     }
 }

@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.wiz.build.ProjectBuildService;
+import com.wiz.config.WizRedirectProperties;
 import com.wiz.core.ProjectService;
 import com.wiz.core.WorkspaceService;
 import com.wiz.http.ResponseEnvelope;
@@ -58,6 +59,40 @@ class RouteDispatcherTest {
         assertEquals(List.of("/dashboard"), result.headers().get(HttpHeaders.LOCATION));
         assertTrue(result.headers().get(HttpHeaders.SET_COOKIE).getFirst().startsWith("JSESSIONID=;"));
         assertTrue(session.isInvalid());
+    }
+
+    @Test
+    void logoutRedirectPolicyDefaultsToAnyForExternalRedirects() throws Exception {
+        Path workspace = tempDir.resolve("workspace-any-redirect");
+        new WorkspaceService().createWorkspace(workspace);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        new ProjectBuildService().build(project, true, "bundle");
+
+        WizResult result = dispatcher(workspace).dispatch(WizRequest.builder()
+                .path("/auth/logout")
+                .queryString("returnTo=https%3A%2F%2Fexample.com%2Fafter-logout")
+                .build()).orElseThrow();
+
+        assertEquals(302, result.httpStatus());
+        assertEquals(List.of("https://example.com/after-logout"), result.headers().get(HttpHeaders.LOCATION));
+    }
+
+    @Test
+    void logoutRedirectLocalOnlyPolicyFallsBackForExternalRedirects() throws Exception {
+        Path workspace = tempDir.resolve("workspace-local-redirect");
+        new WorkspaceService().createWorkspace(workspace);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        new ProjectBuildService().build(project, true, "bundle");
+        WizRedirectProperties redirectProperties = new WizRedirectProperties();
+        redirectProperties.setPolicy(WizRedirectProperties.Policy.LOCAL_ONLY);
+
+        WizResult result = dispatcher(workspace, redirectProperties).dispatch(WizRequest.builder()
+                .path("/auth/logout")
+                .queryString("returnTo=https%3A%2F%2Fexample.com%2Fafter-logout")
+                .build()).orElseThrow();
+
+        assertEquals(302, result.httpStatus());
+        assertEquals(List.of("/"), result.headers().get(HttpHeaders.LOCATION));
     }
 
     @Test
@@ -123,9 +158,13 @@ class RouteDispatcherTest {
     }
 
     private RouteDispatcher dispatcher(Path workspace) {
+        return dispatcher(workspace, new WizRedirectProperties());
+    }
+
+    private RouteDispatcher dispatcher(Path workspace, WizRedirectProperties redirectProperties) {
         ProjectRegistry registry = new ProjectRegistry(new PathService(workspace));
         return new RouteDispatcher(
-                new WizRuntime(registry),
+                new WizRuntime(registry, redirectProperties),
                 new RouteRegistry(),
                 new ControllerChain(),
                 List.of());

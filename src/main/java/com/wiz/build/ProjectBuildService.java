@@ -121,7 +121,14 @@ public class ProjectBuildService {
                 });
             }
             List<String> phases = List.of("reconstruct", "java-source", "project-dependencies", "java-compile", frontend.phase(), "bundle");
-            buildMarkerService.write(project, phases, frontend.built() ? "real" : "fallback", startedAt, Instant.now());
+            SupplyChainManifestService.Result supplyChain = timed(buildLogger, "supply-chain", () -> new SupplyChainManifestService().write(project, Instant.now()));
+            buildMarkerService.write(project, phases, frontend.built() ? "real" : "fallback", startedAt, Instant.now(),
+                    new BuildMarkerService.DependencySummary(
+                            "bundle/" + SupplyChainManifestService.DEPENDENCY_MANIFEST_FILE,
+                            supplyChain.digestAlgorithm(),
+                            supplyChain.dependencyDigest(),
+                            supplyChain.dependencyCount(),
+                            "target/" + SupplyChainManifestService.CYCLONEDX_BOM_FILE));
             return finish(buildLogger, totalStarted, new BuildResult(0, phases, "Generated Java WIZ bundle"));
         } finally {
             lock.unlock();
@@ -545,6 +552,7 @@ public class ProjectBuildService {
         String body = Files.exists(viewHtml) ? Files.readString(viewHtml) : "<main id=\"wiz-app\">WIZ Java</main>";
         return "<!doctype html><html><head><meta charset=\"utf-8\"><title>WIZ Java</title></head><body>"
                 + body
+                + "<script src=\"/wiz/config.js\"></script>"
                 + "<script type=\"module\" src=\"/app.js\"></script></body></html>";
     }
 
@@ -554,7 +562,8 @@ public class ProjectBuildService {
             return Files.readString(viewScript);
         }
         return "const status = document.querySelector('[data-wiz-status]');\n"
-                + "fetch('/wiz/api/page.dashboard/overview', { method: 'POST' })\n"
+                + "const apiPrefix = window.__WIZ_CONFIG__?.apiPrefix || '/wiz/api';\n"
+                + "fetch(`${apiPrefix}/page.dashboard/overview`, { method: 'POST' })\n"
                 + "  .then((response) => response.json())\n"
                 + "  .then((payload) => { if (status) status.textContent = `API ${payload.code}`; });\n";
     }

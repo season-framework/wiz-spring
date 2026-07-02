@@ -1,5 +1,6 @@
 package com.wiz.runtime;
 
+import com.wiz.config.WizRedirectProperties;
 import com.wiz.domain.ModelRegistry;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,17 +14,40 @@ public class WizRuntime {
 
     private final ProjectRegistry projectRegistry;
     private final ModelRegistry modelRegistry;
+    private final WizRedirectProperties redirectProperties;
+    private final ProjectRuntimeCache runtimeCache;
     private final BuildMarkerService buildMarkerService = new BuildMarkerService();
 
     @Autowired
-    public WizRuntime(ProjectRegistry projectRegistry, ModelRegistry modelRegistry) {
+    public WizRuntime(ProjectRegistry projectRegistry, ModelRegistry modelRegistry, WizRedirectProperties redirectProperties, ProjectRuntimeCache runtimeCache) {
         this.projectRegistry = projectRegistry;
         this.modelRegistry = modelRegistry;
+        this.redirectProperties = redirectProperties == null ? new WizRedirectProperties() : redirectProperties;
+        this.runtimeCache = runtimeCache == null ? new ProjectRuntimeCache() : runtimeCache;
+    }
+
+    public WizRuntime(ProjectRegistry projectRegistry, ModelRegistry modelRegistry, WizRedirectProperties redirectProperties) {
+        this(projectRegistry, modelRegistry, redirectProperties, new ProjectRuntimeCache());
+    }
+
+    public WizRuntime(ProjectRegistry projectRegistry, ModelRegistry modelRegistry) {
+        this(projectRegistry, modelRegistry, new WizRedirectProperties());
     }
 
     public WizRuntime(ProjectRegistry projectRegistry) {
-        this.projectRegistry = projectRegistry;
-        this.modelRegistry = new ModelRegistry();
+        this(projectRegistry, new ProjectRuntimeCache(), new WizRedirectProperties());
+    }
+
+    public WizRuntime(ProjectRegistry projectRegistry, WizRedirectProperties redirectProperties) {
+        this(projectRegistry, new ProjectRuntimeCache(), redirectProperties);
+    }
+
+    private WizRuntime(ProjectRegistry projectRegistry, ProjectRuntimeCache runtimeCache, WizRedirectProperties redirectProperties) {
+        this(projectRegistry, new ModelRegistry(runtimeCache), redirectProperties, runtimeCache);
+    }
+
+    public ProjectRuntimeCache runtimeCache() {
+        return runtimeCache;
     }
 
     public WizContext createContext(WizRequest request) {
@@ -33,6 +57,6 @@ public class WizRuntime {
             response.header(DEVMODE_HEADER, "true");
             buildMarkerService.debugHeader(project).ifPresent(value -> response.header(BUILD_MARKER_HEADER, value));
         }
-        return new WizContext(request, response, project, modelRegistry);
+        return new WizContext(request, response, project, modelRegistry, redirectProperties, runtimeCache);
     }
 }

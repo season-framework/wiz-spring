@@ -37,7 +37,8 @@ class WizCommandTest {
 
     @Test
     void runDryRunDoesNotStartServer() {
-        int exitCode = new CommandLine(new WizCommand()).execute("run", "--dry-run", "--port", "18080", "--bundle", "--log", tempDir.resolve("server.log").toString());
+        int exitCode = new CommandLine(new WizCommand()).execute("run", "--dry-run", "--port", "18080", "--bundle", "--profile", "prod", "--log", tempDir.resolve("server.log").toString());
+
         assertEquals(0, exitCode);
     }
 
