@@ -8,14 +8,16 @@ import picocli.CommandLine.Command;
         name = "wiz-spring",
         mixinStandardHelpOptions = true,
         version = "wiz-spring 0.0.4",
-        description = "Java Spring runtime and CLI for WIZ workspaces.",
+        description = "Java Spring runtime, MCP server, and Codex setup CLI for WIZ workspaces.",
         subcommands = {
                 CreateCommand.class,
                 ProjectCommand.class,
                 RunCommand.class,
                 BundleCommand.class,
                 KillCommand.class,
-                ServiceCommand.class
+                ServiceCommand.class,
+                McpCommand.class,
+                CodexCommand.class
         })
 public class WizCommand implements Callable<Integer> {
 

@@ -10,23 +10,19 @@
 #
 # sample project의 DB/auth/session 구현은 project source에 있습니다.
 # project마다 필요한 값만 바꾸고, wiz-spring core jar는 수정하지 않는 것을 권장합니다.
-server:
-  # HTTP 서버 포트입니다.
-  # 기본값: 3000
-  # `wiz-spring run --port`가 있으면 이 값보다 우선합니다.
-  port: 3000
-  # HTTP bind host입니다. 로컬에서만 열려면 127.0.0.1을 사용하세요.
-  # 기본값: 0.0.0.0
-  # `wiz-spring run --host`가 있으면 이 값보다 우선합니다.
-  # address: 0.0.0.0
-  # 내장 Tomcat worker thread/connections 설정입니다.
-  # CPU core 수, 요청 latency, DB pool 크기에 맞춰 조정하세요.
-  # tomcat:
-  #   threads:
-  #     max: 200
-  #     min-spare: 10
-  #   accept-count: 100
-  #   max-connections: 8192
+#
+# HTTP 서버 포트와 bind host는 workspace config/application.yml에서 관리합니다.
+# project config에서 server.port를 다시 지정하면 workspace 포트와 충돌할 수 있습니다.
+# `wiz-spring run --port` 또는 `wiz-spring run --host`가 있으면 workspace 설정보다 우선합니다.
+#
+# 내장 Tomcat worker thread/connections 설정이 필요하면 아래 예시만 주석 해제하세요.
+# server:
+#   tomcat:
+#     threads:
+#       max: 200
+#       min-spare: 10
+#     accept-count: 100
+#     max-connections: 8192
 
 wiz:
   api:

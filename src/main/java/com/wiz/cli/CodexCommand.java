@@ -1,0 +1,254 @@
+package com.wiz.cli;
+
+import java.io.File;
+import java.net.URISyntaxException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.concurrent.Callable;
+
+import com.wiz.runtime.PathService;
+
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Option;
+
+@Command(
+        name = "codex",
+        mixinStandardHelpOptions = true,
+        description = "Generate or check .codex settings for WIZ Spring MCP. Writes server name 'wiz-spring'.")
+public class CodexCommand implements Callable<Integer> {
+
+    @Option(names = "--root", description = "Target WIZ Spring workspace root. Defaults to auto-detecting from the current directory.")
+    private Path root;
+
+    @Option(names = "--project", description = "Initial project name for generated MCP settings. Defaults to main.")
+    private String project = "main";
+
+    @Option(names = "--runtime-jar", description = "wiz-spring executable jar path for generated MCP args. Defaults to the currently running jar.")
+    private Path runtimeJar;
+
+    @Option(names = "--force", description = "Overwrite existing .codex files when generated content differs.")
+    private boolean force;
+
+    @Option(names = "--check", description = "Only check generated content. Missing or outdated files return exit code 2.")
+    private boolean check;
+
+    @Override
+    public Integer call() throws Exception {
+        Path workspaceRoot = workspaceRoot(root);
+        PathService pathService = new PathService(workspaceRoot);
+        if (!pathService.isWorkspaceRoot(workspaceRoot)) {
+            throw new IllegalArgumentException("WIZ workspace root not found: " + workspaceRoot);
+        }
+        pathService.validateProjectName(project);
+
+        Path jar = runtimeJar == null ? currentRuntimePath() : runtimeJar.toAbsolutePath().normalize();
+        if (!Files.isRegularFile(jar)) {
+            throw new IllegalArgumentException("wiz-spring runtime jar not found: " + jar + " (use --runtime-jar)");
+        }
+
+        Map<Path, String> files = desiredFiles(workspaceRoot, project, jar);
+        boolean blocked = false;
+        for (Map.Entry<Path, String> entry : files.entrySet()) {
+            Path path = entry.getKey();
+            String desired = entry.getValue();
+            if (!Files.exists(path)) {
+                if (check) {
+                    System.out.println("Missing: " + path);
+                    blocked = true;
+                } else {
+                    write(path, desired);
+                    System.out.println("Created: " + path);
+                }
+                continue;
+            }
+
+            String current = Files.readString(path);
+            if (current.equals(desired)) {
+                System.out.println("Up to date: " + path);
+                continue;
+            }
+
+            if (check) {
+                System.out.println("Outdated: " + path);
+                blocked = true;
+            } else if (force) {
+                write(path, desired);
+                System.out.println("Updated: " + path);
+            } else {
+                System.out.println("Warning: " + path + " differs from generated WIZ Spring Codex settings.");
+                blocked = true;
+            }
+        }
+
+        if (blocked) {
+            System.out.println("Use --force to overwrite existing files.");
+            return 2;
+        }
+        System.out.println("Codex settings ready: " + workspaceRoot.resolve(".codex"));
+        return 0;
+    }
+
+    private Map<Path, String> desiredFiles(Path workspaceRoot, String projectName, Path jar) {
+        Path codexRoot = workspaceRoot.resolve(".codex");
+        LinkedHashMap<Path, String> files = new LinkedHashMap<>();
+        files.put(codexRoot.resolve("config.toml"), configToml(workspaceRoot, projectName, jar));
+        files.put(codexRoot.resolve("AGENTS.md"), agentsMarkdown());
+        return files;
+    }
+
+    private String configToml(Path workspaceRoot, String projectName, Path jar) {
+        return """
+                approval_policy = "on-failure"
+                sandbox_mode = "danger-full-access"
+
+                [sandbox_workspace_write]
+                network_access = true
+                writable_roots = [%s, "/tmp"]
+
+                [mcp_servers."wiz-spring"]
+                command = "java"
+                args = [
+                  "-jar",
+                  %s,
+                  "mcp",
+                  "--root",
+                  %s,
+                  "--project",
+                  %s,
+                  "--state",
+                  %s,
+                ]
+
+                [mcp_servers."wiz-spring".env]
+                WIZ_WORKSPACE = %s
+                WIZ_PROJECT = %s
+
+                [mcp_servers."wiz-spring".tools.wiz_workspace_status]
+                approval_mode = "approve"
+
+                [mcp_servers."wiz-spring".tools.wiz_project_info]
+                approval_mode = "approve"
+
+                [mcp_servers."wiz-spring".tools.wiz_source_update_app]
+                approval_mode = "approve"
+
+                [mcp_servers."wiz-spring".tools.wiz_project_read_file]
+                approval_mode = "approve"
+
+                [mcp_servers."wiz-spring".tools.wiz_project_build]
+                approval_mode = "approve"
+
+                [mcp_servers."wiz-spring".tools.wiz_project_jar]
+                approval_mode = "approve"
+
+                [mcp_servers."wiz-spring".tools.wiz_project_dependency_info]
+                approval_mode = "approve"
+
+                [mcp_servers."wiz-spring".tools.wiz_source_create_controller]
+                approval_mode = "approve"
+
+                [mcp_servers."wiz-spring".tools.wiz_source_delete_controller]
+                approval_mode = "approve"
+
+                [mcp_servers."wiz-spring".tools.wiz_package_delete]
+                approval_mode = "approve"
+
+                [projects.%s]
+                trust_level = "trusted"
+                """.formatted(
+                toml(workspaceRoot.toString()),
+                toml(jar.toString()),
+                toml(workspaceRoot.toString()),
+                toml(projectName),
+                toml(workspaceRoot.resolve(".wiz/mcp-state.json").toString()),
+                toml(workspaceRoot.toString()),
+                toml(projectName),
+                toml(workspaceRoot.toString()));
+    }
+
+    private String agentsMarkdown() {
+        return """
+                # Codex Instructions
+
+                Follow `.github/copilot-instructions.md`.
+
+                Before code changes, if `.github/custom/custom-instructions.md` exists, read it first.
+                If that file lists reference files, read the relevant referenced files too.
+
+                For WIZ Spring work:
+                - Use the standalone WIZ Spring MCP tools first. This project must not depend on the old `wiz-vscode` extension MCP.
+                - Start with `wiz_workspace_status`.
+                - Modify only the current WIZ project.
+                - Use `wiz_source_*`, `wiz_package_*`, and `wiz_project_*` according to the target path.
+                - Treat `project/<name>/src/app/**/api.java`, `route.java`, `socket.java`, `src/controller`, `src/portal`, `pom.xml`, and `src/angular/package.json` as the main Spring project surfaces.
+                - Do not add Python/Flask, virtualenv, or pip workflows for project code. Use project `pom.xml` for Java dependencies and `src/angular/package.json` for frontend dependencies.
+                - Prefer Spring-specific MCP tools when relevant: `wiz_project_dependency_info`, `wiz_project_jar`, `wiz_source_create_controller`, `wiz_source_delete_controller`, and `wiz_package_delete`.
+
+                ## Devlog Enforcement
+
+                For every task that changes files under `project/<name>/`, write the project devlog before the final response.
+
+                - Check the current project's `devlog.md` and `devlog/{YYYY-MM-DD}/` before finishing.
+                - Add one summary row to `devlog.md` and one matching detail file under `devlog/{YYYY-MM-DD}/`.
+                - Include the user's original request, changed files, and verification result in the detail file.
+                - If prior work in the same session missed devlogs, add a catch-up devlog that records the missed work before reporting completion.
+                """;
+    }
+
+    private Path workspaceRoot(Path root) {
+        if (root != null) {
+            return root.toAbsolutePath().normalize();
+        }
+        return new PathService(Path.of(".")).findWorkspaceRoot(Path.of("."))
+                .orElseThrow(() -> new IllegalArgumentException("WIZ workspace root not found"));
+    }
+
+    private Path currentRuntimePath() {
+        String classPath = System.getProperty("java.class.path", "");
+        if (!classPath.isBlank() && !classPath.contains(File.pathSeparator)) {
+            Path candidate = Path.of(classPath).toAbsolutePath().normalize();
+            if (Files.isRegularFile(candidate)) {
+                return candidate;
+            }
+        }
+        try {
+            return Path.of(CodexCommand.class.getProtectionDomain().getCodeSource().getLocation().toURI())
+                    .toAbsolutePath()
+                    .normalize();
+        } catch (URISyntaxException exception) {
+            throw new IllegalStateException("Failed to resolve current runtime jar path", exception);
+        }
+    }
+
+    private void write(Path path, String content) throws java.io.IOException {
+        Files.createDirectories(path.getParent());
+        Files.writeString(path, content);
+    }
+
+    private static String toml(String value) {
+        StringBuilder result = new StringBuilder("\"");
+        for (int index = 0; index < value.length(); index++) {
+            char c = value.charAt(index);
+            switch (c) {
+                case '\\' -> result.append("\\\\");
+                case '"' -> result.append("\\\"");
+                case '\b' -> result.append("\\b");
+                case '\t' -> result.append("\\t");
+                case '\n' -> result.append("\\n");
+                case '\f' -> result.append("\\f");
+                case '\r' -> result.append("\\r");
+                default -> {
+                    if (c < 0x20) {
+                        result.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        result.append(c);
+                    }
+                }
+            }
+        }
+        result.append('"');
+        return result.toString();
+    }
+}

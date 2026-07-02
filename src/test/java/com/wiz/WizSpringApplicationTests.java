@@ -1,8 +1,10 @@
 package com.wiz;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -31,16 +33,35 @@ class WizSpringApplicationTests {
 		Path workspace = tempDir.resolve("workspace");
 		Files.createDirectories(workspace.resolve("config"));
 		Files.createDirectories(workspace.resolve("project/dev/config"));
-		Files.writeString(workspace.resolve("config/application.yml"), "wiz:\n  project:\n    default-name: dev\n");
+		Files.writeString(workspace.resolve("config/application.yml"), "server:\n  port: 19091\nwiz:\n  project:\n    default-name: dev\n");
 
 		List<String> args = WizSpringApplication.serverArgs(workspace.toString(), null, null, null, false, null);
 
 		assertTrue(args.contains("--wiz.project.default-name=dev"));
 		assertTrue(args.contains("--spring.profiles.default=dev"));
+		assertTrue(args.contains("--server.address=0.0.0.0"));
+		assertTrue(args.contains("--server.port=19091"));
 		assertTrue(args.stream().anyMatch(arg -> arg.startsWith("--spring.config.additional-location=")
 				&& arg.contains(workspace.resolve("config").toUri().toString())
 				&& arg.contains(workspace.resolve("project/dev/config").toUri().toString())));
-		assertTrue(args.stream().noneMatch(arg -> arg.startsWith("--server.port=")));
+	}
+
+	@Test
+	void runSettingsScanFromConfiguredBusyPort() throws Exception {
+		Path workspace = tempDir.resolve("scan-workspace");
+		Files.createDirectories(workspace.resolve("config"));
+		Files.createDirectories(workspace.resolve("project/main/config"));
+		try (ServerSocket busy = new ServerSocket(0)) {
+			int busyPort = busy.getLocalPort();
+			Files.writeString(workspace.resolve("config/application.yml"), "server:\n  port: " + busyPort + "\nwiz:\n  project:\n    default-name: main\n");
+
+			WizSpringApplication.RunSettings settings = WizSpringApplication.resolveRunSettings(workspace.toString(), "127.0.0.1", null, null, false, null, null, false);
+
+			assertEquals(busyPort, settings.requestedPort());
+			assertTrue(settings.port() > busyPort);
+			assertTrue(settings.portChanged());
+			assertTrue(settings.args().contains("--server.port=" + settings.port()));
+		}
 	}
 
 	@Test

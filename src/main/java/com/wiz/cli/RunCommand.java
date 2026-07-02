@@ -37,21 +37,8 @@ public class RunCommand implements Callable<Integer> {
 
     @Override
     public Integer call() {
-        Path resolvedRoot = root.toAbsolutePath().normalize();
-        if (dryRun) {
-            System.out.println("root=" + resolvedRoot);
-            System.out.println("project=" + (project == null || project.isBlank() ? "<workspace/application default>" : project));
-            System.out.println("host=" + (host == null || host.isBlank() ? "<application.yml/default 0.0.0.0>" : host));
-            System.out.println("port=" + (port == null ? "<application.yml>" : port));
-            System.out.println("bundle=" + bundle);
-            System.out.println("profile=" + (profile == null || profile.isBlank() ? WizSpringApplication.DEFAULT_RUN_PROFILE : profile.trim()));
-            if (log != null) {
-                System.out.println("log=" + log.toAbsolutePath().normalize());
-            }
-            return 0;
-        }
-        WizSpringApplication.runServer(
-                resolvedRoot.toString(),
+        WizSpringApplication.RunSettings settings = WizSpringApplication.resolveRunSettings(
+                root.toAbsolutePath().normalize().toString(),
                 host,
                 port,
                 project,
@@ -59,6 +46,33 @@ public class RunCommand implements Callable<Integer> {
                 log == null ? null : log.toAbsolutePath().normalize().toString(),
                 profile == null || profile.isBlank() ? WizSpringApplication.DEFAULT_RUN_PROFILE : profile.trim(),
                 profile != null && !profile.isBlank());
+        if (dryRun) {
+            System.out.println("root=" + settings.workspace());
+            System.out.println("project=" + settings.projectName());
+            System.out.println("host=" + settings.host());
+            System.out.println("port=" + settings.port());
+            if (settings.portChanged()) {
+                System.out.println("requested-port=" + settings.requestedPort());
+            }
+            System.out.println("bundle=" + settings.bundle());
+            System.out.println("profile=" + settings.profile());
+            if (settings.log() != null && !settings.log().isBlank()) {
+                System.out.println("log=" + settings.log());
+            }
+            return 0;
+        }
+        if (settings.portChanged()) {
+            System.out.println("Port " + settings.requestedPort() + " is busy; using " + settings.port() + ".");
+        }
+        WizSpringApplication.runServer(
+                settings.workspace().toString(),
+                settings.host(),
+                settings.port(),
+                settings.projectName(),
+                settings.bundle(),
+                settings.log(),
+                settings.profile(),
+                settings.profileOverride());
         return 0;
     }
 }

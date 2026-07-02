@@ -102,10 +102,30 @@ runtime의 핵심 정의 파일은 [`pom.xml`](pom.xml)입니다. 여기에는 S
 | `wiz-spring project route list/create/delete` | 지원. `route.java` skeleton을 생성/삭제합니다. |
 | `wiz-spring project package list/create/delete` | 지원. portal package를 생성/삭제하고 목록을 출력합니다. |
 | `wiz-spring project npm list/install/uninstall` | 지원. `src/angular/package.json` 기준 npm dependency를 조회/설치/삭제합니다. |
+| `wiz-spring mcp` | 지원. Spring WIZ 전용 MCP stdio 서버로 실행되며 workspace/project/source/package 도구를 Spring WIZ 프로젝트 구조에 맞게 제공합니다. |
+| `wiz-spring codex` | 지원. workspace `.codex/config.toml`, `.codex/AGENTS.md`를 Spring MCP 기준으로 생성/검사합니다. 기존 파일이 다르면 경고하고, `--force`로 덮어쓸 수 있습니다. |
 | `wiz-spring service list/regist/unregist/status/start/stop/restart` | 지원. Linux/systemd service command입니다. `regist --dry-run`으로 생성물을 미리 볼 수 있습니다. |
 | `wiz-spring server` | 별도 CLI command로는 미지원. Spring server 실행은 `run`으로 통합했습니다. |
 | IDE/plugin 관리 | 미지원. 현재 포팅 범위는 IDE가 아니라 runtime/build/run입니다. |
 | Python backend 자동 실행/자동 변환 | 미지원. WIZ Spring은 Java project source를 실행 대상으로 하며 Python source migration/stub 생성은 포함하지 않습니다. |
+
+### MCP 서버
+
+WIZ Spring MCP 서버는 `wiz-vscode` 확장 코드와 분리된 Spring runtime jar 내부 기능입니다. backend source는 `api.java`, `route.java`, `socket.java`, `src/controller`, `src/portal` 규칙으로 처리합니다. Python virtualenv/pip 관리 도구는 Spring 프로젝트에서 사용하지 않으므로 도구 목록에 노출하지 않고, 대신 standalone `project jar`, Java controller 생성/삭제, portal package 삭제, project dependency 위치 확인 도구를 제공합니다. 상태 파일은 기본적으로 workspace의 `.wiz/mcp-state.json`에 저장하며, `--state`로 명시 위치를 지정할 수 있습니다.
+
+```bash
+java -jar target/wiz-spring-0.0.4.jar mcp --root /path/to/workspace --project main
+```
+
+MCP client 설정에서는 서버 이름을 `wiz-spring`으로 두고, `command`를 `java`, `args`를 `["-jar", "/path/to/wiz-spring-0.0.4.jar", "mcp", "--root", "/path/to/workspace"]`처럼 지정합니다. VS Code에서 사용할 경우에도 별도 extension code가 아니라 이 jar 명령을 직접 가리키면 됩니다.
+
+Codex 설정은 `wiz-spring codex`로 생성할 수 있습니다. 기존 `.codex/config.toml` 또는 `.codex/AGENTS.md`가 생성 기준과 다르면 기본적으로 경고와 종료 코드 `2`를 반환하고, `--force`를 주면 덮어씁니다.
+
+```bash
+java -jar target/wiz-spring-0.0.4.jar codex --root /path/to/workspace --project main
+java -jar target/wiz-spring-0.0.4.jar codex --root /path/to/workspace --project main --force
+java -jar target/wiz-spring-0.0.4.jar codex --root /path/to/workspace --project main --check
+```
 
 ## Runtime 지원 범위
 
@@ -368,7 +388,9 @@ Successful project bundle builds also write `bundle/.wiz-dependencies.json`, `bu
 
 ### Command Coverage
 
-With the `wiz-spring` alias, supported commands are `create`, `run`, `bundle`, `kill`, `service`, `project create`, `project build`, `project list`, `project delete`, `project export`, `project app`, `project controller`, `project route`, `project package`, and `project npm`. Separate `wiz-spring server`, web IDE, plugin management, and Python backend auto-conversion/execution are outside the Spring port scope.
+With the `wiz-spring` alias, supported commands are `create`, `run`, `bundle`, `kill`, `service`, `mcp`, `codex`, `project create`, `project build`, `project list`, `project delete`, `project export`, `project app`, `project controller`, `project route`, `project package`, and `project npm`. Separate `wiz-spring server`, web IDE, plugin management, and Python backend auto-conversion/execution are outside the Spring port scope.
+
+`wiz-spring mcp` runs the standalone Spring MCP server. MCP client settings should use the server name `wiz-spring` and run `java -jar /path/to/wiz-spring-0.0.4.jar mcp --root /path/to/workspace --project main`. `wiz-spring codex --root /path/to/workspace --project main` generates `.codex/config.toml` and `.codex/AGENTS.md`; it warns with exit code `2` when existing files differ, and `--force` overwrites them.
 
 ### Runtime Coverage
 

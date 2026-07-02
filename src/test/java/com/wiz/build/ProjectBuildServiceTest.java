@@ -193,6 +193,12 @@ class ProjectBuildServiceTest {
             assertTrue(packaged.getEntry("BOOT-INF/classes/wiz/embedded-workspace/config/application.yml") != null);
             assertTrue(packaged.getEntry("BOOT-INF/classes/wiz/embedded-workspace/project/main/config/application.yml") != null);
             assertTrue(packaged.getEntry("BOOT-INF/classes/wiz/embedded-workspace/project/main/bundle/classes/com/wiz/project/main/api/PageDashboardApi.class") != null);
+            String workspaceConfig = jarEntry(packaged, "BOOT-INF/classes/wiz/embedded-workspace/config/application.yml");
+            String projectConfig = jarEntry(packaged, "BOOT-INF/classes/wiz/embedded-workspace/project/main/config/application.yml");
+            assertTrue(workspaceConfig.contains("server:"));
+            assertTrue(workspaceConfig.contains("port:"));
+            assertTrue(projectConfig.contains("workspace config/application.yml"));
+            assertTrue(!projectConfig.contains("  port: 3000"));
         }
     }
 
@@ -282,6 +288,12 @@ class ProjectBuildServiceTest {
             output.putNextEntry(new java.util.jar.JarEntry("META-INF/MANIFEST.MF"));
             output.write("Manifest-Version: 1.0\nMain-Class: com.wiz.WizSpringApplication\n\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
             output.closeEntry();
+        }
+    }
+
+    private String jarEntry(java.util.jar.JarFile jar, String name) throws Exception {
+        try (var input = jar.getInputStream(jar.getEntry(name))) {
+            return new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
         }
     }
 

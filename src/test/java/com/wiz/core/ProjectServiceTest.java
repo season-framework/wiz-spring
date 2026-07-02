@@ -45,6 +45,8 @@ class ProjectServiceTest {
         assertTrue(Files.exists(project.configRoot().resolve("application-prod.yml")));
         String application = Files.readString(project.configRoot().resolve("application.yml"));
         assertTrue(application.contains("WIZ Spring 프로젝트 공통 설정입니다"));
+        assertFalse(application.contains("  port: 3000"));
+        assertTrue(application.contains("workspace config/application.yml"));
         assertTrue(application.contains("기본값: /wiz/api"));
         assertTrue(application.contains("max-request-body-bytes: 0"));
         assertTrue(Files.readString(project.configRoot().resolve("application-dev.yml")).contains("cookie-selection-enabled: true"));
