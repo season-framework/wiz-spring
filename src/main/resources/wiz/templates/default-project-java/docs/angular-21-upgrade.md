@@ -206,7 +206,6 @@ const { code, data } = await wiz.call("overview");
 
 - `wiz.app(namespace)`
 - `wiz.dev()`
-- `wiz.project()`
 - `wiz.socket()`
 - `wiz.url(function_name)`
 

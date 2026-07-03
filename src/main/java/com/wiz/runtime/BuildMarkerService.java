@@ -26,7 +26,8 @@ public class BuildMarkerService {
     public void write(ProjectContext project, List<String> phases, String frontendMode, Instant startedAt, Instant finishedAt, DependencySummary dependencySummary) throws IOException {
         Files.createDirectories(project.bundleRoot());
         LinkedHashMap<String, Object> marker = new LinkedHashMap<>();
-        marker.put("projectName", project.name());
+        marker.put("workspaceRoot", project.root().toAbsolutePath().normalize().toString());
+        marker.put("javaPackageRoot", project.packageRoot());
         marker.put("buildPhases", List.copyOf(phases));
         marker.put("runtimeVersion", runtimeVersion());
         marker.put("javaVersion", System.getProperty("java.version"));
@@ -60,7 +61,7 @@ public class BuildMarkerService {
     }
 
     public Optional<String> debugHeader(ProjectContext project) {
-        return read(project).map(marker -> "project=" + string(marker, "projectName")
+        return read(project).map(marker -> "package=" + string(marker, "javaPackageRoot")
                 + ";frontend=" + string(marker, "frontendMode")
                 + ";finished=" + string(marker, "buildFinishedAt"));
     }

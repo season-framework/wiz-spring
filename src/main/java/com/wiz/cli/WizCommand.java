@@ -11,7 +11,8 @@ import picocli.CommandLine.Command;
         description = "Java Spring runtime, MCP server, and Codex setup CLI for WIZ workspaces.",
         subcommands = {
                 CreateCommand.class,
-                ProjectCommand.class,
+                BuildCommand.class,
+                JarCommand.class,
                 RunCommand.class,
                 BundleCommand.class,
                 KillCommand.class,

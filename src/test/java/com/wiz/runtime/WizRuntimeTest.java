@@ -23,7 +23,7 @@ class WizRuntimeTest {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
         PathService pathService = new PathService(workspace);
-        ProjectContext project = new ProjectService(pathService).createProject("main", null, null);
+        ProjectContext project = new ProjectService(pathService).createApp(null, null);
         new ProjectBuildService().build(project, true, "bundle");
 
         WizRuntime runtime = new WizRuntime(new ProjectRegistry(pathService));
@@ -33,7 +33,7 @@ class WizRuntimeTest {
             WizResult result = context.response().ok(Map.of("ok", true));
 
             assertEquals("true", result.headers().get(WizRuntime.DEVMODE_HEADER).getFirst());
-            assertTrue(result.headers().get(WizRuntime.BUILD_MARKER_HEADER).getFirst().contains("project=main"));
+            assertTrue(result.headers().get(WizRuntime.BUILD_MARKER_HEADER).getFirst().contains("package=com.wiz.app"));
             assertTrue(result.headers().get(WizRuntime.BUILD_MARKER_HEADER).getFirst().contains("frontend=fallback"));
         }
     }

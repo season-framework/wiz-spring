@@ -44,13 +44,11 @@ public class WizMcpToolService {
     private final Path explicitStatePath;
     private final boolean rootLocked;
     private Path workspaceRoot;
-    private String currentProject;
     private Path statePath;
 
-    public WizMcpToolService(Path workspaceRoot, String currentProject, Path statePath) {
+    public WizMcpToolService(Path workspaceRoot, Path statePath) {
         this.rootLocked = workspaceRoot != null;
         this.workspaceRoot = initialWorkspaceRoot(workspaceRoot);
-        this.currentProject = firstNonBlank(currentProject, System.getenv("WIZ_PROJECT"), "main");
         this.explicitStatePath = statePath == null ? envPath("WIZ_STATE_PATH") : statePath.toAbsolutePath().normalize();
         loadState();
         if (this.workspaceRoot == null) {
@@ -60,7 +58,7 @@ public class WizMcpToolService {
 
     public List<Map<String, Object>> toolDefinitions() {
         List<Map<String, Object>> tools = new ArrayList<>();
-        tools.add(tool("wiz_workspace_status", "Get current Spring WIZ workspace state, active project, and projects.", schema()));
+        tools.add(tool("wiz_workspace_status", "Get current Spring WIZ workspace state and source paths.", schema()));
         tools.add(tool("wiz_workspace_list_dir", "List a directory relative to the WIZ workspace root.", schema()));
         tools.add(tool("wiz_workspace_read_file", "Read a UTF-8 file relative to the WIZ workspace root.", schema("relativePath")));
         tools.add(tool("wiz_workspace_write_file", "Write a UTF-8 file relative to the WIZ workspace root.", schema("relativePath", "content")));
@@ -68,24 +66,21 @@ public class WizMcpToolService {
         tools.add(tool("wiz_workspace_delete", "Delete a file or directory relative to the WIZ workspace root.", schema("relativePath")));
         tools.add(tool("wiz_workspace_rename", "Rename or move a file or directory relative to the WIZ workspace root.", schema("oldRelativePath", "newRelativePath")));
 
-        tools.add(tool("wiz_project_info", "Get Spring WIZ project information, app counts, package list, and paths.", schema()));
-        tools.add(tool("wiz_project_switch", "Switch the active project context and sync the WIZ state file.", schema("projectName")));
-        tools.add(tool("wiz_project_build", "Build a Spring WIZ project.", schema()));
-        tools.add(tool("wiz_project_jar", "Package a built Spring WIZ project as a standalone executable jar.", schema()));
-        tools.add(tool("wiz_project_dependency_info", "Inspect Spring WIZ project dependency entry points: pom.xml, lib jars, resolved Maven jars, and Angular package.json.", schema()));
-        tools.add(tool("wiz_project_export", "Export a Spring WIZ project as a .wizproject archive.", schema()));
-        tools.add(tool("wiz_project_import", "Import a local directory or .wizproject archive as a Spring WIZ project.", schema("filePath", "projectName")));
-        tools.add(tool("wiz_project_structure", "Get a directory tree of the project src directory.", schema()));
-        tools.add(tool("wiz_project_list_dir", "List a directory relative to the project root.", schema()));
-        tools.add(tool("wiz_project_read_file", "Read a UTF-8 file relative to the project root.", schema("relativePath")));
-        tools.add(tool("wiz_project_write_file", "Write a UTF-8 file relative to the project root.", schema("relativePath", "content")));
-        tools.add(tool("wiz_project_create_dir", "Create a directory relative to the project root.", schema("relativePath")));
-        tools.add(tool("wiz_project_delete", "Delete a file or directory relative to the project root.", schema("relativePath")));
-        tools.add(tool("wiz_project_rename", "Rename or move a file or directory relative to the project root.", schema("oldRelativePath", "newRelativePath")));
-        tools.add(tool("wiz_project_search_apps", "Search source and portal apps by keyword.", schema("query")));
-        tools.add(tool("wiz_project_npm_list", "List Angular npm dependencies for src/angular/package.json.", schema()));
-        tools.add(tool("wiz_project_npm_install", "Install Angular npm dependencies for src/angular/package.json.", schema("packages")));
-        tools.add(tool("wiz_project_npm_uninstall", "Uninstall Angular npm dependencies for src/angular/package.json.", schema("packages")));
+        tools.add(tool("wiz_app_info", "Get Spring WIZ app information, app counts, package list, and paths.", schema()));
+        tools.add(tool("wiz_app_build", "Build the Spring WIZ app.", schema()));
+        tools.add(tool("wiz_app_jar", "Package the built Spring WIZ app as a standalone executable jar.", schema()));
+        tools.add(tool("wiz_app_dependency_info", "Inspect Spring WIZ app dependency entry points: pom.xml, lib jars, resolved Maven jars, and Angular package.json.", schema()));
+        tools.add(tool("wiz_app_structure", "Get a directory tree of the app src directory.", schema()));
+        tools.add(tool("wiz_app_list_dir", "List a directory relative to the app root.", schema()));
+        tools.add(tool("wiz_app_read_file", "Read a UTF-8 file relative to the app root.", schema("relativePath")));
+        tools.add(tool("wiz_app_write_file", "Write a UTF-8 file relative to the app root.", schema("relativePath", "content")));
+        tools.add(tool("wiz_app_create_dir", "Create a directory relative to the app root.", schema("relativePath")));
+        tools.add(tool("wiz_app_delete", "Delete a file or directory relative to the app root.", schema("relativePath")));
+        tools.add(tool("wiz_app_rename", "Rename or move a file or directory relative to the app root.", schema("oldRelativePath", "newRelativePath")));
+        tools.add(tool("wiz_app_search_apps", "Search source and portal apps by keyword.", schema("query")));
+        tools.add(tool("wiz_app_npm_list", "List Angular npm dependencies for src/angular/package.json.", schema()));
+        tools.add(tool("wiz_app_npm_install", "Install Angular npm dependencies for src/angular/package.json.", schema("packages")));
+        tools.add(tool("wiz_app_npm_uninstall", "Uninstall Angular npm dependencies for src/angular/package.json.", schema("packages")));
 
         tools.add(tool("wiz_source_list_apps", "List source apps and routes from src/app and src/route.", schema()));
         tools.add(tool("wiz_source_app_info", "Read app.json and files for a source app or route.", schema("appPath")));
@@ -134,27 +129,24 @@ public class WizMcpToolService {
             case "wiz_workspace_create_dir" -> createDir(requireWorkspaceRoot(), stringArg(args, "relativePath"));
             case "wiz_workspace_delete" -> deletePath(requireWorkspaceRoot(), stringArg(args, "relativePath"));
             case "wiz_workspace_rename" -> renamePath(requireWorkspaceRoot(), stringArg(args, "oldRelativePath"), stringArg(args, "newRelativePath"));
-            case "wiz_project_info" -> projectInfo(projectName(args));
-            case "wiz_project_switch" -> projectSwitch(stringArg(args, "projectName"));
-            case "wiz_project_build" -> projectBuild(projectName(args), boolArg(args, "clean", false));
-            case "wiz_project_jar" -> projectJar(args);
-            case "wiz_project_dependency_info" -> projectDependencyInfo(projectName(args));
-            case "wiz_project_export" -> projectExport(projectName(args));
-            case "wiz_project_import" -> projectImport(stringArg(args, "filePath"), stringArg(args, "projectName"));
-            case "wiz_project_structure" -> projectStructure(projectName(args), intArg(args, "maxDepth", 4), stringArg(args, "subPath", ""));
-            case "wiz_project_list_dir" -> listDir(projectContext(projectName(args)).root(), stringArg(args, "relativePath", ""));
-            case "wiz_project_read_file" -> readFile(projectContext(projectName(args)).root(), stringArg(args, "relativePath"), args);
-            case "wiz_project_write_file" -> writeFile(projectContext(projectName(args)).root(), stringArg(args, "relativePath"), stringArg(args, "content"));
-            case "wiz_project_create_dir" -> createDir(projectContext(projectName(args)).root(), stringArg(args, "relativePath"));
-            case "wiz_project_delete" -> deletePath(projectContext(projectName(args)).root(), stringArg(args, "relativePath"));
-            case "wiz_project_rename" -> renamePath(projectContext(projectName(args)).root(), stringArg(args, "oldRelativePath"), stringArg(args, "newRelativePath"));
-            case "wiz_project_search_apps" -> projectSearchApps(projectName(args), stringArg(args, "query"));
-            case "wiz_project_pip_list" -> pipUnsupported();
-            case "wiz_project_pip_install" -> pipUnsupported();
-            case "wiz_project_pip_uninstall" -> pipUnsupported();
-            case "wiz_project_npm_list" -> npmList(projectName(args));
-            case "wiz_project_npm_install" -> npmInstall(projectName(args), stringListArg(args, "packages"), boolArg(args, "dev", false));
-            case "wiz_project_npm_uninstall" -> npmUninstall(projectName(args), stringListArg(args, "packages"));
+            case "wiz_app_info" -> projectInfo(projectName(args));
+            case "wiz_app_build" -> projectBuild(projectName(args), boolArg(args, "clean", false));
+            case "wiz_app_jar" -> projectJar(args);
+            case "wiz_app_dependency_info" -> projectDependencyInfo(projectName(args));
+            case "wiz_app_structure" -> projectStructure(projectName(args), intArg(args, "maxDepth", 4), stringArg(args, "subPath", ""));
+            case "wiz_app_list_dir" -> listDir(workspaceContext().root(), stringArg(args, "relativePath", ""));
+            case "wiz_app_read_file" -> readFile(workspaceContext().root(), stringArg(args, "relativePath"), args);
+            case "wiz_app_write_file" -> writeFile(workspaceContext().root(), stringArg(args, "relativePath"), stringArg(args, "content"));
+            case "wiz_app_create_dir" -> createDir(workspaceContext().root(), stringArg(args, "relativePath"));
+            case "wiz_app_delete" -> deletePath(workspaceContext().root(), stringArg(args, "relativePath"));
+            case "wiz_app_rename" -> renamePath(workspaceContext().root(), stringArg(args, "oldRelativePath"), stringArg(args, "newRelativePath"));
+            case "wiz_app_search_apps" -> projectSearchApps(projectName(args), stringArg(args, "query"));
+            case "wiz_app_pip_list" -> pipUnsupported();
+            case "wiz_app_pip_install" -> pipUnsupported();
+            case "wiz_app_pip_uninstall" -> pipUnsupported();
+            case "wiz_app_npm_list" -> npmList(projectName(args));
+            case "wiz_app_npm_install" -> npmInstall(projectName(args), stringListArg(args, "packages"), boolArg(args, "dev", false));
+            case "wiz_app_npm_uninstall" -> npmUninstall(projectName(args), stringListArg(args, "packages"));
             case "wiz_source_list_apps" -> sourceListApps(projectName(args), stringArg(args, "appType", "all"));
             case "wiz_source_app_info" -> appInfo(stringArg(args, "appPath"));
             case "wiz_source_create_app" -> sourceCreateApp(args);
@@ -206,23 +198,25 @@ public class WizMcpToolService {
     private Object workspaceStatus() throws IOException {
         LinkedHashMap<String, Object> data = new LinkedHashMap<>();
         data.put("workspacePath", workspaceRoot == null ? null : workspaceRoot.toString());
-        data.put("currentProject", currentProject);
         data.put("version", VERSION);
         data.put("runtime", "spring");
-        data.put("projects", workspaceRoot == null ? List.of() : projectService().listProjects());
         LinkedHashMap<String, Object> paths = new LinkedHashMap<>();
         paths.put("workspace", workspaceRoot == null ? null : workspaceRoot.toString());
         paths.put("config", workspaceRoot == null ? null : workspaceRoot.resolve("config").toString());
-        paths.put("project", workspaceRoot == null ? null : workspaceRoot.resolve("project").resolve(currentProject).toString());
-        paths.put("projectSrc", workspaceRoot == null ? null : workspaceRoot.resolve("project").resolve(currentProject).resolve("src").toString());
+        paths.put("src", workspaceRoot == null ? null : workspaceRoot.resolve("src").toString());
+        paths.put("build", workspaceRoot == null ? null : workspaceRoot.resolve("build").toString());
+        paths.put("bundle", workspaceRoot == null ? null : workspaceRoot.resolve("bundle").toString());
         data.put("paths", paths);
+        if (workspaceRoot != null) {
+            data.put("javaPackageRoot", new PathService(workspaceRoot).packageRoot());
+        }
         return data;
     }
 
     private Object projectInfo(String projectName) throws IOException {
-        ProjectContext project = projectContext(projectName);
+        ProjectContext project = workspaceContext();
         if (!Files.isDirectory(project.root())) {
-            throw new NoSuchFileException("Project does not exist: " + project.name());
+            throw new NoSuchFileException("App does not exist: " + project.root());
         }
         LinkedHashMap<String, Object> appCounts = new LinkedHashMap<>();
         appCounts.put("page", countApps(project.appRoot(), app -> app.name().startsWith("page.") || "page".equals(app.mode())));
@@ -240,7 +234,6 @@ public class WizMcpToolService {
 
         LinkedHashMap<String, Object> paths = new LinkedHashMap<>();
         paths.put("workspace", requireWorkspaceRoot().toString());
-        paths.put("project", project.root().toString());
         paths.put("src", project.sourceRoot().toString());
         paths.put("config", project.configRoot().toString());
 
@@ -250,9 +243,8 @@ public class WizMcpToolService {
         fileTypes.put("controller", "Java ControllerHook source under src/controller");
 
         LinkedHashMap<String, Object> data = new LinkedHashMap<>();
-        data.put("project", project.name());
+        data.put("app", "main");
         data.put("runtime", "spring");
-        data.put("allProjects", projectService().listProjects());
         data.put("paths", paths);
         data.put("appCounts", appCounts);
         data.put("packages", packageList(project.name()).get("packages"));
@@ -260,18 +252,8 @@ public class WizMcpToolService {
         return data;
     }
 
-    private Object projectSwitch(String projectName) throws IOException {
-        ProjectContext project = projectContext(required(projectName, "Project name is required"));
-        if (!Files.isDirectory(project.root())) {
-            throw new NoSuchFileException("Project does not exist: " + project.name());
-        }
-        currentProject = project.name();
-        saveState();
-        return Map.of("success", true, "currentProject", currentProject);
-    }
-
     private Object projectBuild(String projectName, boolean clean) throws IOException {
-        ProjectContext project = projectContext(projectName);
+        ProjectContext project = workspaceContext();
         CapturingBuildLogger logger = new CapturingBuildLogger();
         BuildResult result = new ProjectBuildService().build(project, clean, "bundle", logger);
         LinkedHashMap<String, Object> data = new LinkedHashMap<>();
@@ -285,7 +267,7 @@ public class WizMcpToolService {
 
     private Object projectJar(Map<String, Object> args) throws IOException {
         String projectName = projectName(args);
-        ProjectContext project = projectContext(projectName);
+        ProjectContext project = workspaceContext();
         if (!boolArg(args, "skipBuild", false)) {
             BuildResult result = new ProjectBuildService().build(project, boolArg(args, "clean", false), "bundle", BuildLogger.quiet());
             if (!result.success()) {
@@ -300,18 +282,18 @@ public class WizMcpToolService {
                 "success", true,
                 "jar", jar.toString(),
                 "checksum", jarService.checksumPath(jar).toString(),
-                "project", project.name());
+                "app", "main");
     }
 
     private Object projectDependencyInfo(String projectName) throws IOException {
-        ProjectContext project = projectContext(projectName);
+        ProjectContext project = workspaceContext();
         Path pom = project.root().resolve("pom.xml");
         Path angularPackage = project.sourceRoot().resolve("angular/package.json");
         Path dependencyRoot = project.root().resolve("target/dependency");
         Path libRoot = project.root().resolve("lib");
 
         LinkedHashMap<String, Object> data = new LinkedHashMap<>();
-        data.put("project", project.name());
+        data.put("app", "main");
         data.put("java", Map.of(
                 "pomXml", dependencyFileInfo(pom),
                 "resolvedMavenJars", jarList(dependencyRoot),
@@ -319,29 +301,15 @@ public class WizMcpToolService {
         data.put("frontend", Map.of("packageJson", dependencyFileInfo(angularPackage)));
         data.put("runtime", Map.of("corePomXml", dependencyFileInfo(Path.of("pom.xml").toAbsolutePath().normalize())));
         data.put("notes", List.of(
-                "Project Java/Spring dependencies belong in project/<name>/pom.xml.",
-                "Resolved Maven dependencies are prepared by project build under target/dependency.",
-                "Project-local jars can be placed under project/<name>/lib.",
+                "Java/Spring dependencies belong in workspace pom.xml.",
+                "Resolved Maven dependencies are prepared by build under target/dependency.",
+                "Workspace-local jars can be placed under lib.",
                 "Frontend dependencies belong in src/angular/package.json."));
         return data;
     }
 
-    private Object projectExport(String projectName) throws IOException {
-        ProjectContext project = projectContext(projectName);
-        Path exports = requireWorkspaceRoot().resolve("exports");
-        Path archive = projectService().exportProject(project.name(), exports.resolve(project.name()));
-        return Map.of("success", true, "outputPath", archive.toString());
-    }
-
-    private Object projectImport(String filePath, String projectName) throws IOException, InterruptedException {
-        String targetProject = required(projectName, "Project name is required");
-        Path source = resolveExternalOrWorkspacePath(required(filePath, "File path is required"));
-        ProjectContext project = projectService().createProject(targetProject, null, source);
-        return Map.of("success", true, "projectPath", project.root().toString(), "project", project.name());
-    }
-
     private Object projectStructure(String projectName, int maxDepth, String subPath) throws IOException {
-        ProjectContext project = projectContext(projectName);
+        ProjectContext project = workspaceContext();
         Path start = subPath == null || subPath.isBlank()
                 ? project.sourceRoot()
                 : new SafePath(project.sourceRoot()).resolveExisting(subPath);
@@ -350,7 +318,7 @@ public class WizMcpToolService {
 
     private Object projectSearchApps(String projectName, String query) throws IOException {
         String q = required(query, "Query is required").toLowerCase(Locale.ROOT);
-        ProjectContext project = projectContext(projectName);
+        ProjectContext project = workspaceContext();
         List<Map<String, Object>> apps = new ArrayList<>();
         apps.addAll(scanSourceApps(project, "all"));
         for (String packageName : scaffoldService().listPackages(project.name())) {
@@ -383,7 +351,7 @@ public class WizMcpToolService {
         data.put("count", packages.size());
         data.put("dependencies", packageJson.getOrDefault("dependencies", Map.of()));
         data.put("devDependencies", packageJson.getOrDefault("devDependencies", Map.of()));
-        data.put("cwd", projectContext(projectName).sourceRoot().resolve("angular").toString());
+        data.put("cwd", workspaceContext().sourceRoot().resolve("angular").toString());
         return data;
     }
 
@@ -416,7 +384,7 @@ public class WizMcpToolService {
     }
 
     private Object sourceListApps(String projectName, String appType) throws IOException {
-        List<Map<String, Object>> apps = scanSourceApps(projectContext(projectName), appType);
+        List<Map<String, Object>> apps = scanSourceApps(workspaceContext(), appType);
         return Map.of("apps", apps, "count", apps.size());
     }
 
@@ -526,14 +494,14 @@ public class WizMcpToolService {
 
     private Object sourceListLayouts(String projectName) throws IOException {
         List<Map<String, Object>> layouts = new ArrayList<>();
-        for (Map<String, Object> app : scanSourceApps(projectContext(projectName), "layout")) {
+        for (Map<String, Object> app : scanSourceApps(workspaceContext(), "layout")) {
             layouts.add(app);
         }
         return Map.of("layouts", layouts);
     }
 
     private Map<String, Object> packageList(String projectName) throws IOException {
-        ProjectContext project = projectContext(projectName);
+        ProjectContext project = workspaceContext();
         Path portal = project.sourceRoot().resolve("portal");
         List<Map<String, Object>> packages = new ArrayList<>();
         if (Files.isDirectory(portal)) {
@@ -572,7 +540,7 @@ public class WizMcpToolService {
     }
 
     private Object packageExport(String projectName, String packageName) throws IOException {
-        ProjectContext project = projectContext(projectName);
+        ProjectContext project = workspaceContext();
         String name = required(packageName, "Package name is required");
         Path packageRoot = new SafePath(project.sourceRoot().resolve("portal")).resolveExisting(name);
         if (!Files.isDirectory(packageRoot)) {
@@ -595,7 +563,7 @@ public class WizMcpToolService {
     }
 
     private Object packageListApps(String projectName, String packageName, String appType) throws IOException {
-        ProjectContext project = projectContext(projectName);
+        ProjectContext project = workspaceContext();
         String name = required(packageName, "Package name is required");
         Path packageRoot = new SafePath(project.sourceRoot().resolve("portal")).resolveExisting(name);
         List<Map<String, Object>> apps = new ArrayList<>();
@@ -657,7 +625,7 @@ public class WizMcpToolService {
     }
 
     private Object listControllers(String projectName, String packageName) throws IOException {
-        ProjectContext project = projectContext(projectName);
+        ProjectContext project = workspaceContext();
         Path controllerDir = packageName == null || packageName.isBlank()
                 ? project.sourceRoot().resolve("controller")
                 : new SafePath(project.sourceRoot().resolve("portal")).resolveExisting(packageName).resolve("controller");
@@ -826,7 +794,7 @@ public class WizMcpToolService {
     }
 
     private Path resolveAppPath(String appPath) throws IOException {
-        ProjectContext project = projectContext(currentProject);
+        ProjectContext project = workspaceContext();
         Path raw = Path.of(appPath);
         Path candidate;
         if (raw.isAbsolute()) {
@@ -1037,8 +1005,8 @@ public class WizMcpToolService {
         return new ProjectScaffoldService(paths());
     }
 
-    private ProjectContext projectContext(String projectName) {
-        return paths().projectContext(firstNonBlank(projectName, currentProject, "main"));
+    private ProjectContext workspaceContext() {
+        return paths().workspaceContext();
     }
 
     private Path requireWorkspaceRoot() {
@@ -1151,10 +1119,6 @@ public class WizMcpToolService {
             if (session == null) {
                 session = raw;
             }
-            Object project = session.get("currentProject");
-            if (project != null && !project.toString().isBlank()) {
-                currentProject = project.toString();
-            }
             Object root = session.get("workspacePath");
             if (!rootLocked && root != null && !root.toString().isBlank()) {
                 workspaceRoot = Path.of(root.toString()).toAbsolutePath().normalize();
@@ -1198,7 +1162,6 @@ public class WizMcpToolService {
                 map.forEach((key, value) -> session.put(String.valueOf(key), value));
             }
             session.put("workspacePath", requireWorkspaceRoot().toString());
-            session.put("currentProject", currentProject);
             session.put("lastUsed", Instant.now().toEpochMilli());
             sessions.put(sessionId, session);
             Files.writeString(target, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(raw) + "\n");
@@ -1285,7 +1248,7 @@ public class WizMcpToolService {
     private Map<String, Object> schema(String... required) {
         LinkedHashMap<String, Object> properties = new LinkedHashMap<>();
         for (String name : List.of(
-                "workspacePath", "projectName", "relativePath", "oldRelativePath", "newRelativePath", "content",
+                "workspacePath", "relativePath", "oldRelativePath", "newRelativePath", "content",
                 "filePath", "clean", "maxDepth", "subPath", "query", "packages", "dev", "global", "outdated",
                 "appType", "namespace", "title", "category", "controller", "layout", "viewuri", "id", "routePath",
                 "appPath", "updates", "fileName", "oldName", "newName", "packageName", "output", "runtimeJar",
@@ -1306,7 +1269,7 @@ public class WizMcpToolService {
     }
 
     private String projectName(Map<String, Object> args) {
-        return firstNonBlank(stringArg(args, "projectName", null), currentProject, "main");
+        return PathService.APP_NAME;
     }
 
     private String controllerNameArg(Map<String, Object> args) {

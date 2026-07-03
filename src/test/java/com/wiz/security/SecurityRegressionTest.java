@@ -57,7 +57,7 @@ class SecurityRegressionTest {
         ProjectService service = new ProjectService(new PathService(workspace));
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-                () -> service.createProject("copy", null, source));
+                () -> service.createApp(null, source));
         assertTrue(exception.getMessage().contains("Symbolic links are not allowed"));
     }
 
@@ -66,7 +66,7 @@ class SecurityRegressionTest {
         Path workspace = tempDir.resolve("workspace");
         Path outside = tempDir.resolve("outside.txt");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         Files.writeString(outside, "secret");
         createSymbolicLinkOrSkip(project.assetsRoot().resolve("leak.txt"), outside);
 
@@ -102,7 +102,7 @@ class SecurityRegressionTest {
     void appApiDispatchRestoresContextClassLoader() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         new ProjectBuildService().build(project, true, "bundle");
         AppApiDispatcher dispatcher = new AppApiDispatcher(new WizRuntime(new ProjectRegistry(new PathService(workspace))));
         ClassLoader original = Thread.currentThread().getContextClassLoader();

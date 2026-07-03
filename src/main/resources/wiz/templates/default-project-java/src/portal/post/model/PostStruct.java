@@ -1,7 +1,7 @@
-import com.wiz.project.main.model.struct.UserStruct;
-import com.wiz.project.main.portal.post.model.struct.CommentService;
-import com.wiz.project.main.portal.post.model.struct.PostService;
-import com.wiz.project.main.portal.season.model.orm.Jpa;
+import __WIZ_PACKAGE_ROOT__.model.struct.UserStruct;
+import __WIZ_PACKAGE_ROOT__.portal.post.model.struct.CommentService;
+import __WIZ_PACKAGE_ROOT__.portal.post.model.struct.PostService;
+import __WIZ_PACKAGE_ROOT__.portal.season.model.orm.Jpa;
 import com.wiz.runtime.WizContext;
 
 public final class PostStruct {

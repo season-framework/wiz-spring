@@ -19,6 +19,7 @@ wiz:
   http:
     max-request-body-bytes: 0
   socket:
+    path: /wiz/app
     allowed-origins:
       - "*"
     polling-session-ttl-millis: 120000
@@ -27,9 +28,8 @@ wiz:
   redirect:
     policy: any
     allowed-hosts: []
-  project:
-    default-name: main
-    cookie-name: season-wiz-project
+  java:
+    package-root: com.wiz.app
+  runtime:
     devmode-cookie-name: season-wiz-devmode
-    cookie-selection-enabled: true
     warmup-enabled: true

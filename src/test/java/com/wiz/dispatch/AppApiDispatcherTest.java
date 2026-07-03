@@ -31,7 +31,7 @@ class AppApiDispatcherTest {
     void invokesCompiledAppLocalJavaApi() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         setDashboardController(project, "base");
         Files.writeString(project.appRoot().resolve("page.dashboard/api.java"), simpleOverviewApi());
         new ProjectBuildService().build(project, true, "bundle");
@@ -42,14 +42,14 @@ class AppApiDispatcherTest {
         ResponseEnvelope envelope = (ResponseEnvelope) result.entity();
         assertEquals(200, result.httpStatus());
         assertEquals(200, envelope.code());
-        assertEquals(Map.of("message", "Java WIZ project ready"), envelope.data());
+        assertEquals(Map.of("message", "Java WIZ app ready"), envelope.data());
     }
 
     @Test
     void returnsEnvelopeForMissingFunction() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         setDashboardController(project, "base");
         new ProjectBuildService().build(project, true, "bundle");
 
@@ -65,7 +65,7 @@ class AppApiDispatcherTest {
     void mapsRequiredQueryFailureToBadRequestEnvelope() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         setDashboardController(project, "base");
         Files.writeString(project.appRoot().resolve("page.dashboard/api.java"), requiredQueryApi());
         new ProjectBuildService().build(project, true, "bundle");
@@ -87,7 +87,7 @@ class AppApiDispatcherTest {
     void appliesControllerHookBeforeAppApiHandler() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         setDashboardController(project, "guard");
         Files.writeString(project.sourceRoot().resolve("controller/GuardController.java"), guardControllerApi());
         new ProjectBuildService().build(project, true, "bundle");
@@ -104,7 +104,7 @@ class AppApiDispatcherTest {
     void appliesBaseControllerWhenAppControllerIsBlank() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         setDashboardController(project, "");
         Files.writeString(project.sourceRoot().resolve("controller/BaseController.java"), baseControllerApi());
         new ProjectBuildService().build(project, true, "bundle");
@@ -121,7 +121,7 @@ class AppApiDispatcherTest {
     void appApiCanResolveProjectModelsFromWizContext() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         setDashboardController(project, "base");
         removeJavaSources(project);
         Files.writeString(project.modelRoot().resolve("Struct.java"), "public final class Struct { public String name() { return \"root\"; } }\n");
@@ -142,7 +142,7 @@ class AppApiDispatcherTest {
     void appApiCanStoreLoginDataInHttpSession() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         setDashboardController(project, "base");
         Files.writeString(project.appRoot().resolve("page.dashboard/api.java"), loginApi());
         new ProjectBuildService().build(project, true, "bundle");
@@ -163,7 +163,7 @@ class AppApiDispatcherTest {
     void builtInUserAndAdminControllerGuardsValidateSession() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         setDashboardController(project, "user");
         new ProjectBuildService().build(project, true, "bundle");
 
@@ -207,7 +207,7 @@ class AppApiDispatcherTest {
         return "import java.util.Map;\n\n"
                 + "public final class PageDashboardApi {\n"
                 + "    public Object overview() {\n"
-                + "        return Map.of(\"message\", \"Java WIZ project ready\");\n"
+                + "        return Map.of(\"message\", \"Java WIZ app ready\");\n"
                 + "    }\n"
                 + "}\n";
     }
@@ -247,8 +247,8 @@ class AppApiDispatcherTest {
 
     private String modelApi() {
         return "import com.wiz.runtime.WizContext;\n"
-                + "import com.wiz.project.main.model.Struct;\n"
-                + "import com.wiz.project.main.model.struct.UserStruct;\n"
+                + "import com.wiz.app.model.Struct;\n"
+                + "import com.wiz.app.model.struct.UserStruct;\n"
                 + "import java.util.Map;\n\n"
                 + "public final class PageDashboardApi {\n"
                 + "    public Object models(WizContext wiz) {\n"

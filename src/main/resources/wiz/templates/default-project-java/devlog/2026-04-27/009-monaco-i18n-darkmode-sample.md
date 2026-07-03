@@ -10,7 +10,7 @@
 ## 변경 파일 목록
 - `plugin/workspace/model/builder.py`: Monaco/translate 템플릿 감지 기반 의존성 추가 로직 제거
 - `plugin/workspace/model/src/build/annotator.py`: `@dependencies`, `@directives` annotation parser가 여러 명시 항목을 처리하도록 일반화
-- `project/main/src/portal/post/app/detail/view.ts`: `NuMonacoEditorComponent`, `TranslateModule` explicit dependency 선언 추가
+- `src/portal/post/app/detail/view.ts`: `NuMonacoEditorComponent`, `TranslateModule` explicit dependency 선언 추가
 
 ## 검증
 - `python -m py_compile plugin/workspace/model/builder.py plugin/workspace/model/src/build/annotator.py` 성공

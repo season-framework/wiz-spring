@@ -12,7 +12,7 @@ import java.util.Map;
 
 import com.wiz.build.BuildResult;
 import com.wiz.build.ProjectBuildService;
-import com.wiz.config.WizProjectProperties;
+import com.wiz.config.WizRuntimeProperties;
 import com.wiz.config.WizRedirectProperties;
 import com.wiz.core.ProjectService;
 import com.wiz.core.WorkspaceService;
@@ -50,16 +50,16 @@ class JavaSampleProjectTest {
     void javaSampleProjectBuildsAndRunsMainApis() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         removeAngularSource(project);
         BuildResult build = new ProjectBuildService().build(project, true, "bundle");
         assertTrue(build.success(), build.message());
-        assertTrue(Files.exists(project.bundleRoot().resolve("project-api.jar")));
-        assertTrue(Files.exists(project.bundleRoot().resolve("classes/com/wiz/project/main/socket/PageChatSocketController.class")));
+        assertTrue(Files.exists(project.bundleRoot().resolve("app-api.jar")));
+        assertTrue(Files.exists(project.bundleRoot().resolve("classes/com/wiz/app/socket/PageChatSocketController.class")));
 
         SocketRoomRegistry rooms = new SocketRoomRegistry();
         ProjectSocketDispatcher socketDispatcher = new ProjectSocketDispatcher(new PathService(workspace), rooms);
-        SocketNamespace chatNamespace = new SocketNamespace("main", "page.chat");
+        SocketNamespace chatNamespace = new SocketNamespace("page.chat");
         MockHttpSession chatHttpSession = new MockHttpSession();
         chatHttpSession.setAttribute("id", "admin");
         chatHttpSession.setAttribute("role", "admin");
@@ -199,7 +199,7 @@ class JavaSampleProjectTest {
     void defaultProjectTemplateBuildsAndRunsMainApis() throws Exception {
         Path workspace = tempDir.resolve("default-workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("demo-app", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         removeAngularSource(project);
         BuildResult build = new ProjectBuildService().build(project, true, "bundle");
         assertTrue(build.success(), build.message());
@@ -247,7 +247,7 @@ class JavaSampleProjectTest {
                 cache,
                 new ModelRegistry(cache),
                 new WizRedirectProperties(),
-                new WizProjectProperties())
+                new WizRuntimeProperties())
                 .run(null);
         return cache;
     }
@@ -284,7 +284,7 @@ class JavaSampleProjectTest {
     private ProjectContext createEmbeddedSampleProject(String workspaceName, String projectName) throws Exception {
         Path workspace = tempDir.resolve(workspaceName);
         new WorkspaceService().createWorkspace(workspace);
-        return new ProjectService(new PathService(workspace)).createProject(projectName, null, null);
+        return new ProjectService(new PathService(workspace)).createApp(null, null);
     }
 
     private void removeAngularSource(ProjectContext project) throws Exception {

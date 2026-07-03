@@ -31,7 +31,7 @@ public class SocketWebSocketConfig implements WebSocketConfigurer {
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-        registry.addHandler(handler, "/wiz/ws/app/{project}/{appId}")
+        registry.addHandler(handler, socketProperties.getPath() + "/{appId}")
                 .addInterceptors(new SocketHandshakeInterceptor())
                 .setAllowedOrigins(socketProperties.getAllowedOrigins().toArray(String[]::new));
         if (registry instanceof ServletWebSocketHandlerRegistry servletRegistry) {

@@ -6,10 +6,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-import com.wiz.project.main.model.db.UserEntity;
-import com.wiz.project.main.portal.season.model.orm.Ids;
-import com.wiz.project.main.portal.season.model.orm.Jpa;
-import com.wiz.project.main.portal.season.model.security.PasswordHasher;
+import __WIZ_PACKAGE_ROOT__.model.db.UserEntity;
+import __WIZ_PACKAGE_ROOT__.portal.season.model.orm.Ids;
+import __WIZ_PACKAGE_ROOT__.portal.season.model.orm.Jpa;
+import __WIZ_PACKAGE_ROOT__.portal.season.model.security.PasswordHasher;
 import com.wiz.runtime.WizContext;
 
 import org.springframework.transaction.support.TransactionTemplate;

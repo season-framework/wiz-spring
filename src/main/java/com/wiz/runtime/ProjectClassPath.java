@@ -26,7 +26,7 @@ public final class ProjectClassPath {
     public static List<Path> apiEntries(ProjectContext project) throws IOException {
         LinkedHashSet<Path> entries = new LinkedHashSet<>();
         Path classes = project.bundleRoot().resolve("classes");
-        Path jar = project.bundleRoot().resolve("project-api.jar");
+        Path jar = project.bundleRoot().resolve("app-api.jar");
         if (Files.isDirectory(classes)) {
             entries.add(classes.toAbsolutePath().normalize());
         }

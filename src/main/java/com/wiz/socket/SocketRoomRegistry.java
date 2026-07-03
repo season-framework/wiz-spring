@@ -51,6 +51,6 @@ public class SocketRoomRegistry {
     }
 
     private String roomKey(SocketNamespace namespace, String room) {
-        return namespace.project() + ":" + namespace.appId() + ":" + room;
+        return namespace.appId() + ":" + room;
     }
 }

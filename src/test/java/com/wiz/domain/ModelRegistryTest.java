@@ -38,7 +38,7 @@ class ModelRegistryTest {
             Object postService = context.models().get("portal/post/struct/post", Object.class);
             Object seasonSession = context.models().get("portal/season/session", Object.class);
 
-            assertEquals("com.wiz.project.main.model.Struct", rootStruct.getClass().getName());
+            assertEquals("com.wiz.app.model.Struct", rootStruct.getClass().getName());
             assertEquals("root", invoke(rootStruct, "name"));
             assertEquals("main", invoke(userStruct, "projectName"));
             assertEquals("entity", invoke(userEntity, "kind"));
@@ -73,7 +73,7 @@ class ModelRegistryTest {
     private ProjectContext projectWithModels() throws Exception {
         Path workspace = tempDir.resolve("workspace-" + java.util.UUID.randomUUID());
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         removeJavaSources(project);
         Files.writeString(project.modelRoot().resolve("Struct.java"), "public final class Struct { public String name() { return \"root\"; } }\n");
         Files.createDirectories(project.modelRoot().resolve("struct"));
@@ -81,7 +81,7 @@ class ModelRegistryTest {
                 + "public final class UserStruct {\n"
                 + "    private final WizContext wiz;\n"
                 + "    public UserStruct(WizContext wiz) { this.wiz = wiz; }\n"
-                + "    public String projectName() { return wiz.project().name(); }\n"
+                + "    public String projectName() { return wiz.workspace().name(); }\n"
                 + "}\n");
         Files.createDirectories(project.modelRoot().resolve("db"));
         Files.writeString(project.modelRoot().resolve("db/UserEntity.java"), "public final class UserEntity { public String kind() { return \"entity\"; } }\n");

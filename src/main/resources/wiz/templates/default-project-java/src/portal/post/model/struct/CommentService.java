@@ -5,9 +5,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import com.wiz.project.main.portal.post.model.db.CommentEntity;
-import com.wiz.project.main.portal.season.model.orm.Ids;
-import com.wiz.project.main.portal.season.model.orm.Jpa;
+import __WIZ_PACKAGE_ROOT__.portal.post.model.db.CommentEntity;
+import __WIZ_PACKAGE_ROOT__.portal.season.model.orm.Ids;
+import __WIZ_PACKAGE_ROOT__.portal.season.model.orm.Jpa;
 import com.wiz.runtime.WizContext;
 
 public final class CommentService {

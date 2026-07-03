@@ -77,7 +77,7 @@ class WizCommandTest {
         Files.createDirectories(log);
         Path workspace = tempDir.resolve("workspace");
         Files.createDirectories(workspace.resolve("config"));
-        Files.writeString(workspace.resolve("config/application.yml"), "server:\n  port: 19191\nwiz:\n  project:\n    default-name: main\n");
+        Files.writeString(workspace.resolve("config/application.yml"), "server:\n  port: 19191\nwiz:\n  runtime:\n    devmode-cookie-name: season-wiz-devmode\n");
         Files.writeString(systemd.resolve("wiz.demo.service"), "[Unit]\nDescription=wiz.demo\n");
         Files.writeString(bin.resolve("wiz.demo"), "#!/bin/sh\n"
                 + "# wiz.service.name=demo\n"
@@ -143,65 +143,45 @@ class WizCommandTest {
     }
 
     @Test
-    void projectCommandShellAcceptsExpectedOptions() throws Exception {
+    void workspaceCommandShellAcceptsExpectedOptions() throws Exception {
         Path workspace = tempDir.resolve("workspace");
-        assertEquals(0, new CommandLine(new WizCommand()).execute("project", "create", "--help"));
-        assertEquals(0, new CommandLine(new WizCommand()).execute("project", "jar", "--help"));
+        assertEquals(0, new CommandLine(new WizCommand()).execute("create", "--help"));
+        assertEquals(0, new CommandLine(new WizCommand()).execute("jar", "--help"));
         assertEquals(0, new CommandLine(new WizCommand()).execute("bundle", "--help"));
         assertEquals(0, new CommandLine(new WizCommand()).execute("kill", "--help"));
         assertEquals(0, new CommandLine(new WizCommand()).execute("service", "--help"));
         assertEquals(0, new CommandLine(new WizCommand()).execute("mcp", "--help"));
         assertEquals(0, new CommandLine(new WizCommand()).execute("codex", "--help"));
-        assertEquals(0, new CommandLine(new WizCommand()).execute("create", workspace.toString()));
-        assertEquals(0, new CommandLine(new WizCommand()).execute("project", "create", "--root", workspace.toString(), "--project", "main"));
-        assertTrue(Files.exists(workspace.resolve("project/main/src/app/page.dashboard/api.java")));
-        assertEquals(0, new CommandLine(new WizCommand()).execute("project", "app", "create", "--root", workspace.toString(), "--project", "main", "--app", "page.cli", "--engine", "pug"));
-        assertEquals(0, new CommandLine(new WizCommand()).execute("project", "controller", "create", "--root", workspace.toString(), "--project", "main", "--controller", "cli"));
-        assertEquals(0, new CommandLine(new WizCommand()).execute("project", "route", "create", "--root", workspace.toString(), "--project", "main", "--route", "custom", "--path", "/api/v1", "--methods", "GET,POST"));
-        assertEquals(0, new CommandLine(new WizCommand()).execute("project", "package", "create", "--root", workspace.toString(), "--project", "main", "--package", "blog"));
-        assertEquals(0, new CommandLine(new WizCommand()).execute("project", "app", "list", "--root", workspace.toString(), "--project", "main"));
-        assertEquals(0, new CommandLine(new WizCommand()).execute("project", "controller", "list", "--root", workspace.toString(), "--project", "main"));
-        assertEquals(0, new CommandLine(new WizCommand()).execute("project", "route", "list", "--root", workspace.toString(), "--project", "main"));
-        assertEquals(0, new CommandLine(new WizCommand()).execute("project", "package", "list", "--root", workspace.toString(), "--project", "main"));
-        assertEquals(0, new CommandLine(new WizCommand()).execute("project", "npm", "list", "--root", workspace.toString(), "--project", "main"));
-        deleteIfExists(workspace.resolve("project/main/src/angular"));
-        assertEquals(0, new CommandLine(new WizCommand()).execute("project", "list", "--root", workspace.toString()));
-        assertEquals(0, new CommandLine(new WizCommand()).execute("project", "build", "--root", workspace.toString(), "--project", "main", "--clean"));
-        assertTrue(Files.exists(workspace.resolve("project/main/build/src/app/page.dashboard/api.java")));
-        assertTrue(Files.exists(workspace.resolve("project/main/bundle/project-api.jar")));
+        assertEquals(0, new CommandLine(new WizCommand()).execute("create", workspace.toString(), "--package", "com.wiz.app", "--skip-build"));
+        assertTrue(Files.exists(workspace.resolve("src/app/page.dashboard/api.java")));
+        deleteIfExists(workspace.resolve("src/angular"));
+        assertEquals(0, new CommandLine(new WizCommand()).execute("build", "--root", workspace.toString(), "--clean"));
+        assertTrue(Files.exists(workspace.resolve("build/src/app/page.dashboard/api.java")));
+        assertTrue(Files.exists(workspace.resolve("bundle/app-api.jar")));
         Path runtimeJar = tempDir.resolve("wiz-runtime.jar");
         writeFakeRuntimeJar(runtimeJar);
-        Path projectJar = tempDir.resolve("main.jar");
-        assertEquals(0, new CommandLine(new WizCommand()).execute("project", "jar", "--root", workspace.toString(), "--project", "main", "--skip-build", "--runtime-jar", runtimeJar.toString(), "--output", projectJar.toString()));
-        assertTrue(Files.exists(projectJar));
+        Path appJar = tempDir.resolve("main.jar");
+        assertEquals(0, new CommandLine(new WizCommand()).execute("jar", "--root", workspace.toString(), "--skip-build", "--runtime-jar", runtimeJar.toString(), "--output", appJar.toString()));
+        assertTrue(Files.exists(appJar));
         Path bundle = workspace.resolve("deploy-bundle");
-        assertEquals(0, new CommandLine(new WizCommand()).execute("bundle", "--root", workspace.toString(), "--project", "main", "--output", bundle.toString()));
-        assertTrue(Files.exists(bundle.resolve("project/main/bundle/project-api.jar")));
+        assertEquals(0, new CommandLine(new WizCommand()).execute("bundle", "--root", workspace.toString(), "--output", bundle.toString()));
+        assertTrue(Files.exists(bundle.resolve("bundle/app-api.jar")));
         assertEquals(0, new CommandLine(new WizCommand()).execute("kill", "--dry-run"));
         assertEquals(0, new CommandLine(new WizCommand()).execute("service", "regist", "demo", "19090", "bundle", "--root", workspace.toString(), "--jar", tempDir.resolve("wiz-spring.jar").toString(), "--dry-run"));
-        Path archive = workspace.resolve("main-export");
-        assertEquals(0, new CommandLine(new WizCommand()).execute("project", "export", "--root", workspace.toString(), "--project", "main", "--output", archive.toString()));
-        assertTrue(Files.exists(workspace.resolve("main-export.wizproject")));
-        assertEquals(0, new CommandLine(new WizCommand()).execute("project", "app", "delete", "--root", workspace.toString(), "--project", "main", "--app", "page.cli"));
-        assertEquals(0, new CommandLine(new WizCommand()).execute("project", "controller", "delete", "--root", workspace.toString(), "--project", "main", "--controller", "cli"));
-        assertEquals(0, new CommandLine(new WizCommand()).execute("project", "route", "delete", "--root", workspace.toString(), "--project", "main", "--route", "custom"));
-        assertEquals(0, new CommandLine(new WizCommand()).execute("project", "package", "delete", "--root", workspace.toString(), "--project", "main", "--package", "blog"));
-        assertEquals(0, new CommandLine(new WizCommand()).execute("project", "delete", "--root", workspace.toString(), "--project", "main"));
     }
 
     @Test
     void codexCommandCreatesWarnsAndOverwritesSettings() throws Exception {
         Path workspace = tempDir.resolve("codex-workspace");
         Files.createDirectories(workspace.resolve("config"));
-        Files.createDirectories(workspace.resolve("project/main"));
-        Files.writeString(workspace.resolve("config/application.yml"), "wiz:\n  project:\n    default-name: main\n");
+        Files.writeString(workspace.resolve("config/application.yml"), "wiz:\n  java:\n    package-root: com.wiz.app\n");
+        Files.writeString(workspace.resolve("config/wiz.yml"), "workspace: java\n");
         Path runtimeJar = tempDir.resolve("wiz-spring.jar");
         writeFakeRuntimeJar(runtimeJar);
 
         assertEquals(0, new CommandLine(new WizCommand()).execute(
                 "codex",
                 "--root", workspace.toString(),
-                "--project", "main",
                 "--runtime-jar", runtimeJar.toString()));
 
         Path config = workspace.resolve(".codex/config.toml");
@@ -216,21 +196,18 @@ class WizCommandTest {
         assertEquals(2, new CommandLine(new WizCommand()).execute(
                 "codex",
                 "--root", workspace.toString(),
-                "--project", "main",
                 "--runtime-jar", runtimeJar.toString()));
         assertEquals("legacy = true\n", Files.readString(config));
 
         assertEquals(0, new CommandLine(new WizCommand()).execute(
                 "codex",
                 "--root", workspace.toString(),
-                "--project", "main",
                 "--runtime-jar", runtimeJar.toString(),
                 "--force"));
         assertTrue(Files.readString(config).contains("[mcp_servers.\"wiz-spring\"]"));
         assertEquals(0, new CommandLine(new WizCommand()).execute(
                 "codex",
                 "--root", workspace.toString(),
-                "--project", "main",
                 "--runtime-jar", runtimeJar.toString(),
                 "--check"));
     }

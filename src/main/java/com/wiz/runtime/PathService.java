@@ -2,14 +2,21 @@ package com.wiz.runtime;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Optional;
+import java.util.Properties;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.config.YamlPropertiesFactoryBean;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.stereotype.Service;
 
 @Service
 public class PathService {
+
+    public static final String APP_NAME = "main";
+    public static final String DEFAULT_PACKAGE_ROOT = "com.wiz.app";
 
     private final Path root;
 
@@ -34,27 +41,24 @@ public class PathService {
         return root.resolve("public");
     }
 
-    public Path projectsRoot() {
-        return root.resolve("project");
+    public ProjectContext workspaceContext() {
+        return workspaceContext(packageRoot());
     }
 
-    public Path projectRoot(String projectName) {
-        return projectsRoot().resolve(validateProjectName(projectName));
-    }
-
-    public ProjectContext projectContext(String projectName) {
-        Path projectRoot = projectRoot(projectName);
+    public ProjectContext workspaceContext(String packageRoot) {
+        Path workspaceRoot = root;
         return new ProjectContext(
-                validateProjectName(projectName),
-                projectRoot,
-                projectRoot.resolve("src"),
-                projectRoot.resolve("src/app"),
-                projectRoot.resolve("src/model"),
-                projectRoot.resolve("src/route"),
-                projectRoot.resolve("src/assets"),
-                projectRoot.resolve("config"),
-                projectRoot.resolve("build"),
-                projectRoot.resolve("bundle"));
+                APP_NAME,
+                validatePackageRoot(packageRoot),
+                workspaceRoot,
+                workspaceRoot.resolve("src"),
+                workspaceRoot.resolve("src/app"),
+                workspaceRoot.resolve("src/model"),
+                workspaceRoot.resolve("src/route"),
+                workspaceRoot.resolve("src/assets"),
+                workspaceRoot.resolve("config"),
+                workspaceRoot.resolve("build"),
+                workspaceRoot.resolve("bundle"));
     }
 
     public Optional<Path> findWorkspaceRoot(Path start) {
@@ -80,24 +84,50 @@ public class PathService {
         return (Files.isRegularFile(candidate.resolve("config/application.yml"))
                 || Files.isRegularFile(candidate.resolve("config/application.yaml"))
                 || Files.isRegularFile(candidate.resolve("config/wiz.yml")))
-                && Files.isDirectory(candidate.resolve("project"));
+                && (Files.isDirectory(candidate.resolve("src"))
+                        || Files.isDirectory(candidate.resolve("bundle"))
+                        || Files.isRegularFile(candidate.resolve("pom.xml"))
+                        || Files.isRegularFile(candidate.resolve("config/wiz.yml")));
     }
 
-    public String validateProjectName(String projectName) {
-        if (projectName == null || projectName.isBlank()) {
-            throw new IllegalArgumentException("Project name is required");
+    public String packageRoot() {
+        for (Path config : List.of(
+                root.resolve("config/application.yml"),
+                root.resolve("config/application.yaml"),
+                root.resolve("config/wiz.yml"),
+                root.resolve("config/wiz.yaml"))) {
+            String value = yaml(config).getProperty("wiz.java.package-root");
+            if (value == null || value.isBlank()) {
+                value = yaml(config).getProperty("wiz.java.packageRoot");
+            }
+            if (value != null && !value.isBlank()) {
+                return validatePackageRoot(value.trim());
+            }
         }
-        Path candidate = Path.of(projectName);
-        if (candidate.isAbsolute()
-                || candidate.getNameCount() != 1
-                || !candidate.normalize().equals(candidate)
-                || projectName.contains("\\")) {
-            throw new IllegalArgumentException("Project name must be a single safe path segment");
+        return DEFAULT_PACKAGE_ROOT;
+    }
+
+    public String validatePackageRoot(String packageRoot) {
+        if (packageRoot == null || packageRoot.isBlank()) {
+            throw new IllegalArgumentException("Java package root is required");
         }
-        String value = candidate.toString();
-        if (".".equals(value) || "..".equals(value)) {
-            throw new IllegalArgumentException("Project name must be a single safe path segment");
+        String value = packageRoot.trim();
+        if (!value.matches("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*")) {
+            throw new IllegalArgumentException("Java package root must be a valid Java package name");
+        }
+        if (value.startsWith("java.") || value.equals("java")) {
+            throw new IllegalArgumentException("Java package root must not use the java namespace");
         }
         return value;
+    }
+
+    private Properties yaml(Path path) {
+        if (!Files.isRegularFile(path)) {
+            return new Properties();
+        }
+        YamlPropertiesFactoryBean factory = new YamlPropertiesFactoryBean();
+        factory.setResources(new FileSystemResource(path));
+        Properties properties = factory.getObject();
+        return properties == null ? new Properties() : properties;
     }
 }

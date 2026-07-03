@@ -9,13 +9,13 @@
 
 ## 변경 파일 목록
 - `plugin/workspace/model/builder.py`: `src/angular/app/app.module.ts`의 `@dependencies` 선언을 모든 generated standalone 컴포넌트 imports에 공통 반영
-- `project/main/src/angular/app/app.module.ts`: `NuMonacoEditorComponent`, `TranslateModule` 전역 standalone dependency 선언 추가
-- `project/main/src/portal/season/libs/service.ts`, `project/main/src/portal/season/libs/src/theme.ts`: 전역 theme 상태 및 `html.dark` 적용 helper 추가
-- `project/main/src/app/component.nav.sidebar/view.ts`, `project/main/src/app/component.nav.sidebar/view.pug`: navbar 언어 전환과 다크 모드 토글 추가, 메뉴 라벨 다국어화 및 테마 대응
-- `project/main/src/app/layout.sidebar/view.pug`, `project/main/src/angular/styles/styles.scss`: 앱 shell 기본 dark mode 배경 적용
-- `project/main/src/portal/post/app/detail/view.ts`, `project/main/src/portal/post/app/detail/view.pug`: 화면 내부 언어/테마 토글 제거, 전역 theme 이벤트 기반 Monaco 테마 갱신
-- `project/main/src/assets/lang/ko.json`, `project/main/src/assets/lang/en.json`: navbar 번역 리소스 추가
-- `project/main/src/portal/season/README.md`: `service.theme` 사용법 문서화
+- `src/angular/app/app.module.ts`: `NuMonacoEditorComponent`, `TranslateModule` 전역 standalone dependency 선언 추가
+- `src/portal/season/libs/service.ts`, `src/portal/season/libs/src/theme.ts`: 전역 theme 상태 및 `html.dark` 적용 helper 추가
+- `src/app/component.nav.sidebar/view.ts`, `src/app/component.nav.sidebar/view.pug`: navbar 언어 전환과 다크 모드 토글 추가, 메뉴 라벨 다국어화 및 테마 대응
+- `src/app/layout.sidebar/view.pug`, `src/angular/styles/styles.scss`: 앱 shell 기본 dark mode 배경 적용
+- `src/portal/post/app/detail/view.ts`, `src/portal/post/app/detail/view.pug`: 화면 내부 언어/테마 토글 제거, 전역 theme 이벤트 기반 Monaco 테마 갱신
+- `src/assets/lang/ko.json`, `src/assets/lang/en.json`: navbar 번역 리소스 추가
+- `src/portal/season/README.md`: `service.theme` 사용법 문서화
 
 ## 검증
 - `python -m py_compile plugin/workspace/model/builder.py plugin/workspace/model/src/build/annotator.py` 성공

@@ -22,9 +22,6 @@ public class CodexCommand implements Callable<Integer> {
     @Option(names = "--root", description = "Target WIZ Spring workspace root. Defaults to auto-detecting from the current directory.")
     private Path root;
 
-    @Option(names = "--project", description = "Initial project name for generated MCP settings. Defaults to main.")
-    private String project = "main";
-
     @Option(names = "--runtime-jar", description = "wiz-spring executable jar path for generated MCP args. Defaults to the currently running jar.")
     private Path runtimeJar;
 
@@ -41,14 +38,13 @@ public class CodexCommand implements Callable<Integer> {
         if (!pathService.isWorkspaceRoot(workspaceRoot)) {
             throw new IllegalArgumentException("WIZ workspace root not found: " + workspaceRoot);
         }
-        pathService.validateProjectName(project);
 
         Path jar = runtimeJar == null ? currentRuntimePath() : runtimeJar.toAbsolutePath().normalize();
         if (!Files.isRegularFile(jar)) {
             throw new IllegalArgumentException("wiz-spring runtime jar not found: " + jar + " (use --runtime-jar)");
         }
 
-        Map<Path, String> files = desiredFiles(workspaceRoot, project, jar);
+        Map<Path, String> files = desiredFiles(workspaceRoot, jar);
         boolean blocked = false;
         for (Map.Entry<Path, String> entry : files.entrySet()) {
             Path path = entry.getKey();
@@ -90,15 +86,15 @@ public class CodexCommand implements Callable<Integer> {
         return 0;
     }
 
-    private Map<Path, String> desiredFiles(Path workspaceRoot, String projectName, Path jar) {
+    private Map<Path, String> desiredFiles(Path workspaceRoot, Path jar) {
         Path codexRoot = workspaceRoot.resolve(".codex");
         LinkedHashMap<Path, String> files = new LinkedHashMap<>();
-        files.put(codexRoot.resolve("config.toml"), configToml(workspaceRoot, projectName, jar));
+        files.put(codexRoot.resolve("config.toml"), configToml(workspaceRoot, jar));
         files.put(codexRoot.resolve("AGENTS.md"), agentsMarkdown());
         return files;
     }
 
-    private String configToml(Path workspaceRoot, String projectName, Path jar) {
+    private String configToml(Path workspaceRoot, Path jar) {
         return """
                 approval_policy = "on-failure"
                 sandbox_mode = "danger-full-access"
@@ -115,35 +111,32 @@ public class CodexCommand implements Callable<Integer> {
                   "mcp",
                   "--root",
                   %s,
-                  "--project",
-                  %s,
                   "--state",
                   %s,
                 ]
 
                 [mcp_servers."wiz-spring".env]
                 WIZ_WORKSPACE = %s
-                WIZ_PROJECT = %s
 
                 [mcp_servers."wiz-spring".tools.wiz_workspace_status]
                 approval_mode = "approve"
 
-                [mcp_servers."wiz-spring".tools.wiz_project_info]
+                [mcp_servers."wiz-spring".tools.wiz_app_info]
                 approval_mode = "approve"
 
                 [mcp_servers."wiz-spring".tools.wiz_source_update_app]
                 approval_mode = "approve"
 
-                [mcp_servers."wiz-spring".tools.wiz_project_read_file]
+                [mcp_servers."wiz-spring".tools.wiz_app_read_file]
                 approval_mode = "approve"
 
-                [mcp_servers."wiz-spring".tools.wiz_project_build]
+                [mcp_servers."wiz-spring".tools.wiz_app_build]
                 approval_mode = "approve"
 
-                [mcp_servers."wiz-spring".tools.wiz_project_jar]
+                [mcp_servers."wiz-spring".tools.wiz_app_jar]
                 approval_mode = "approve"
 
-                [mcp_servers."wiz-spring".tools.wiz_project_dependency_info]
+                [mcp_servers."wiz-spring".tools.wiz_app_dependency_info]
                 approval_mode = "approve"
 
                 [mcp_servers."wiz-spring".tools.wiz_source_create_controller]
@@ -161,10 +154,8 @@ public class CodexCommand implements Callable<Integer> {
                 toml(workspaceRoot.toString()),
                 toml(jar.toString()),
                 toml(workspaceRoot.toString()),
-                toml(projectName),
                 toml(workspaceRoot.resolve(".wiz/mcp-state.json").toString()),
                 toml(workspaceRoot.toString()),
-                toml(projectName),
                 toml(workspaceRoot.toString()));
     }
 
@@ -178,19 +169,19 @@ public class CodexCommand implements Callable<Integer> {
                 If that file lists reference files, read the relevant referenced files too.
 
                 For WIZ Spring work:
-                - Use the standalone WIZ Spring MCP tools first. This project must not depend on the old `wiz-vscode` extension MCP.
+                - Use the standalone WIZ Spring MCP tools first. This workspace must not depend on the old `wiz-vscode` extension MCP.
                 - Start with `wiz_workspace_status`.
-                - Modify only the current WIZ project.
-                - Use `wiz_source_*`, `wiz_package_*`, and `wiz_project_*` according to the target path.
-                - Treat `project/<name>/src/app/**/api.java`, `route.java`, `socket.java`, `src/controller`, `src/portal`, `pom.xml`, and `src/angular/package.json` as the main Spring project surfaces.
-                - Do not add Python/Flask, virtualenv, or pip workflows for project code. Use project `pom.xml` for Java dependencies and `src/angular/package.json` for frontend dependencies.
-                - Prefer Spring-specific MCP tools when relevant: `wiz_project_dependency_info`, `wiz_project_jar`, `wiz_source_create_controller`, `wiz_source_delete_controller`, and `wiz_package_delete`.
+                - Modify only the current WIZ workspace/app.
+                - Use `wiz_source_*`, `wiz_package_*`, and `wiz_app_*` according to the target path.
+                - Treat `src/app/**/api.java`, `route.java`, `socket.java`, `src/controller`, `src/portal`, `pom.xml`, and `src/angular/package.json` as the main Spring app surfaces.
+                - Do not add Python/Flask, virtualenv, or pip workflows for app code. Use workspace `pom.xml` for Java dependencies and `src/angular/package.json` for frontend dependencies.
+                - Prefer Spring-specific MCP tools when relevant: `wiz_app_dependency_info`, `wiz_app_jar`, `wiz_source_create_controller`, `wiz_source_delete_controller`, and `wiz_package_delete`.
 
                 ## Devlog Enforcement
 
-                For every task that changes files under `project/<name>/`, write the project devlog before the final response.
+                For every task that changes workspace source files, write the devlog before the final response.
 
-                - Check the current project's `devlog.md` and `devlog/{YYYY-MM-DD}/` before finishing.
+                - Check the current workspace `devlog.md` and `devlog/{YYYY-MM-DD}/` before finishing.
                 - Add one summary row to `devlog.md` and one matching detail file under `devlog/{YYYY-MM-DD}/`.
                 - Include the user's original request, changed files, and verification result in the detail file.
                 - If prior work in the same session missed devlogs, add a catch-up devlog that records the missed work before reporting completion.

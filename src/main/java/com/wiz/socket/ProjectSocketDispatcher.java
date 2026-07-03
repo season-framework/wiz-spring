@@ -58,14 +58,14 @@ public class ProjectSocketDispatcher {
     }
 
     public SocketEventResult dispatch(SocketSession session, String event, Map<String, Object> payload) {
-        ProjectContext project = paths.projectContext(session.namespace().project());
+        ProjectContext project = paths.workspaceContext();
         Optional<Map<String, Object>> metadata = appMetadata(project, session.namespace().appId());
         Optional<SocketEventResult> controllerResult = authorize(project, session, event, metadata.orElse(Map.of()));
         if (controllerResult.isPresent()) {
             return controllerResult.get();
         }
         String handlerClass = metadata.flatMap(this::socketHandlerClass)
-                .orElseGet(() -> ProjectJavaNaming.appSocketHandlerClass(project.name(), session.namespace().appId()));
+                .orElseGet(() -> ProjectJavaNaming.appSocketHandlerClass(project, session.namespace().appId()));
         return dispatchProjectSocket(project, session, handlerClass, event, payload);
     }
 
@@ -102,7 +102,7 @@ public class ProjectSocketDispatcher {
     private WizRequest socketRequest(SocketSession session) {
         WizRequest.Builder builder = WizRequest.builder()
                 .method("GET")
-                .path(session.namespace().websocketPath())
+                .path(session.namespace().path())
                 .remoteAddress(session.remoteAddress())
                 .session(session.httpSession());
         session.cookies().forEach(builder::cookie);

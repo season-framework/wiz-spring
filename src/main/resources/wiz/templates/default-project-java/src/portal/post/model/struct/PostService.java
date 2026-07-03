@@ -6,11 +6,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
-import com.wiz.project.main.model.struct.UserStruct;
-import com.wiz.project.main.portal.post.model.db.PostEntity;
-import com.wiz.project.main.portal.post.model.db.CommentEntity;
-import com.wiz.project.main.portal.season.model.orm.Ids;
-import com.wiz.project.main.portal.season.model.orm.Jpa;
+import __WIZ_PACKAGE_ROOT__.model.struct.UserStruct;
+import __WIZ_PACKAGE_ROOT__.portal.post.model.db.PostEntity;
+import __WIZ_PACKAGE_ROOT__.portal.post.model.db.CommentEntity;
+import __WIZ_PACKAGE_ROOT__.portal.season.model.orm.Ids;
+import __WIZ_PACKAGE_ROOT__.portal.season.model.orm.Jpa;
 import com.wiz.runtime.WizContext;
 
 public final class PostService {

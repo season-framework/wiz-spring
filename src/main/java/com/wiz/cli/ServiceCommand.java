@@ -390,7 +390,6 @@ public class ServiceCommand implements Callable<Integer> {
                     root,
                     null,
                     null,
-                    null,
                     false,
                     null,
                     WizSpringApplication.DEFAULT_RUN_PROFILE,

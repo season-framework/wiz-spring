@@ -6,9 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.LinkOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Set;
 import java.util.Comparator;
-import java.util.List;
 import java.util.stream.Stream;
 
 import com.wiz.runtime.PathService;
@@ -18,14 +16,9 @@ import com.wiz.security.SecretMasker;
 
 import org.springframework.stereotype.Service;
 
-import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
-import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream;
-
 @Service
 public class ProjectService {
 
-    private static final Set<String> EXPORT_EXCLUDED_DIRECTORIES = Set.of(".git", "build", "bundle", "node_modules", ".angular");
-    private static final Set<String> EXPORT_EXCLUDED_FILES = Set.of();
     private static final String EMBEDDED_JAVA_SAMPLE_ROOT = "/wiz/templates/default-project-java/";
     private static final String EMBEDDED_JAVA_SAMPLE_FILES = "/wiz/templates/default-project-java.files";
 
@@ -35,152 +28,73 @@ public class ProjectService {
         this.paths = paths;
     }
 
-    public ProjectContext createProject(String name, String uri, Path sourcePath) throws IOException, InterruptedException {
-        return createProject(name, uri, sourcePath, false);
+    public ProjectContext createApp(String uri, Path sourcePath) throws IOException, InterruptedException {
+        return createApp(null, uri, sourcePath);
     }
 
-    public ProjectContext createProject(String name, String uri, Path sourcePath, boolean ignoredGenerateJavaStubs) throws IOException, InterruptedException {
+    public ProjectContext createApp(String packageRoot, String uri, Path sourcePath) throws IOException, InterruptedException {
         if (uri != null && !uri.isBlank() && sourcePath != null) {
             throw new IllegalArgumentException("Use either --uri or --path, not both");
         }
 
-        ProjectContext project = paths.projectContext(name);
-        if (Files.exists(project.root())) {
-            throw new IllegalArgumentException("Project already exists: " + project.name());
+        String javaPackageRoot = packageRoot == null || packageRoot.isBlank()
+                ? paths.packageRoot()
+                : paths.validatePackageRoot(packageRoot);
+        ProjectContext project = paths.workspaceContext(javaPackageRoot);
+        if (appSourceExists(project)) {
+            throw new IllegalArgumentException("WIZ source already exists under workspace: " + project.root());
         }
-        Files.createDirectories(paths.projectsRoot());
+        Files.createDirectories(project.root());
 
         if (uri != null && !uri.isBlank()) {
             cloneProject(uri, project.root());
         } else if (sourcePath != null) {
             importSource(sourcePath.toAbsolutePath().normalize(), project.root());
         } else {
-            createDefaultProject(project);
+            createDefaultApp(project);
         }
 
-        ensureProjectDirectories(project);
+        ensureAppDirectories(project);
         return project;
     }
 
+    private boolean appSourceExists(ProjectContext project) {
+        return Files.exists(project.sourceRoot())
+                || Files.exists(project.buildRoot())
+                || Files.exists(project.bundleRoot())
+                || Files.exists(project.root().resolve("pom.xml"))
+                || Files.exists(project.root().resolve("package.json"));
+    }
+
     private void importSource(Path sourcePath, Path target) throws IOException {
-        if (Files.isRegularFile(sourcePath) && isZipProjectSource(sourcePath)) {
-            new ZipProjectSource().extract(sourcePath, target);
-            return;
-        }
         copyDirectory(sourcePath, target);
     }
 
-    private boolean isZipProjectSource(Path sourcePath) {
-        String filename = sourcePath.getFileName() == null ? "" : sourcePath.getFileName().toString().toLowerCase(java.util.Locale.ROOT);
-        return filename.endsWith(".wizproject") || filename.endsWith(".zip");
-    }
-
-    public List<String> listProjects() throws IOException {
-        if (!Files.isDirectory(paths.projectsRoot())) {
-            return List.of();
-        }
-        try (Stream<Path> children = Files.list(paths.projectsRoot())) {
-            return children
-                    .filter(Files::isDirectory)
-                    .map(path -> path.getFileName().toString())
-                    .sorted()
-                    .toList();
-        }
-    }
-
-    public void deleteProject(String name) throws IOException {
-        ProjectContext project = paths.projectContext(name);
-        if (!Files.isDirectory(project.root())) {
-            throw new IllegalArgumentException("Project does not exist: " + project.name());
-        }
-        delete(project.root());
-    }
-
-    public Path exportProject(String name, Path output) throws IOException {
-        ProjectContext project = paths.projectContext(name);
-        if (!Files.isDirectory(project.root())) {
-            throw new IllegalArgumentException("Project does not exist: " + project.name());
-        }
-        Path archive = exportOutput(project, output);
-        Files.createDirectories(archive.getParent());
-        try (ZipArchiveOutputStream zip = new ZipArchiveOutputStream(archive)) {
-            try (Stream<Path> paths = Files.walk(project.root())) {
-                for (Path file : paths
-                        .filter(path -> !path.equals(project.root()))
-                        .filter(path -> shouldExport(project.root(), path))
-                        .filter(Files::isRegularFile)
-                        .sorted()
-                        .toList()) {
-                    addZipEntry(project.root(), file, zip);
-                }
-            }
-        }
-        return archive;
-    }
-
-    private Path exportOutput(ProjectContext project, Path output) {
-        Path archive = output == null
-                ? paths.root().resolve(project.name() + ".wizproject")
-                : output;
-        archive = archive.toAbsolutePath().normalize();
-        if (Files.isDirectory(archive)) {
-            archive = archive.resolve(project.name() + ".wizproject");
-        }
-        String filename = archive.getFileName() == null ? "" : archive.getFileName().toString();
-        if (!filename.endsWith(".wizproject")) {
-            archive = archive.resolveSibling(filename + ".wizproject");
-        }
-        return archive;
-    }
-
-    private boolean shouldExport(Path projectRoot, Path path) {
-        Path relative = projectRoot.relativize(path);
-        for (Path part : relative) {
-            if (EXPORT_EXCLUDED_DIRECTORIES.contains(part.toString())) {
-                return false;
-            }
-        }
-        return !EXPORT_EXCLUDED_FILES.contains(relative.getFileName().toString());
-    }
-
-    private void addZipEntry(Path projectRoot, Path file, ZipArchiveOutputStream zip) throws IOException {
-        if (Files.isSymbolicLink(file)) {
-            throw new IllegalArgumentException("Symbolic links are not allowed in project exports: " + projectRoot.relativize(file));
-        }
-        Path relative = projectRoot.relativize(file);
-        String name = relative.toString().replace(java.io.File.separatorChar, '/');
-        ZipArchiveEntry entry = new ZipArchiveEntry(name);
-        entry.setSize(Files.size(file));
-        zip.putArchiveEntry(entry);
-        Files.copy(file, zip);
-        zip.closeArchiveEntry();
-    }
-
-    private void createDefaultProject(ProjectContext project) throws IOException {
+    private void createDefaultApp(ProjectContext project) throws IOException {
         if (copyEmbeddedJavaTemplate(project)) {
-            rewriteTemplateProjectPackage(project);
+            rewriteTemplateAppPackage(project);
             return;
         }
 
-        ensureProjectDirectories(project);
+        ensureAppDirectories(project);
         Path app = project.appRoot().resolve("page.dashboard");
         Files.createDirectories(app);
-        writeIfMissing(project.root().resolve("README.md"), "# WIZ Spring Project\n\nGenerated by wiz-spring.\n");
-        writeIfMissing(project.root().resolve("pom.xml"), minimalProjectPom(project));
+        writeIfMissing(project.root().resolve("README.md"), "# WIZ Spring App\n\nGenerated by wiz-spring.\n");
+        writeIfMissing(project.root().resolve("pom.xml"), minimalAppPom(project));
         writeIfMissing(project.root().resolve("package.json"), "{\n  \"type\": \"module\",\n  \"scripts\": {\n    \"build\": \"echo build placeholder\"\n  }\n}\n");
         writeIfMissing(project.configRoot().resolve("season.yml"), "auth_baseuri: /auth\n");
         writeIfMissing(project.assetsRoot().resolve("sample.txt"), "WIZ Java asset\n");
-        writeIfMissing(project.modelRoot().resolve("README.md"), "Project model and struct Java sources live here.\n");
-        writeIfMissing(project.routeRoot().resolve("README.md"), "Project route handlers live here.\n");
+        writeIfMissing(project.modelRoot().resolve("README.md"), "App model and struct Java sources live here.\n");
+        writeIfMissing(project.routeRoot().resolve("README.md"), "App route handlers live here.\n");
         writeIfMissing(project.sourceRoot().resolve("portal/season/portal.json"), "{\"id\":\"season\",\"runtime\":\"java\"}\n");
         writeIfMissing(app.resolve("app.json"), dashboardAppJson(project));
-        writeIfMissing(app.resolve("view.pug"), "section\n  h1 WIZ Java Dashboard\n  p Generated Spring WIZ project\n");
+        writeIfMissing(app.resolve("view.pug"), "section\n  h1 WIZ Java Dashboard\n  p Generated Spring WIZ app\n");
         writeIfMissing(app.resolve("view.html"), "<main id=\"wiz-app\"><h1>WIZ Java Dashboard</h1><pre data-wiz-output>ready</pre></main>\n");
         writeIfMissing(app.resolve("view.ts"), "document.querySelector('[data-wiz-output]')?.replaceChildren('page.dashboard ready');\n");
         writeIfMissing(app.resolve("api.java"), dashboardApiJava());
     }
 
-    private void ensureProjectDirectories(ProjectContext project) throws IOException {
+    private void ensureAppDirectories(ProjectContext project) throws IOException {
         Files.createDirectories(project.sourceRoot());
         Files.createDirectories(project.appRoot());
         Files.createDirectories(project.sourceRoot().resolve("controller"));
@@ -192,7 +106,7 @@ public class ProjectService {
     }
 
     private String dashboardAppJson(ProjectContext project) {
-        String handler = ProjectJavaNaming.appApiHandlerClass(project.name(), "page.dashboard");
+        String handler = ProjectJavaNaming.appApiHandlerClass(project, "page.dashboard");
         return "{\n"
                 + "  \"id\": \"page.dashboard\",\n"
                 + "  \"mode\": \"page\",\n"
@@ -208,20 +122,20 @@ public class ProjectService {
                 + "}\n";
     }
 
-    private String minimalProjectPom(ProjectContext project) {
+    private String minimalAppPom(ProjectContext project) {
         return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                 + "<project xmlns=\"http://maven.apache.org/POM/4.0.0\"\n"
                 + "         xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n"
                 + "         xsi:schemaLocation=\"http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd\">\n"
                 + "    <modelVersion>4.0.0</modelVersion>\n"
-                + "    <groupId>com.wiz.project</groupId>\n"
-                + "    <artifactId>wiz-project-" + ProjectJavaNaming.packageSegment(project.name()) + "</artifactId>\n"
+                + "    <groupId>" + project.packageRoot() + "</groupId>\n"
+                + "    <artifactId>wiz-app</artifactId>\n"
                 + "    <version>0.0.7</version>\n"
                 + "    <properties>\n"
                 + "        <java.version>21</java.version>\n"
                 + "    </properties>\n"
                 + "    <dependencies>\n"
-                + "        <!-- Add project-specific Java dependencies here. -->\n"
+                + "        <!-- Add app-specific Java dependencies here. -->\n"
                 + "    </dependencies>\n"
                 + "</project>\n";
     }
@@ -230,7 +144,7 @@ public class ProjectService {
         return "import java.util.Map;\n\n"
                 + "public final class PageDashboardApi {\n"
                 + "    public Object overview(Object wiz) {\n"
-                + "        return Map.of(\"message\", \"Java WIZ project ready\");\n"
+                + "        return Map.of(\"message\", \"Java WIZ app ready\");\n"
                 + "    }\n"
                 + "}\n";
     }
@@ -255,7 +169,10 @@ public class ProjectService {
         }
         Path target = project.root().resolve(entry).normalize();
         if (!target.startsWith(project.root().normalize())) {
-            throw new IllegalArgumentException("Embedded template entry escapes project root: " + entry);
+            throw new IllegalArgumentException("Embedded template entry escapes workspace root: " + entry);
+        }
+        if (Files.exists(target)) {
+            return;
         }
         try (InputStream input = ProjectService.class.getResourceAsStream(EMBEDDED_JAVA_SAMPLE_ROOT + entry)) {
             if (input == null) {
@@ -266,12 +183,13 @@ public class ProjectService {
         }
     }
 
-    private void rewriteTemplateProjectPackage(ProjectContext project) throws IOException {
-        String packageRoot = ProjectJavaNaming.packageRoot(project.name());
+    private void rewriteTemplateAppPackage(ProjectContext project) throws IOException {
+        String packageRoot = ProjectJavaNaming.packageRoot(project);
         try (Stream<Path> paths = Files.walk(project.root())) {
             for (Path file : paths.filter(path -> Files.isRegularFile(path) && rewritableTemplateFile(path)).toList()) {
                 String source = Files.readString(file);
-                String rewritten = source.replace("com.wiz.project.main", packageRoot);
+                String rewritten = source
+                        .replace("__WIZ_PACKAGE_ROOT__", packageRoot);
                 if (!source.equals(rewritten)) {
                     Files.writeString(file, rewritten);
                 }
@@ -281,23 +199,27 @@ public class ProjectService {
 
     private boolean rewritableTemplateFile(Path path) {
         String name = path.getFileName() == null ? "" : path.getFileName().toString();
-        return name.endsWith(".java") || name.endsWith(".yml") || name.endsWith(".yaml") || name.endsWith(".json");
+        return name.endsWith(".java")
+                || name.endsWith(".yml")
+                || name.endsWith(".yaml")
+                || name.endsWith(".json")
+                || name.equals("pom.xml");
     }
 
     private void cloneProject(String uri, Path target) throws IOException, InterruptedException {
         String validatedUri = GitUriPolicy.validate(uri);
-        Path cloneTarget = target.toAbsolutePath().normalize();
-        if (!cloneTarget.startsWith(paths.projectsRoot().toAbsolutePath().normalize())) {
-            throw new IllegalArgumentException("Project clone destination escapes workspace projects directory");
-        }
+        Path cloneTarget = Files.createTempDirectory(target, ".wiz-clone-");
         Process process = new ProcessBuilder("git", "clone", validatedUri, cloneTarget.toString())
                 .redirectErrorStream(true)
                 .start();
         String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
         int exitCode = process.waitFor();
         if (exitCode != 0) {
+            delete(cloneTarget);
             throw new IllegalStateException("git clone failed with exit code " + exitCode + System.lineSeparator() + SecretMasker.mask(output));
         }
+        copyDirectory(cloneTarget, target);
+        delete(cloneTarget);
     }
 
     private void copyDirectory(Path source, Path target) throws IOException {
@@ -309,10 +231,10 @@ public class ProjectService {
                 Path relative = source.relativize(item);
                 Path destination = target.resolve(relative.toString()).normalize();
                 if (!destination.startsWith(target.normalize())) {
-                    throw new IllegalArgumentException("Project copy escapes target directory");
+                    throw new IllegalArgumentException("App source copy escapes target directory");
                 }
                 if (Files.isSymbolicLink(item)) {
-                    throw new IllegalArgumentException("Symbolic links are not allowed in project copies: " + relative);
+                    throw new IllegalArgumentException("Symbolic links are not allowed in app source copies: " + relative);
                 }
                 if (relative.toString().contains(".git" + java.io.File.separator) || relative.toString().equals(".git")) {
                     continue;
@@ -320,6 +242,9 @@ public class ProjectService {
                 if (Files.isDirectory(item, LinkOption.NOFOLLOW_LINKS)) {
                     Files.createDirectories(destination);
                 } else {
+                    if (Files.exists(destination)) {
+                        continue;
+                    }
                     Files.createDirectories(destination.getParent());
                     Files.copy(item, destination);
                 }

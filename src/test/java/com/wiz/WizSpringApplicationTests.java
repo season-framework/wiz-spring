@@ -9,7 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
-import com.wiz.config.WizProjectProperties;
+import com.wiz.config.WizRuntimeProperties;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -29,33 +29,30 @@ class WizSpringApplicationTests {
 	}
 
 	@Test
-	void serverArgsIncludeWorkspaceAndProjectApplicationConfigLocations() throws Exception {
+	void serverArgsIncludeWorkspaceApplicationConfigLocation() throws Exception {
 		Path workspace = tempDir.resolve("workspace");
 		Files.createDirectories(workspace.resolve("config"));
-		Files.createDirectories(workspace.resolve("project/dev/config"));
-		Files.writeString(workspace.resolve("config/application.yml"), "server:\n  port: 19091\nwiz:\n  project:\n    default-name: dev\n");
+		Files.writeString(workspace.resolve("config/application.yml"), "server:\n  port: 19091\nwiz:\n  java:\n    package-root: com.example.app\n");
 
-		List<String> args = WizSpringApplication.serverArgs(workspace.toString(), null, null, null, false, null);
+		List<String> args = WizSpringApplication.serverArgs(workspace.toString(), null, null, false, null);
 
-		assertTrue(args.contains("--wiz.project.default-name=dev"));
 		assertTrue(args.contains("--spring.profiles.default=dev"));
 		assertTrue(args.contains("--server.address=0.0.0.0"));
 		assertTrue(args.contains("--server.port=19091"));
 		assertTrue(args.stream().anyMatch(arg -> arg.startsWith("--spring.config.additional-location=")
-				&& arg.contains(workspace.resolve("config").toUri().toString())
-				&& arg.contains(workspace.resolve("project/dev/config").toUri().toString())));
+				&& arg.contains(workspace.resolve("config").toUri().toString())));
 	}
 
 	@Test
 	void runSettingsScanFromConfiguredBusyPort() throws Exception {
 		Path workspace = tempDir.resolve("scan-workspace");
 		Files.createDirectories(workspace.resolve("config"));
-		Files.createDirectories(workspace.resolve("project/main/config"));
+		Files.createDirectories(workspace.resolve("config"));
 		try (ServerSocket busy = new ServerSocket(0)) {
 			int busyPort = busy.getLocalPort();
-			Files.writeString(workspace.resolve("config/application.yml"), "server:\n  port: " + busyPort + "\nwiz:\n  project:\n    default-name: main\n");
+			Files.writeString(workspace.resolve("config/application.yml"), "server:\n  port: " + busyPort + "\nwiz:\n  java:\n    package-root: com.example.app\n");
 
-			WizSpringApplication.RunSettings settings = WizSpringApplication.resolveRunSettings(workspace.toString(), "127.0.0.1", null, null, false, null, null, false);
+			WizSpringApplication.RunSettings settings = WizSpringApplication.resolveRunSettings(workspace.toString(), "127.0.0.1", null, false, null, null, false);
 
 			assertEquals(busyPort, settings.requestedPort());
 			assertTrue(settings.port() > busyPort);
@@ -68,9 +65,9 @@ class WizSpringApplicationTests {
 	void serverArgsCanActivateExplicitProfile() throws Exception {
 		Path workspace = tempDir.resolve("profile-workspace");
 		Files.createDirectories(workspace.resolve("config"));
-		Files.createDirectories(workspace.resolve("project/main/config"));
+		Files.createDirectories(workspace.resolve("config"));
 
-		List<String> args = WizSpringApplication.serverArgs(workspace.toString(), null, null, null, false, null, "prod");
+		List<String> args = WizSpringApplication.serverArgs(workspace.toString(), null, null, false, null, "prod");
 
 		assertTrue(args.contains("--spring.profiles.active=prod"));
 		assertTrue(args.stream().noneMatch(arg -> arg.startsWith("--spring.profiles.default=")));
@@ -80,21 +77,21 @@ class WizSpringApplicationTests {
 	void embeddedServerArgsUseProdDefaultProfile() throws Exception {
 		Path workspace = tempDir.resolve("embedded-workspace");
 		Files.createDirectories(workspace.resolve("config"));
-		Files.createDirectories(workspace.resolve("project/main/config"));
+		Files.createDirectories(workspace.resolve("config"));
 
-		List<String> args = WizSpringApplication.serverArgs(workspace.toString(), null, null, "main", true, null, WizSpringApplication.DEFAULT_EMBEDDED_PROFILE, false);
+		List<String> args = WizSpringApplication.serverArgs(workspace.toString(), null, null, true, null, WizSpringApplication.DEFAULT_EMBEDDED_PROFILE, false);
 
 		assertTrue(args.contains("--spring.profiles.default=prod"));
 		assertTrue(args.contains("--wiz.bundle=true"));
 	}
 
 	@Test
-	void profileSpecificApplicationFilesOverrideProjectCookieSelectionDefault() {
+	void profileSpecificApplicationFilesBindRuntimeProperties() {
 		try (ConfigurableApplicationContext dev = applicationContext("dev")) {
-			assertTrue(dev.getBean(WizProjectProperties.class).isCookieSelectionEnabled());
+			assertTrue(dev.getBean(WizRuntimeProperties.class).isWarmupEnabled());
 		}
 		try (ConfigurableApplicationContext prod = applicationContext("prod")) {
-			assertFalse(prod.getBean(WizProjectProperties.class).isCookieSelectionEnabled());
+			assertTrue(prod.getBean(WizRuntimeProperties.class).isWarmupEnabled());
 		}
 	}
 

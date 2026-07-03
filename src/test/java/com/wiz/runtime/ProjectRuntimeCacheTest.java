@@ -36,8 +36,8 @@ class ProjectRuntimeCacheTest {
 
         ProjectRuntimeCache.CachedProjectRuntime firstRuntime = cache.get(project);
         ProjectRuntimeCache.CachedProjectRuntime secondRuntime = cache.get(project);
-        var firstHandler = firstRuntime.apiHandler(ProjectJavaNaming.appApiHandlerClass(project.name(), "page.dashboard"), "version").orElseThrow();
-        var secondHandler = secondRuntime.apiHandler(ProjectJavaNaming.appApiHandlerClass(project.name(), "page.dashboard"), "version").orElseThrow();
+        var firstHandler = firstRuntime.apiHandler(ProjectJavaNaming.appApiHandlerClass(project, "page.dashboard"), "version").orElseThrow();
+        var secondHandler = secondRuntime.apiHandler(ProjectJavaNaming.appApiHandlerClass(project, "page.dashboard"), "version").orElseThrow();
 
         assertSame(firstRuntime, secondRuntime);
         assertSame(firstHandler, secondHandler);
@@ -117,7 +117,7 @@ class ProjectRuntimeCacheTest {
     private ProjectContext projectWithApi(String version) throws Exception {
         Path workspace = tempDir.resolve("workspace-" + version + "-" + java.util.UUID.randomUUID());
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         Files.writeString(project.appRoot().resolve("page.dashboard/api.java"), versionApi(version));
         BuildResult build = new ProjectBuildService().build(project, true, "bundle");
         assertTrue(build.success(), build.message());
@@ -131,7 +131,7 @@ class ProjectRuntimeCacheTest {
     }
 
     private String invokeVersion(ProjectContext project, ProjectRuntimeCache.CachedProjectRuntime runtime) throws Exception {
-        var handler = runtime.apiHandler(ProjectJavaNaming.appApiHandlerClass(project.name(), "page.dashboard"), "version").orElseThrow();
+        var handler = runtime.apiHandler(ProjectJavaNaming.appApiHandlerClass(project, "page.dashboard"), "version").orElseThrow();
         ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(runtime.classLoader());
         try {

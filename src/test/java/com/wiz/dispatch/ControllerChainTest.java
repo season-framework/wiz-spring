@@ -27,7 +27,7 @@ class ControllerChainTest {
     void baseControllerAddsSessionBootstrapData() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         MockHttpSession session = new MockHttpSession();
         session.setAttribute("id", "u1");
         session.setAttribute("name", "User One");
@@ -46,7 +46,7 @@ class ControllerChainTest {
     void portalSeasonBaseMapsToBuiltInBaseController() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         MockHttpSession session = new MockHttpSession();
         session.setAttribute("id", "u1");
 
@@ -64,7 +64,7 @@ class ControllerChainTest {
     void userAndAdminControllersExpandBuiltInGuardChain() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         ControllerChain chain = new ControllerChain();
 
         try (WizContext anonymous = new WizContext(WizRequest.builder().session(new MockHttpSession()).build(), new WizResponse(), project)) {

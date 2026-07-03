@@ -9,8 +9,8 @@ Angular 21 업그레이드 후 생성 컴포넌트를 standalone으로 유지할
 
 ## 변경 파일 목록
 - `plugin/workspace/model/builder.py`: generated WIZ component를 `standalone: false`로 생성하고 모든 앱 컴포넌트를 `AppModule.declarations`에 포함하도록 복원
-- `project/main/src/angular/app/app.module.ts`: `@wiz.declarations` placeholder를 되살려 생성 컴포넌트 선언을 AppModule 중심으로 관리
-- `project/main/docs/angular-21-upgrade.md`: Angular 21 standalone 기본값, WIZ NgModule 유지 정책, 전역 AppModule imports, `service.theme` 내용을 문서화
+- `src/angular/app/app.module.ts`: `@wiz.declarations` placeholder를 되살려 생성 컴포넌트 선언을 AppModule 중심으로 관리
+- `docs/angular-21-upgrade.md`: Angular 21 standalone 기본값, WIZ NgModule 유지 정책, 전역 AppModule imports, `service.theme` 내용을 문서화
 
 ## 검증
 - `python -m py_compile plugin/workspace/model/builder.py plugin/workspace/model/src/build/annotator.py` 성공

@@ -69,7 +69,7 @@ public class AppApiDispatcher {
                 return controllerResult.get();
             }
             Optional<String> handlerClass = metadata.flatMap(this::javaHandlerClass)
-                    .or(() -> Optional.of(defaultHandlerClass(context.project().name(), appId)));
+                    .or(() -> Optional.of(ProjectJavaNaming.appApiHandlerClass(context.project(), appId)));
             return dispatchProjectJavaApi(context, handlerClass.get(), function);
         }
     }
@@ -121,7 +121,4 @@ public class AppApiDispatcher {
         return Optional.of(handler.toString());
     }
 
-    private String defaultHandlerClass(String projectName, String appId) {
-        return ProjectJavaNaming.appApiHandlerClass(projectName, appId);
-    }
 }

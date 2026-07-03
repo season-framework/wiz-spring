@@ -182,19 +182,6 @@ class WizHttpControllerTest {
     }
 
     @Test
-    void configJsExposesConfiguredApiPrefix() {
-        WizApiProperties apiProperties = new WizApiProperties();
-        apiProperties.setPrefix("/custom/api/");
-        WizHttpController controller = new WizHttpController(null, new CapturingAppApiDispatcher(), null, new WizHttpProperties(), apiProperties);
-
-        ResponseEntity<String> response = controller.config();
-
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals("no-store", response.getHeaders().getCacheControl());
-        assertTrue(response.getBody().contains("apiPrefix: \"/custom/api\""));
-    }
-
-    @Test
     void apiPrefixDefaultsBlankAndTrimsTrailingSlash() {
         WizApiProperties properties = new WizApiProperties();
         properties.setPrefix(" /api/v1/ ");

@@ -31,7 +31,7 @@ public class JpaConfig {
         String url = datasourceUrl(wiz, values);
         int maximumPoolSize = positiveInt(values.get("sample.datasource.maximum-pool-size"), defaultMaximumPoolSize(url));
         HikariConfig config = new HikariConfig();
-        config.setPoolName("wiz-" + safePoolName(wiz.project().name()) + "-sample");
+        config.setPoolName("wiz-" + safePoolName(wiz.workspace().packageRoot()) + "-sample");
         config.setDriverClassName(value(values.get("sample.datasource.driver-class-name"), driverFor(url)));
         config.setJdbcUrl(url);
         config.setMaximumPoolSize(maximumPoolSize);
@@ -87,7 +87,7 @@ public class JpaConfig {
         String location = url.substring("jdbc:sqlite:".length());
         Path path = Path.of(location);
         if (!path.isAbsolute()) {
-            path = wiz.project().root().resolve(location).normalize();
+            path = wiz.workspace().root().resolve(location).normalize();
         }
         Path parent = path.getParent();
         if (parent != null) {
@@ -178,7 +178,7 @@ public class JpaConfig {
     }
 
     private String safePoolName(String value) {
-        return value(value, "project").replaceAll("[^A-Za-z0-9_.-]", "-");
+        return value(value, "app").replaceAll("[^A-Za-z0-9_.-]", "-");
     }
 
     private void optional(Object value, java.util.function.Consumer<String> setter) {

@@ -1,5 +1,5 @@
 {
-  "name": "wiz-sample-project-java",
+  "name": "wiz-sample-app-java",
   "private": true,
   "type": "module",
   "dependencies": {

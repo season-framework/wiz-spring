@@ -26,14 +26,14 @@ class ProjectSocketDispatcherTest {
     void dispatchesProjectSocketJavaThroughCompiledBundle() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         java.nio.file.Files.writeString(project.appRoot().resolve("page.dashboard/socket.java"), dashboardSocketJava());
         BuildResult build = new ProjectBuildService().build(project, true, "bundle");
         assertTrue(build.success(), build.message());
 
         SocketRoomRegistry rooms = new SocketRoomRegistry();
         ProjectSocketDispatcher dispatcher = new ProjectSocketDispatcher(new PathService(workspace), rooms);
-        SocketNamespace namespace = new SocketNamespace("main", "page.dashboard");
+        SocketNamespace namespace = new SocketNamespace("page.dashboard");
         SocketSession session = authenticatedSocket("sid-1", namespace);
 
         assertTrue(dispatcher.dispatch(session, "connect", Map.of()).accepted());
@@ -46,13 +46,13 @@ class ProjectSocketDispatcherTest {
     void appliesAppControllerPolicyBeforeSocketDispatch() throws Exception {
         Path workspace = tempDir.resolve("auth-workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         java.nio.file.Files.writeString(project.appRoot().resolve("page.dashboard/socket.java"), dashboardSocketJava());
         BuildResult build = new ProjectBuildService().build(project, true, "bundle");
         assertTrue(build.success(), build.message());
 
         ProjectSocketDispatcher dispatcher = new ProjectSocketDispatcher(new PathService(workspace), new SocketRoomRegistry());
-        SocketNamespace namespace = new SocketNamespace("main", "page.dashboard");
+        SocketNamespace namespace = new SocketNamespace("page.dashboard");
 
         assertFalse(dispatcher.dispatch(new SocketSession("sid-1", namespace), "connect", Map.of()).accepted());
         assertTrue(dispatcher.dispatch(authenticatedSocket("sid-2", namespace), "connect", Map.of()).accepted());
@@ -62,14 +62,14 @@ class ProjectSocketDispatcherTest {
     void reloadsProjectSocketHandlerAfterRebuildWithoutNewDispatcher() throws Exception {
         Path workspace = tempDir.resolve("reload-workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         Path socketSource = project.appRoot().resolve("page.dashboard/socket.java");
         java.nio.file.Files.writeString(socketSource, versionSocketJava("one"));
         BuildResult firstBuild = new ProjectBuildService().build(project, true, "bundle");
         assertTrue(firstBuild.success(), firstBuild.message());
 
         ProjectSocketDispatcher dispatcher = new ProjectSocketDispatcher(new PathService(workspace), new SocketRoomRegistry());
-        SocketSession session = authenticatedSocket("sid-1", new SocketNamespace("main", "page.dashboard"));
+        SocketSession session = authenticatedSocket("sid-1", new SocketNamespace("page.dashboard"));
         assertTrue(dispatcher.dispatch(session, "version", Map.of()).message().contains("one"));
 
         java.nio.file.Files.writeString(socketSource, versionSocketJava("two"));

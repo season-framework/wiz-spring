@@ -14,8 +14,13 @@ import jakarta.validation.constraints.NotEmpty;
 @ConfigurationProperties(prefix = "wiz.socket")
 public class WizSocketProperties {
 
+    public static final String DEFAULT_PATH = "/wiz/app";
+
     @NotEmpty
     private List<@NotBlank String> allowedOrigins = new ArrayList<>(List.of("*"));
+
+    @jakarta.validation.constraints.Pattern(regexp = "^/(?:[A-Za-z0-9._~-]+/)*[A-Za-z0-9._~-]+$", message = "must start with / and must not end with /")
+    private String path = DEFAULT_PATH;
 
     @Min(0)
     private long pollingSessionTtlMillis = 120_000;
@@ -45,6 +50,14 @@ public class WizSocketProperties {
                 .anyMatch(allowedOrigin -> "*".equals(allowedOrigin) || allowedOrigin.equals(candidate));
     }
 
+    public String getPath() {
+        return path;
+    }
+
+    public void setPath(String path) {
+        this.path = normalizePath(path, DEFAULT_PATH);
+    }
+
     public long getPollingSessionTtlMillis() {
         return pollingSessionTtlMillis;
     }
@@ -67,5 +80,16 @@ public class WizSocketProperties {
 
     public void setPollingQueueCapacity(int pollingQueueCapacity) {
         this.pollingQueueCapacity = pollingQueueCapacity;
+    }
+
+    private String normalizePath(String path, String defaultValue) {
+        String value = path == null ? "" : path.trim();
+        if (value.isBlank()) {
+            return defaultValue;
+        }
+        while (value.length() > 1 && value.endsWith("/")) {
+            value = value.substring(0, value.length() - 1);
+        }
+        return value;
     }
 }

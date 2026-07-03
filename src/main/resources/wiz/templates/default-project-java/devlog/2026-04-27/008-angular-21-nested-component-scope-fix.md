@@ -18,7 +18,7 @@ Angular 21 AOT/esbuild 빌드에서 WIZ App/Portal App을 NgModule 선언에만 
 - `src/portal/post/app/list/view.pug`, `src/portal/post/app/detail/view.pug`: `author`/`author_name` 양쪽 필드를 지원하도록 표시 fallback 추가.
 
 ## 검증
-- `mcp_wiz_wiz_project_build(clean=false)` 성공.
+- `mcp_wiz_wiz_app_build(clean=false)` 성공.
 - `/dashboard`, `/posts`, `/posts/post_notice/view`, `/posts/post_notice/edit`, `/posts/post_notice/settings`, `/posts/new/edit`, `/members`, `/mypage`, `/access` 브라우저 순회 확인.
 - 중첩 WIZ 커스텀 컴포넌트 빈 host 0개 확인.
 - `wiz-portal-season-modal` 검증 메시지 표시 확인.

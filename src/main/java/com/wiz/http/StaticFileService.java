@@ -22,11 +22,11 @@ public class StaticFileService {
     }
 
     public Optional<StaticFile> findAsset(String assetPath, Map<String, String> cookies) {
-        return currentProject(cookies).flatMap(project -> regularFile(project.bundleAssetsRoot(), assetPath, "public, max-age=3600"));
+        return currentWorkspace(cookies).flatMap(project -> regularFile(project.bundleAssetsRoot(), assetPath, "public, max-age=3600"));
     }
 
     public Optional<StaticFile> findSpaFile(String requestPath, Map<String, String> cookies) {
-        return currentProject(cookies).flatMap(project -> {
+        return currentWorkspace(cookies).flatMap(project -> {
             Path wwwRoot = project.bundleWwwRoot();
             String normalizedRequestPath = normalizeRequestPath(requestPath);
             Optional<StaticFile> requestedFile = regularFile(wwwRoot, normalizedRequestPath, "no-cache");
@@ -37,9 +37,9 @@ public class StaticFileService {
         });
     }
 
-    private Optional<ProjectContext> currentProject(Map<String, String> cookies) {
+    private Optional<ProjectContext> currentWorkspace(Map<String, String> cookies) {
         try {
-            return Optional.of(projectRegistry.currentProject(cookies));
+            return Optional.of(projectRegistry.workspace());
         } catch (IllegalArgumentException | IllegalStateException exception) {
             return Optional.empty();
         }

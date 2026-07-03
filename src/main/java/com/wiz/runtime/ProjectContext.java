@@ -4,6 +4,7 @@ import java.nio.file.Path;
 
 public record ProjectContext(
         String name,
+        String packageRoot,
         Path root,
         Path sourceRoot,
         Path appRoot,

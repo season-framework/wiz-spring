@@ -52,7 +52,7 @@ class SocketWebSocketIntegrationTest {
 
     @Test
     void dispatchesCompiledProjectSocketThroughDirectWebSocketBridgePath() throws Exception {
-        ProjectContext project = new ProjectService(new PathService(WORKSPACE)).createProject("main", null, null);
+        ProjectContext project = project();
         Files.writeString(project.appRoot().resolve("page.dashboard/socket.java"), dashboardSocketJava());
         allowSocketWithoutLogin(project, "page.dashboard");
         BuildResult build = new ProjectBuildService().build(project, true, "bundle");
@@ -61,7 +61,7 @@ class SocketWebSocketIntegrationTest {
         QueueListener listener = new QueueListener();
         WebSocket webSocket = HttpClient.newHttpClient()
                 .newWebSocketBuilder()
-                .buildAsync(URI.create("ws://127.0.0.1:" + port + "/wiz/ws/app/main/page.dashboard"), listener)
+                .buildAsync(URI.create("ws://127.0.0.1:" + port + "/wiz/app/page.dashboard"), listener)
                 .join();
 
         Map<String, Object> connect = envelope(listener.nextMessage());
@@ -85,7 +85,7 @@ class SocketWebSocketIntegrationTest {
 
     @Test
     void acceptsSocketIoClientStyleNamespaceOverHttpPollingPath() throws Exception {
-        ProjectContext project = new ProjectService(new PathService(WORKSPACE)).createProject("socketio", null, null);
+        ProjectContext project = project();
         Files.writeString(project.appRoot().resolve("page.dashboard/socket.java"), dashboardSocketJava());
         allowSocketWithoutLogin(project, "page.dashboard");
         BuildResult build = new ProjectBuildService().build(project, true, "bundle");
@@ -99,20 +99,20 @@ class SocketWebSocketIntegrationTest {
         });
         String sid = openPacket.get("sid").toString();
 
-        post(client, base + "&sid=" + sid, "40/wiz/app/socketio/page.dashboard,");
+        post(client, base + "&sid=" + sid, "40/wiz/app/page.dashboard,");
         String connect = client.send(HttpRequest.newBuilder(URI.create(base + "&sid=" + sid)).GET().build(), HttpResponse.BodyHandlers.ofString()).body();
-        assertTrue(connect.startsWith("40/wiz/app/socketio/page.dashboard,"), connect);
+        assertTrue(connect.startsWith("40/wiz/app/page.dashboard,"), connect);
 
-        post(client, base + "&sid=" + sid, "42/wiz/app/socketio/page.dashboard,[\"join\",{\"id\":\"room-it\"}]");
+        post(client, base + "&sid=" + sid, "42/wiz/app/page.dashboard,[\"join\",{\"id\":\"room-it\"}]");
         String join = client.send(HttpRequest.newBuilder(URI.create(base + "&sid=" + sid)).GET().build(), HttpResponse.BodyHandlers.ofString()).body();
-        assertTrue(join.startsWith("42/wiz/app/socketio/page.dashboard,"), join);
+        assertTrue(join.startsWith("42/wiz/app/page.dashboard,"), join);
         assertTrue(join.contains("\"join\""), join);
         assertTrue(join.contains("\"room-it\""), join);
     }
 
     @Test
     void broadcastsRoomResultToJoinedWebSocketSessions() throws Exception {
-        ProjectContext project = new ProjectService(new PathService(WORKSPACE)).createProject("broadcast", null, null);
+        ProjectContext project = project();
         Files.writeString(project.appRoot().resolve("page.dashboard/socket.java"), broadcastSocketJava());
         allowSocketWithoutLogin(project, "page.dashboard");
         BuildResult build = new ProjectBuildService().build(project, true, "bundle");
@@ -121,12 +121,12 @@ class SocketWebSocketIntegrationTest {
         QueueListener first = new QueueListener();
         WebSocket firstSocket = HttpClient.newHttpClient()
                 .newWebSocketBuilder()
-                .buildAsync(URI.create("ws://127.0.0.1:" + port + "/wiz/ws/app/broadcast/page.dashboard"), first)
+                .buildAsync(URI.create("ws://127.0.0.1:" + port + "/wiz/app/page.dashboard"), first)
                 .join();
         QueueListener second = new QueueListener();
         WebSocket secondSocket = HttpClient.newHttpClient()
                 .newWebSocketBuilder()
-                .buildAsync(URI.create("ws://127.0.0.1:" + port + "/wiz/ws/app/broadcast/page.dashboard"), second)
+                .buildAsync(URI.create("ws://127.0.0.1:" + port + "/wiz/app/page.dashboard"), second)
                 .join();
 
         assertEquals("connect", envelope(first.nextMessage()).get("event"));
@@ -166,6 +166,14 @@ class SocketWebSocketIntegrationTest {
     private static void allowSocketWithoutLogin(ProjectContext project, String appId) throws IOException {
         Path appJson = project.appRoot().resolve(appId).resolve("app.json");
         Files.writeString(appJson, Files.readString(appJson).replace("\"controller\": \"user\"", "\"controller\": \"base\""));
+    }
+
+    private static ProjectContext project() throws Exception {
+        PathService paths = new PathService(WORKSPACE);
+        if (Files.isDirectory(WORKSPACE.resolve("src"))) {
+            return paths.workspaceContext();
+        }
+        return new ProjectService(paths).createApp(null, null);
     }
 
     private static Path workspace() {

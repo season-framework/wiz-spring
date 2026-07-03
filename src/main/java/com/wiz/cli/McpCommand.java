@@ -18,15 +18,12 @@ public class McpCommand implements Callable<Integer> {
     @Option(names = "--root", description = "WIZ Spring workspace root. Defaults to WIZ_WORKSPACE or auto-detecting from the current directory.")
     private Path root;
 
-    @Option(names = "--project", description = "Initial project name. Defaults to WIZ_PROJECT or main.")
-    private String project;
-
     @Option(names = "--state", description = "Path to the WIZ Spring MCP state file. Defaults to <workspace>/.wiz/mcp-state.json.")
     private Path state;
 
     @Override
     public Integer call() throws Exception {
-        WizMcpToolService tools = new WizMcpToolService(root, project, state);
+        WizMcpToolService tools = new WizMcpToolService(root, state);
         new WizMcpServer(tools, System.in, System.out).run();
         return 0;
     }

@@ -61,7 +61,8 @@ public class SupplyChainManifestService {
             List<Artifact> buildInputs) {
         LinkedHashMap<String, Object> manifest = new LinkedHashMap<>();
         manifest.put("schemaVersion", 1);
-        manifest.put("projectName", project.name());
+        manifest.put("workspaceRoot", project.root().toAbsolutePath().normalize().toString());
+        manifest.put("javaPackageRoot", project.packageRoot());
         manifest.put("runtimeVersion", runtimeVersion());
         manifest.put("javaVersion", System.getProperty("java.version"));
         manifest.put("generatedAt", generatedAt.toString());
@@ -89,7 +90,7 @@ public class SupplyChainManifestService {
         metadata.put("timestamp", generatedAt.toString());
         LinkedHashMap<String, Object> component = new LinkedHashMap<>();
         component.put("type", "application");
-        component.put("name", project.name());
+        component.put("name", "wiz-app");
         component.put("version", runtimeVersion());
         metadata.put("component", component);
 
@@ -124,9 +125,9 @@ public class SupplyChainManifestService {
 
     private List<Artifact> projectArtifacts(ProjectContext project) throws IOException {
         ArrayList<Artifact> artifacts = new ArrayList<>();
-        Path projectApi = project.bundleRoot().resolve("project-api.jar");
+        Path projectApi = project.bundleRoot().resolve("app-api.jar");
         if (Files.isRegularFile(projectApi)) {
-            artifacts.add(artifact(projectApi, project.bundleRoot(), "project-api"));
+            artifacts.add(artifact(projectApi, project.bundleRoot(), "app-api"));
         }
         return List.copyOf(artifacts);
     }

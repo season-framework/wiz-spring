@@ -14,7 +14,7 @@ class SocketControllerRegistryTest {
 
     @Test
     void dispatchesEventsToAppControllerMethods() {
-        SocketNamespace namespace = new SocketNamespace("main", "page.xyz");
+        SocketNamespace namespace = new SocketNamespace("page.xyz");
         SocketSession session = new SocketSession("sid-1", namespace);
         SocketNamespaceRegistry registry = new SocketNamespaceRegistry(List.of(new TestPageSocketController()), new SocketRoomRegistry());
 
@@ -30,13 +30,13 @@ class SocketControllerRegistryTest {
     void reportsUnknownControllerOrEvent() {
         SocketNamespaceRegistry registry = new SocketNamespaceRegistry(List.of(new TestPageSocketController()), new SocketRoomRegistry());
 
-        assertFalse(registry.dispatch(new SocketSession("sid-1", new SocketNamespace("main", "missing")), "connect", Map.of()).accepted());
-        assertFalse(registry.dispatch(new SocketSession("sid-1", new SocketNamespace("main", "page.xyz")), "custom", Map.of()).accepted());
+        assertFalse(registry.dispatch(new SocketSession("sid-1", new SocketNamespace("missing")), "connect", Map.of()).accepted());
+        assertFalse(registry.dispatch(new SocketSession("sid-1", new SocketNamespace("page.xyz")), "custom", Map.of()).accepted());
     }
 
     @Test
     void emitsToExplicitRoomAndNamespaceRecipients() {
-        SocketNamespace namespace = new SocketNamespace("main", "page.xyz");
+        SocketNamespace namespace = new SocketNamespace("page.xyz");
         SocketNamespaceRegistry registry = new SocketNamespaceRegistry(List.of(new TestPageSocketController()), new SocketRoomRegistry());
         registry.dispatch(new SocketSession("sid-1", namespace), "join", Map.of("namespace", "room-1"));
 

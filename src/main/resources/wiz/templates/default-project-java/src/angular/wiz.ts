@@ -1,7 +1,10 @@
+import { WIZ_API_PREFIX, WIZ_BASEURI, WIZ_SOCKET_PATH } from './wiz-runtime-config';
+
 type WizOptions = string | {
     baseuri?: string;
     baseUri?: string;
     apiPrefix?: string;
+    socketPath?: string;
 };
 
 type SocketListener = (...args: any[]) => void;
@@ -118,27 +121,24 @@ export default class Wiz {
     public namespace: any;
     public baseuri: string;
     public apiPrefix: string;
+    public socketPath: string;
 
-    constructor(options: WizOptions = "/wiz") {
-        const config = this.runtimeConfig();
+    constructor(options: WizOptions = WIZ_BASEURI) {
         if (typeof options === "string") {
-            this.baseuri = this.normalizeBaseuri(options || config.baseuri || "/wiz");
-            this.apiPrefix = this.normalizeApiPrefix(config.apiPrefix || "/wiz/api");
+            this.baseuri = this.normalizeBaseuri(options || WIZ_BASEURI);
+            this.apiPrefix = this.normalizeApiPrefix(WIZ_API_PREFIX);
+            this.socketPath = this.normalizePath(WIZ_SOCKET_PATH);
             return;
         }
-        this.baseuri = this.normalizeBaseuri(options?.baseuri || options?.baseUri || config.baseuri || "/wiz");
-        this.apiPrefix = this.normalizeApiPrefix(options?.apiPrefix || config.apiPrefix || "/wiz/api");
+        this.baseuri = this.normalizeBaseuri(options?.baseuri || options?.baseUri || WIZ_BASEURI);
+        this.apiPrefix = this.normalizeApiPrefix(options?.apiPrefix || WIZ_API_PREFIX);
+        this.socketPath = this.normalizePath(options?.socketPath || WIZ_SOCKET_PATH);
     }
 
     public app(namespace: any) {
-        let instance = new Wiz({ baseuri: this.baseuri, apiPrefix: this.apiPrefix });
+        let instance = new Wiz({ baseuri: this.baseuri, apiPrefix: this.apiPrefix, socketPath: this.socketPath });
         instance.namespace = namespace;
         return instance;
-    }
-
-    private runtimeConfig() {
-        if (typeof window === "undefined") return {};
-        return (window as any).__WIZ_CONFIG__ || {};
     }
 
     private normalizeBaseuri(value: any) {
@@ -152,6 +152,12 @@ export default class Wiz {
     private normalizeApiPrefix(value: any) {
         let prefix = String(value || "/wiz/api").trim();
         if (!prefix) prefix = "/wiz/api";
+        return this.normalizePath(prefix);
+    }
+
+    private normalizePath(value: any) {
+        let prefix = String(value || "").trim();
+        if (!prefix) prefix = "/";
         while (prefix.length > 1 && prefix.endsWith("/")) {
             prefix = prefix.substring(0, prefix.length - 1);
         }
@@ -177,14 +183,8 @@ export default class Wiz {
         return false;
     }
 
-    public project() {
-        let project = this.cookie("season-wiz-project");
-        if (project) return project;
-        return "main";
-    }
-
     public socket() {
-        let socketns = this.baseuri + "/ws/app/" + this.project();
+        let socketns = this.socketPath;
         if (this.namespace)
             socketns = socketns + "/" + this.namespace;
         return new WizWebSocketClient(this.websocketUri(socketns));

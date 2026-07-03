@@ -25,7 +25,7 @@ class StaticFileServiceTest {
     void findsAssetsAndSpaFallbackFromCurrentBundle() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         new ProjectBuildService().build(project, true, "bundle");
         StaticFileService service = new StaticFileService(new ProjectRegistry(new PathService(workspace)));
 

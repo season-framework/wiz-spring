@@ -139,7 +139,7 @@ public class ControllerChain {
     }
 
     private String controllerClass(WizContext context, String controllerName) {
-        return ProjectJavaNaming.controllerHookClass(context.project().name(), controllerName);
+        return ProjectJavaNaming.controllerHookClass(context.project(), controllerName);
     }
 
 }

@@ -24,7 +24,7 @@ class ProjectScaffoldServiceTest {
     void createsCliManagedSourceSkeletonsThatBuild() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         ProjectScaffoldService service = new ProjectScaffoldService(new PathService(workspace));
 
         service.createApp("main", null, "page.cli", "pug", "page");
@@ -46,7 +46,7 @@ class ProjectScaffoldServiceTest {
 
         BuildResult result = new ProjectBuildService().build(project, true, "bundle");
         assertTrue(result.success(), result.message());
-        assertTrue(Files.exists(project.bundleRoot().resolve("project-api.jar")));
+        assertTrue(Files.exists(project.bundleRoot().resolve("app-api.jar")));
 
         service.deleteApp("main", null, "page.cli");
         service.deleteController("main", null, "cli");
@@ -62,7 +62,7 @@ class ProjectScaffoldServiceTest {
     void listsNpmDependenciesFromAngularPackageJson() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         Path angular = project.sourceRoot().resolve("angular");
         Files.createDirectories(angular);
         Files.writeString(angular.resolve("package.json"), """

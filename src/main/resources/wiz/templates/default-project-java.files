@@ -38,6 +38,7 @@ src/angular/styles/styles.scss
 src/angular/styles/styles/sample.scss
 src/angular/tailwind.config.js
 src/angular/tailwind.css
+src/angular/wiz-runtime-config.ts
 src/angular/wiz.ts
 src/app/component.nav.sidebar/app.json
 src/app/component.nav.sidebar/view.pug

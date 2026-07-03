@@ -8,12 +8,12 @@ WIZ 프레임워크의 공통 기반 패키지. 인증, ORM, 세션, UI 컴포�
 
 ### Java Dependencies
 
-Season package의 backend helper는 project source와 project `pom.xml` dependency로 관리한다. sample project는 SQLite JDBC와 Spring Security Crypto dependency를 project `pom.xml`에 선언한다.
+Season package의 backend helper는 workspace source와 workspace `pom.xml` dependency로 관리한다. sample app은 SQLite JDBC와 Spring Security Crypto dependency를 workspace `pom.xml`에 선언한다.
 
 ### NPM Dependencies
 
 - `tailwindcss`, `@tailwindcss/aspect-ratio`, `@tailwindcss/container-queries`, `@tailwindcss/forms`, `@tailwindcss/typography`
-- `urlpattern-polyfill`, `moment`, `sortablejs`
+- `urlpattern-polyfill`, `sortablejs`
 
 ---
 
@@ -359,7 +359,7 @@ const hash = this.service.crypto.SHA256("text");  // SHA256 해시 문자열
 날짜/통화 포매팅 유틸리티.
 
 ```typescript
-// 날짜 포매팅 (moment.js 기반)
+// 날짜 포매팅
 this.service.formatter.date(date)            // "2026-02-20"
 this.service.formatter.date(null, "N/A")     // "N/A" (값 없을 때 대체 텍스트)
 

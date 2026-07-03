@@ -177,7 +177,7 @@ public class ProjectRuntimeCache implements AutoCloseable {
     private String runtimeArtifactFingerprint(ProjectContext project) {
         return Stream.of(
                 project.bundleRoot().resolve("classes"),
-                project.bundleRoot().resolve("project-api.jar"),
+                project.bundleRoot().resolve("app-api.jar"),
                 project.bundleRoot().resolve("lib"),
                 project.bundleRoot().resolve("src/app"),
                 project.bundleRoot().resolve("src/route"))
@@ -456,7 +456,7 @@ public class ProjectRuntimeCache implements AutoCloseable {
             if (!configured.isBlank()) {
                 return configured;
             }
-            return ProjectJavaNaming.routeHandlerClass(project.name(), routeId);
+            return ProjectJavaNaming.routeHandlerClass(project, routeId);
         }
 
         private String routeId(String directoryId, String metadataId) {

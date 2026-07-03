@@ -30,7 +30,6 @@ public final class EmbeddedWorkspace {
         }
 
         String id = required(properties, "id");
-        String project = properties.getProperty("project", ProjectRegistry.DEFAULT_PROJECT_NAME);
         Path root = cacheRoot().resolve(safeCacheName(id)).toAbsolutePath().normalize();
         Path marker = root.resolve(".wiz-spring-embedded-id");
         if (!Files.isRegularFile(marker) || !Files.readString(marker).strip().equals(id)) {
@@ -39,7 +38,7 @@ public final class EmbeddedWorkspace {
             extractFiles(loader, root);
             Files.writeString(marker, id + System.lineSeparator());
         }
-        return Optional.of(new Launch(root, project));
+        return Optional.of(new Launch(root));
     }
 
     private static void extractFiles(ClassLoader loader, Path root) throws IOException {
@@ -111,6 +110,6 @@ public final class EmbeddedWorkspace {
         }
     }
 
-    public record Launch(Path root, String project) {
+    public record Launch(Path root) {
     }
 }

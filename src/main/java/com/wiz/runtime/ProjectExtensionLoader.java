@@ -37,7 +37,7 @@ final class ProjectExtensionLoader {
     }
 
     private static List<String> sessionCandidates(WizContext context) {
-        String root = ProjectJavaNaming.packageRoot(context.project().name());
+        String root = ProjectJavaNaming.packageRoot(context.project());
         return configured(context, List.of(
                 "wiz.session.service-class",
                 "wiz.session.handler",
@@ -52,7 +52,7 @@ final class ProjectExtensionLoader {
     }
 
     private static List<String> authCandidates(WizContext context) {
-        String root = ProjectJavaNaming.packageRoot(context.project().name());
+        String root = ProjectJavaNaming.packageRoot(context.project());
         return configured(context, List.of(
                 "wiz.auth.service-class",
                 "wiz.auth.handler",

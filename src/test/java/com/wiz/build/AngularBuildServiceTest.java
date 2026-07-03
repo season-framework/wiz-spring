@@ -103,13 +103,18 @@ class AngularBuildServiceTest {
         String source = Files.readString(component);
         assertTrue(source.indexOf("import { OnInit } from '@angular/core';") < source.indexOf("@Component({"));
         assertTrue(source.indexOf("@Component({") < source.indexOf("export class PageAccessComponent"));
-        assertTrue(source.contains("apiPrefix: (window as any).__WIZ_CONFIG__?.apiPrefix || '/wiz/api'"));
+        assertTrue(source.contains("let wiz = new Wiz().app('page.access');"));
 
         String declarations = Files.readString(project.buildRoot().resolve("src/angular/src/types.d.ts"));
-        assertTrue(declarations.contains("__WIZ_CONFIG__?: { apiPrefix?: string;"));
+        assertFalse(declarations.contains("__WIZ_CONFIG__"));
 
         String index = Files.readString(project.buildRoot().resolve("src/angular/src/index.pug"));
-        assertTrue(index.contains("script(src=\"/wiz/config.js\")"));
+        assertFalse(index.contains("config.js"));
+
+        String runtimeConfig = Files.readString(project.buildRoot().resolve("src/angular/src/wiz-runtime-config.ts"));
+        assertTrue(runtimeConfig.contains("WIZ_API_PREFIX = \"/wiz/api\""));
+        assertTrue(runtimeConfig.contains("WIZ_SOCKET_PATH = \"/wiz/app\""));
+        assertFalse(runtimeConfig.contains("WIZ_SOCKET_WEBSOCKET_PATH"));
 
         String routing = Files.readString(project.buildRoot().resolve("src/angular/src/app/app-routing.module.ts"));
         assertTrue(routing.contains("data: { app_id: \"page.access\" }"));
@@ -122,7 +127,7 @@ class AngularBuildServiceTest {
     private ProjectContext newProject() throws Exception {
         Path workspace = tempDir.resolve("workspace-" + java.util.UUID.randomUUID());
         new WorkspaceService().createWorkspace(workspace);
-        return new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        return new ProjectService(new PathService(workspace)).createApp(null, null);
     }
 
     private void writeReadyAngularPackage(Path angularRoot) throws Exception {

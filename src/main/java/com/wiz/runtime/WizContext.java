@@ -67,6 +67,10 @@ public class WizContext implements AutoCloseable {
         return project;
     }
 
+    public ProjectContext workspace() {
+        return project;
+    }
+
     public ConfigService config() {
         return config;
     }

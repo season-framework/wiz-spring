@@ -20,9 +20,6 @@ public class RunCommand implements Callable<Integer> {
     @Option(names = "--port", description = "HTTP bind port.")
     private Integer port;
 
-    @Option(names = "--project", description = "Default project name for project-local application.yml.")
-    private String project;
-
     @Option(names = "--profile", description = "Spring profile to activate. Defaults to dev for wiz-spring run.")
     private String profile;
 
@@ -41,14 +38,12 @@ public class RunCommand implements Callable<Integer> {
                 root.toAbsolutePath().normalize().toString(),
                 host,
                 port,
-                project,
                 bundle,
                 log == null ? null : log.toAbsolutePath().normalize().toString(),
                 profile == null || profile.isBlank() ? WizSpringApplication.DEFAULT_RUN_PROFILE : profile.trim(),
                 profile != null && !profile.isBlank());
         if (dryRun) {
             System.out.println("root=" + settings.workspace());
-            System.out.println("project=" + settings.projectName());
             System.out.println("host=" + settings.host());
             System.out.println("port=" + settings.port());
             if (settings.portChanged()) {
@@ -68,7 +63,6 @@ public class RunCommand implements Callable<Integer> {
                 settings.workspace().toString(),
                 settings.host(),
                 settings.port(),
-                settings.projectName(),
                 settings.bundle(),
                 settings.log(),
                 settings.profile(),

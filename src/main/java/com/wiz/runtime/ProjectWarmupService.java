@@ -5,7 +5,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Optional;
 
-import com.wiz.config.WizProjectProperties;
+import com.wiz.config.WizRuntimeProperties;
 import com.wiz.config.WizRedirectProperties;
 import com.wiz.core.ProjectJavaNaming;
 import com.wiz.domain.ModelRegistry;
@@ -25,29 +25,29 @@ public class ProjectWarmupService implements ApplicationRunner {
     private final ProjectRuntimeCache runtimeCache;
     private final ModelRegistry modelRegistry;
     private final WizRedirectProperties redirectProperties;
-    private final WizProjectProperties projectProperties;
+    private final WizRuntimeProperties runtimeProperties;
 
     public ProjectWarmupService(
             ProjectRegistry projectRegistry,
             ProjectRuntimeCache runtimeCache,
             ModelRegistry modelRegistry,
             WizRedirectProperties redirectProperties,
-            WizProjectProperties projectProperties) {
+            WizRuntimeProperties runtimeProperties) {
         this.projectRegistry = projectRegistry;
         this.runtimeCache = runtimeCache == null ? new ProjectRuntimeCache() : runtimeCache;
         this.modelRegistry = modelRegistry == null ? new ModelRegistry(this.runtimeCache) : modelRegistry;
         this.redirectProperties = redirectProperties == null ? new WizRedirectProperties() : redirectProperties;
-        this.projectProperties = projectProperties == null ? new WizProjectProperties() : projectProperties;
+        this.runtimeProperties = runtimeProperties == null ? new WizRuntimeProperties() : runtimeProperties;
     }
 
     @Override
     public void run(ApplicationArguments args) {
-        if (!projectProperties.isWarmupEnabled()) {
-            LOGGER.debug("WIZ project warmup is disabled");
+        if (!runtimeProperties.isWarmupEnabled()) {
+            LOGGER.debug("WIZ app warmup is disabled");
             return;
         }
 
-        Optional<ProjectContext> project = defaultProject();
+        Optional<ProjectContext> project = defaultWorkspace();
         if (project.isEmpty()) {
             return;
         }
@@ -55,12 +55,12 @@ public class ProjectWarmupService implements ApplicationRunner {
     }
 
     boolean warmup(ProjectContext project) {
-        String className = ProjectJavaNaming.packageRoot(project.name()) + ".model.Struct";
+        String className = ProjectJavaNaming.packageRoot(project) + ".model.Struct";
         ProjectRuntimeCache.CachedProjectRuntime runtime;
         try {
             runtime = runtimeCache.get(project);
         } catch (RuntimeException exception) {
-            LOGGER.warn("WIZ project warmup skipped for {}: runtime cache could not be created", project.name(), exception);
+            LOGGER.warn("WIZ app warmup skipped: runtime cache could not be created", exception);
             return false;
         }
 
@@ -70,34 +70,34 @@ public class ProjectWarmupService implements ApplicationRunner {
             Class<?> type = Class.forName(className, true, runtime.classLoader());
             Method warmup = warmupMethod(type).orElse(null);
             if (warmup == null) {
-                LOGGER.debug("WIZ project warmup hook not found: {}", className);
+                LOGGER.debug("WIZ app warmup hook not found: {}", className);
                 return false;
             }
             invokeWarmup(project, warmup);
-            LOGGER.info("WIZ project warmup completed: {}", project.name());
+            LOGGER.info("WIZ app warmup completed");
             return true;
         } catch (ClassNotFoundException exception) {
-            LOGGER.debug("WIZ project warmup hook class not found: {}", className);
+            LOGGER.debug("WIZ app warmup hook class not found: {}", className);
             return false;
         } catch (InvocationTargetException exception) {
-            LOGGER.warn("WIZ project warmup failed for {}", project.name(), exception.getCause());
+            LOGGER.warn("WIZ app warmup failed", exception.getCause());
             return false;
         } catch (LinkageError error) {
-            LOGGER.warn("WIZ project warmup failed for {}", project.name(), error);
+            LOGGER.warn("WIZ app warmup failed", error);
             return false;
         } catch (ReflectiveOperationException | RuntimeException exception) {
-            LOGGER.warn("WIZ project warmup failed for {}", project.name(), exception);
+            LOGGER.warn("WIZ app warmup failed", exception);
             return false;
         } finally {
             Thread.currentThread().setContextClassLoader(previousLoader);
         }
     }
 
-    private Optional<ProjectContext> defaultProject() {
+    private Optional<ProjectContext> defaultWorkspace() {
         try {
-            return Optional.of(projectRegistry.currentProject(Optional.empty()));
+            return Optional.of(projectRegistry.workspace());
         } catch (RuntimeException exception) {
-            LOGGER.debug("WIZ project warmup skipped: no default project is available");
+            LOGGER.debug("WIZ app warmup skipped: workspace is not available");
             return Optional.empty();
         }
     }

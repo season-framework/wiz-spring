@@ -23,7 +23,7 @@ class WorkspaceServiceTest {
 
         assertTrue(Files.isDirectory(workspace.root().resolve("config")));
         assertTrue(!Files.exists(workspace.root().resolve("public")));
-        assertTrue(Files.isDirectory(workspace.root().resolve("project")));
+        assertTrue(!Files.exists(workspace.root().resolve("project")));
         assertTrue(Files.isRegularFile(workspace.root().resolve("config/application.yml")));
         assertTrue(Files.isRegularFile(workspace.root().resolve("config/wiz.yml")));
         assertTrue(!Files.exists(workspace.root().resolve("ide")));

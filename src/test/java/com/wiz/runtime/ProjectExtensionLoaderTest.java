@@ -26,7 +26,7 @@ class ProjectExtensionLoaderTest {
     void loadsProjectAuthAndSessionImplementationsFromBundle() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         Files.writeString(project.modelRoot().resolve("AuthService.java"), authServiceJava());
         Files.writeString(project.modelRoot().resolve("SessionService.java"), sessionServiceJava());
 
@@ -35,8 +35,8 @@ class ProjectExtensionLoaderTest {
 
         MockHttpSession httpSession = new MockHttpSession();
         try (WizContext context = new WizContext(WizRequest.builder().session(httpSession).build(), new WizResponse(), project)) {
-            assertEquals("com.wiz.project.main.model.AuthService", context.auth().getClass().getName());
-            assertEquals("com.wiz.project.main.model.SessionService", context.session().getClass().getName());
+            assertEquals("com.wiz.app.model.AuthService", context.auth().getClass().getName());
+            assertEquals("com.wiz.app.model.SessionService", context.session().getClass().getName());
             ResponseEnvelope envelope = (ResponseEnvelope) context.auth().check(context).entity();
             assertEquals(Map.of("projectAuth", true), envelope.data());
         }

@@ -88,9 +88,13 @@ public class ConfigService {
 
     private java.util.List<Path> configRoots() {
         java.util.ArrayList<Path> roots = new java.util.ArrayList<>();
-        Path workspaceConfig = project.root().getParent() == null || project.root().getParent().getParent() == null
-                ? null
-                : project.root().getParent().getParent().resolve("config");
+        Path parent = project.root().getParent();
+        Path workspaceConfig = parent != null
+                && parent.getFileName() != null
+                && parent.getFileName().toString().equals("project")
+                && parent.getParent() != null
+                        ? parent.getParent().resolve("config")
+                        : null;
         if (workspaceConfig != null && Files.isDirectory(workspaceConfig)) {
             roots.add(workspaceConfig);
         }

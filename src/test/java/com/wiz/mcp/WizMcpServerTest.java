@@ -30,7 +30,7 @@ class WizMcpServerTest {
                 """;
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         WizMcpServer server = new WizMcpServer(
-                new WizMcpToolService(tempDir, "main", null),
+                new WizMcpToolService(tempDir, null),
                 new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8)),
                 output);
 
@@ -42,7 +42,7 @@ class WizMcpServerTest {
         assertEquals(1, ((Number) initialize.get("id")).intValue());
         assertTrue(((Map<?, ?>) initialize.get("result")).containsKey("serverInfo"));
         assertEquals(2, ((Number) list.get("id")).intValue());
-        assertEquals(58, ((java.util.List<?>) ((Map<?, ?>) list.get("result")).get("tools")).size());
+        assertEquals(55, ((java.util.List<?>) ((Map<?, ?>) list.get("result")).get("tools")).size());
     }
 
     private Map<String, Object> read(String line) throws Exception {

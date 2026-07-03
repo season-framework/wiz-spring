@@ -18,26 +18,26 @@ public class BundleCommand implements Callable<Integer> {
     @Option(names = "--root", description = "WIZ workspace root. Defaults to auto-detecting from the current directory.")
     private Path root;
 
-    @Option(names = "--project", description = "Project name.")
-    private String project = "main";
-
-    @Option(names = "--output", description = "Output bundle directory. Defaults to <workspace>/bundle.")
+    @Option(names = "--output", description = "Output bundle directory. Defaults to <workspace>/target/runtime-bundle.")
     private Path output;
 
     @Override
     public Integer call() throws Exception {
         PathService paths = pathService(root);
-        Path projectBundle = paths.projectContext(project).bundleRoot();
+        Path projectBundle = paths.workspaceContext().bundleRoot();
         if (!Files.isDirectory(projectBundle)) {
-            throw new IllegalArgumentException("Project bundle does not exist. Run project build first: " + project);
+            throw new IllegalArgumentException("Bundle does not exist. Run build first.");
         }
 
-        Path bundleRoot = output == null ? paths.root().resolve("bundle") : output.toAbsolutePath().normalize();
+        Path bundleRoot = output == null ? paths.root().resolve("target/runtime-bundle") : output.toAbsolutePath().normalize();
+        if (bundleRoot.equals(projectBundle.toAbsolutePath().normalize())) {
+            throw new IllegalArgumentException("Output bundle must be different from the build bundle directory");
+        }
         delete(bundleRoot);
         Files.createDirectories(bundleRoot);
         copyIfExists(paths.configRoot(), bundleRoot.resolve("config"));
-        copyDirectory(projectBundle, bundleRoot.resolve("project").resolve(project).resolve("bundle"));
-        Files.writeString(bundleRoot.resolve(".wiz-spring-bundle"), "project=" + project + System.lineSeparator());
+        copyDirectory(projectBundle, bundleRoot.resolve("bundle"));
+        Files.writeString(bundleRoot.resolve(".wiz-spring-bundle"), "workspace=single" + System.lineSeparator());
 
         System.out.println("Bundle created: " + bundleRoot);
         return 0;

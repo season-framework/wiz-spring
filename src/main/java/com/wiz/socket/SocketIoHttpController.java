@@ -183,7 +183,7 @@ public class SocketIoHttpController {
         if (comma < 0) {
             return;
         }
-        Optional<SocketNamespace> namespace = SocketNamespace.parse(packet.substring(0, comma));
+        Optional<SocketNamespace> namespace = SocketNamespace.parse(packet.substring(0, comma), socketProperties);
         if (namespace.isEmpty()) {
             return;
         }
@@ -257,7 +257,7 @@ public class SocketIoHttpController {
         if (comma >= 0) {
             namespace = namespace.substring(0, comma);
         }
-        return SocketNamespace.parse(namespace);
+        return SocketNamespace.parse(namespace, socketProperties);
     }
 
     private String nextPayload(PollingSession session) {
@@ -362,7 +362,7 @@ public class SocketIoHttpController {
     }
 
     private String namespacePath(SocketNamespace namespace) {
-        return namespace.socketIoPath();
+        return namespace.socketIoPath(socketProperties);
     }
 
     private record PollingSession(String id, AtomicLong lastAccessedAtMillis, BlockingQueue<String> queue, Map<String, SocketSession> namespaces, Map<String, String> cookies, HttpSession httpSession, String remoteAddress) {

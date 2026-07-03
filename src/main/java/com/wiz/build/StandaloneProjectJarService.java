@@ -33,7 +33,7 @@ public class StandaloneProjectJarService {
             throw new IllegalArgumentException("Runtime jar does not exist: " + runtime);
         }
         if (!Files.isDirectory(project.bundleRoot())) {
-            throw new IllegalArgumentException("Project bundle does not exist. Run project build first: " + project.name());
+            throw new IllegalArgumentException("App bundle does not exist. Run build first.");
         }
 
         Path target = outputPath(project, output).toAbsolutePath().normalize();
@@ -44,8 +44,8 @@ public class StandaloneProjectJarService {
         Files.copy(runtime, target, StandardCopyOption.REPLACE_EXISTING);
 
         List<EmbeddedFile> files = embeddedFiles(workspaceRoot, project);
-        String id = "wiz-" + project.name() + "-" + digest(files);
-        writeEmbeddedWorkspace(target, project.name(), id, files);
+        String id = "wiz-app-" + digest(files);
+        writeEmbeddedWorkspace(target, id, files);
         writeChecksum(target);
         return target;
     }
@@ -56,9 +56,9 @@ public class StandaloneProjectJarService {
     }
 
     private Path outputPath(ProjectContext project, Path output) {
-        Path target = output == null ? project.root().resolve("target").resolve(project.name() + ".jar") : output;
+        Path target = output == null ? project.root().resolve("target").resolve("wiz-app.jar") : output;
         if (Files.isDirectory(target)) {
-            return target.resolve(project.name() + ".jar");
+            return target.resolve("wiz-app.jar");
         }
         return target;
     }
@@ -66,8 +66,7 @@ public class StandaloneProjectJarService {
     private List<EmbeddedFile> embeddedFiles(Path workspaceRoot, ProjectContext project) throws IOException {
         ArrayList<EmbeddedFile> files = new ArrayList<>();
         collectDirectory(workspaceRoot.resolve("config"), "config", files);
-        collectDirectory(project.configRoot(), "project/" + project.name() + "/config", files);
-        collectDirectory(project.bundleRoot(), "project/" + project.name() + "/bundle", files);
+        collectDirectory(project.bundleRoot(), "bundle", files);
         files.sort(Comparator.comparing(EmbeddedFile::relativeName));
         return List.copyOf(files);
     }
@@ -130,12 +129,11 @@ public class StandaloneProjectJarService {
         }
     }
 
-    private void writeEmbeddedWorkspace(Path jar, String project, String id, List<EmbeddedFile> files) throws IOException {
+    private void writeEmbeddedWorkspace(Path jar, String id, List<EmbeddedFile> files) throws IOException {
         URI uri = URI.create("jar:" + jar.toUri());
         try (FileSystem zip = FileSystems.newFileSystem(uri, Map.of())) {
             writeString(zip, ZIP_PROPERTIES, ""
                     + "id=" + id + "\n"
-                    + "project=" + project + "\n"
                     + "createdAt=" + Instant.now() + "\n");
             writeString(zip, ZIP_FILES, files.stream()
                     .map(EmbeddedFile::relativeName)

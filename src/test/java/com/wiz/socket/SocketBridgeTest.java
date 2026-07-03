@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 
 class SocketBridgeTest {
 
-    private final SocketNamespace namespace = new SocketNamespace("main", "page.xyz");
+    private final SocketNamespace namespace = new SocketNamespace("page.xyz");
 
     @Test
     void handlesConnectJoinLeaveAndDisconnect() {

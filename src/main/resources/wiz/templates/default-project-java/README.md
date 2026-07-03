@@ -1,6 +1,6 @@
-# WIZ Java Sample Project
+# WIZ Java Sample App
 
-Spring WIZ runtime에서 실행되는 Java backend 샘플 프로젝트입니다. 기존 sample의 frontend/App 구조는 유지하고, backend는 app-local `api.java`, Java controller, Java Struct/domain source로 구성했습니다.
+Spring WIZ runtime에서 실행되는 Java backend 샘플 앱입니다. 기존 sample의 frontend/App 구조는 유지하고, backend는 app-local `api.java`, Java controller, Java Struct/domain source로 구성했습니다.
 
 ## Demo Accounts
 
@@ -12,7 +12,7 @@ Spring WIZ runtime에서 실행되는 Java backend 샘플 프로젝트입니다.
 | carol@example.com | carol123 | Carol Lee | editor |
 | dave@example.com | dave1234 | Dave Choi | viewer |
 
-The Java Struct layer seeds these accounts and starter posts idempotently. With the default `wiz.project.warmup-enabled` setting, this runs during server startup so the first login does not pay the JPA/Hikari initialization cost. The login page also shows the admin sample account so a freshly generated project can be tested immediately.
+The Java Struct layer seeds these accounts and starter posts idempotently. With the default `wiz.runtime.warmup-enabled` setting, this runs during server startup so the first login does not pay the JPA/Hikari initialization cost. The login page also shows the admin sample account so a freshly generated app can be tested immediately.
 
 ## Source Layout
 
@@ -51,7 +51,7 @@ src/
 
 Frontend files such as `view.pug`, `view.ts`, `view.scss`, `app.json`, `src/angular/**`, and portal frontend assets are preserved from the original sample.
 
-Database access is project-local. This sample uses Spring ORM with JPA/Hibernate and SQLite through the project `pom.xml`; the runtime core does not contain DB/ORM implementation code. Common DB setup lives under `src/portal/season/model/orm`, and entity-specific repository helpers are nested inside each entity class. Change `config/application.yml` key `sample.datasource.url` or replace the project entity/helper classes when using another database.
+Database access is workspace-local. This sample uses Spring ORM with JPA/Hibernate and SQLite through the workspace `pom.xml`; the runtime core does not contain DB/ORM implementation code. Common DB setup lives under `src/portal/season/model/orm`, and entity-specific repository helpers are nested inside each entity class. Change `config/application.yml` key `sample.datasource.url` or replace the app entity/helper classes when using another database.
 
 ## Run With Spring WIZ
 
@@ -61,9 +61,8 @@ cd /root/workspace/wiz-java
 
 tmp=/tmp/wiz-spring-sample
 rm -rf "$tmp"
-java -jar wiz-spring/target/wiz-spring-*.jar create "$tmp"
-java -jar wiz-spring/target/wiz-spring-*.jar project create --root "$tmp" --project main
-java -jar wiz-spring/target/wiz-spring-*.jar project build --root "$tmp" --project main --clean
+java -jar wiz-spring/target/wiz-spring-*.jar create "$tmp" --package com.example.demo
+java -jar wiz-spring/target/wiz-spring-*.jar build --root "$tmp" --clean
 java -jar wiz-spring/target/wiz-spring-*.jar run --root "$tmp" --port 3000
 ```
 
@@ -98,7 +97,10 @@ The `page.dashboard`, `page.members`, and `page.mypage` apps use the built-in `u
 ## Implemented Socket
 
 - frontend usage: `wiz.socket()`
-- native WebSocket endpoint: `/wiz/ws/app/main/page.chat`
-- Socket.IO polling compatibility namespace: `/wiz/app/main/page.chat`
+- native WebSocket endpoint: `/wiz/app/page.chat`
+- Socket.IO polling compatibility namespace: `/wiz/app/page.chat`
 - events: `connect`, `join`, `send`, `disconnect`
 - unauthenticated guests are labeled by socket session id, for example `Guest-1a2b3c`, so different browsers are distinguishable before login.
+
+API/socket prefixes are baked into the Angular bundle during `wiz-spring build`.
+Rebuild after changing `wiz.api.prefix` or `wiz.socket.path`.

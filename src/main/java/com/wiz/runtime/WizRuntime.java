@@ -51,7 +51,7 @@ public class WizRuntime {
     }
 
     public WizContext createContext(WizRequest request) {
-        ProjectContext project = projectRegistry.currentProject(request.cookies());
+        ProjectContext project = projectRegistry.workspace();
         WizResponse response = new WizResponse();
         if (projectRegistry.devMode(request.cookies())) {
             response.header(DEVMODE_HEADER, "true");

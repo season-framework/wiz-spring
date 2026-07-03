@@ -16,17 +16,16 @@ class PathServiceTest {
     Path tempDir;
 
     @Test
-    void computesWorkspaceAndProjectRoots() {
+    void computesWorkspaceContextRoots() {
         PathService service = new PathService(tempDir);
 
         assertEquals(tempDir.toAbsolutePath().normalize(), service.root());
         assertEquals(service.root().resolve("config"), service.configRoot());
         assertEquals(service.root().resolve("public"), service.publicRoot());
-        assertEquals(service.root().resolve("project"), service.projectsRoot());
 
-        ProjectContext project = service.projectContext("main");
+        ProjectContext project = service.workspaceContext();
         assertEquals("main", project.name());
-        assertEquals(service.projectsRoot().resolve("main"), project.root());
+        assertEquals(service.root(), project.root());
         assertEquals(project.root().resolve("src/app"), project.appRoot());
         assertEquals(project.root().resolve("bundle/www"), project.bundleWwwRoot());
         assertEquals(project.root().resolve("bundle/src/assets"), project.bundleAssetsRoot());
@@ -36,27 +35,12 @@ class PathServiceTest {
     void findsJavaWorkspaceRootsOnly() throws Exception {
         Path javaRoot = tempDir.resolve("java-root");
         Files.createDirectories(javaRoot.resolve("config"));
-        Files.createDirectories(javaRoot.resolve("project/main/src/app"));
-        Files.writeString(javaRoot.resolve("config/application.yml"), "wiz:\n  project:\n    default-name: main\n");
+        Files.createDirectories(javaRoot.resolve("src/app"));
+        Files.writeString(javaRoot.resolve("config/application.yml"), "wiz:\n  java:\n    package-root: com.example.app\n");
 
         PathService service = new PathService(tempDir);
-        assertEquals(javaRoot, service.findWorkspaceRoot(javaRoot.resolve("project/main/src/app")).orElseThrow());
+        assertEquals(javaRoot, service.findWorkspaceRoot(javaRoot.resolve("src/app")).orElseThrow());
         assertTrue(service.findWorkspaceRoot(tempDir.resolve("missing")).isEmpty());
-    }
-
-    @Test
-    void rejectsUnsafeProjectNames() {
-        PathService service = new PathService(tempDir);
-
-        assertThrows(IllegalArgumentException.class, () -> service.projectRoot(null));
-        assertThrows(IllegalArgumentException.class, () -> service.projectRoot(""));
-        assertThrows(IllegalArgumentException.class, () -> service.projectRoot(" "));
-        assertThrows(IllegalArgumentException.class, () -> service.projectRoot("."));
-        assertThrows(IllegalArgumentException.class, () -> service.projectRoot(".."));
-        assertThrows(IllegalArgumentException.class, () -> service.projectRoot("../main"));
-        assertThrows(IllegalArgumentException.class, () -> service.projectRoot("main/other"));
-        assertThrows(IllegalArgumentException.class, () -> service.projectRoot("/tmp/main"));
-        assertThrows(IllegalArgumentException.class, () -> service.projectRoot("main\\other"));
     }
 
     @Test

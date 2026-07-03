@@ -34,6 +34,7 @@ final class AngularSourceStagingService {
         Path angularSrc = angularRoot.resolve("src");
         Files.createDirectories(angularSrc);
         copyAngularShell(angularRoot, angularSrc);
+        writeRuntimeConfig(angularSrc, project);
         copyIfExists(buildSourceRoot.resolve("libs"), angularSrc.resolve("libs"));
         copyIfExists(buildSourceRoot.resolve("assets"), angularSrc.resolve("assets"));
         loosenTemplateFacingServiceTypes(angularSrc);
@@ -110,7 +111,7 @@ final class AngularSourceStagingService {
                 + "import Wiz from '../../wiz';\n"
                 + split.imports()
                 + "declare const WizRoute: any;\n"
-                + "let wiz = new Wiz({ baseuri: '/wiz', apiPrefix: (window as any).__WIZ_CONFIG__?.apiPrefix || '/wiz/api' }).app('" + escapeTs(component.appId()) + "');\n"
+                + "let wiz = new Wiz().app('" + escapeTs(component.appId()) + "');\n"
                 + "@Component({\n"
                 + "    selector: '" + escapeTs(component.selector()) + "',\n"
                 + "    templateUrl: './view.html',\n"
@@ -319,11 +320,15 @@ final class AngularSourceStagingService {
 
     private void writeTypeDeclarations(Path angularSrc) throws IOException {
         Files.writeString(angularSrc.resolve("types.d.ts"), "declare global {\n"
-                + "  interface Window { WizRoute?: any; MonacoEnvironment?: any; __WIZ_CONFIG__?: { apiPrefix?: string; baseuri?: string; baseUri?: string }; }\n"
+                + "  interface Window { WizRoute?: any; MonacoEnvironment?: any; }\n"
                 + "  interface Navigator { userLanguage?: string; }\n"
                 + "}\n"
                 + "declare const WizRoute: any;\n"
                 + "export {};\n");
+    }
+
+    private void writeRuntimeConfig(Path angularSrc, ProjectContext project) throws IOException {
+        Files.writeString(angularSrc.resolve("wiz-runtime-config.ts"), FrontendRuntimeConfig.from(project).typescriptModule());
     }
 
     private void disableTypeChecking(Path root) throws IOException {

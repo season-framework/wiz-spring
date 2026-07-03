@@ -36,11 +36,11 @@ public class ProjectScaffoldService {
     }
 
     public List<String> listApps(String project, String packageName) throws IOException {
-        return listDirectories(appBase(projectContext(project), packageName));
+        return listDirectories(appBase(workspaceContext(), packageName));
     }
 
     public Path createApp(String project, String packageName, String appId, String engine, String mode) throws IOException {
-        ProjectContext context = projectContext(project);
+        ProjectContext context = workspaceContext();
         String id = safeSegment(required(appId, "App id is required"));
         Path appRoot = new SafePath(appBase(context, packageName)).resolveForWrite(id);
         if (Files.exists(appRoot)) {
@@ -58,7 +58,7 @@ public class ProjectScaffoldService {
         metadata.put("controller", "");
         metadata.put("template", ProjectJavaNaming.selector(id) + "()");
         metadata.put("runtime", "java");
-        metadata.put("api", Map.of("handler", ProjectJavaNaming.appApiHandlerClass(context.name(), id)));
+        metadata.put("api", Map.of("handler", ProjectJavaNaming.appApiHandlerClass(context, id)));
         writeJson(appRoot.resolve("app.json"), metadata);
 
         Files.writeString(appRoot.resolve("view.ts"), appViewTs());
@@ -74,15 +74,15 @@ public class ProjectScaffoldService {
     }
 
     public void deleteApp(String project, String packageName, String appId) throws IOException {
-        deleteChild(appBase(projectContext(project), packageName), safeSegment(required(appId, "App id is required")), "App");
+        deleteChild(appBase(workspaceContext(), packageName), safeSegment(required(appId, "App id is required")), "App");
     }
 
     public List<String> listControllers(String project, String packageName) throws IOException {
-        return listFiles(controllerBase(projectContext(project), packageName), ".java");
+        return listFiles(controllerBase(workspaceContext(), packageName), ".java");
     }
 
     public Path createController(String project, String packageName, String controllerName) throws IOException {
-        ProjectContext context = projectContext(project);
+        ProjectContext context = workspaceContext();
         String name = safeSegment(required(controllerName, "Controller name is required"));
         Path base = controllerBase(context, packageName);
         Files.createDirectories(base);
@@ -96,17 +96,17 @@ public class ProjectScaffoldService {
     }
 
     public void deleteController(String project, String packageName, String controllerName) throws IOException {
-        ProjectContext context = projectContext(project);
+        ProjectContext context = workspaceContext();
         String name = safeSegment(required(controllerName, "Controller name is required"));
         deleteFile(controllerBase(context, packageName).resolve(suffixedClassName(name, "Controller") + ".java"), "Controller");
     }
 
     public List<String> listRoutes(String project, String packageName) throws IOException {
-        return listDirectories(routeBase(projectContext(project), packageName));
+        return listDirectories(routeBase(workspaceContext(), packageName));
     }
 
     public Path createRoute(String project, String packageName, String routeName, String routePath, String methods) throws IOException {
-        ProjectContext context = projectContext(project);
+        ProjectContext context = workspaceContext();
         String name = safeSegment(required(routeName, "Route name is required"));
         Path routeRoot = new SafePath(routeBase(context, packageName)).resolveForWrite(name);
         if (Files.exists(routeRoot)) {
@@ -121,22 +121,22 @@ public class ProjectScaffoldService {
         metadata.put("viewuri", "");
         metadata.put("category", "");
         metadata.put("methods", splitMethods(methods));
-        metadata.put("handler", ProjectJavaNaming.routeHandlerClass(context.name(), name));
+        metadata.put("handler", ProjectJavaNaming.routeHandlerClass(context, name));
         writeJson(routeRoot.resolve("app.json"), metadata);
         Files.writeString(routeRoot.resolve("route.java"), routeJava(name, path));
         return routeRoot;
     }
 
     public void deleteRoute(String project, String packageName, String routeName) throws IOException {
-        deleteChild(routeBase(projectContext(project), packageName), safeSegment(required(routeName, "Route name is required")), "Route");
+        deleteChild(routeBase(workspaceContext(), packageName), safeSegment(required(routeName, "Route name is required")), "Route");
     }
 
     public List<String> listPackages(String project) throws IOException {
-        return listDirectories(projectContext(project).sourceRoot().resolve("portal"));
+        return listDirectories(workspaceContext().sourceRoot().resolve("portal"));
     }
 
     public Path createPackage(String project, String packageName) throws IOException {
-        ProjectContext context = projectContext(project);
+        ProjectContext context = workspaceContext();
         String name = safeSegment(required(packageName, "Package name is required"));
         Path packageRoot = new SafePath(context.sourceRoot().resolve("portal")).resolveForWrite(name);
         if (Files.exists(packageRoot)) {
@@ -164,11 +164,11 @@ public class ProjectScaffoldService {
     }
 
     public void deletePackage(String project, String packageName) throws IOException {
-        deleteChild(projectContext(project).sourceRoot().resolve("portal"), safeSegment(required(packageName, "Package name is required")), "Package");
+        deleteChild(workspaceContext().sourceRoot().resolve("portal"), safeSegment(required(packageName, "Package name is required")), "Package");
     }
 
     public Map<String, Object> npmList(String project) throws IOException {
-        Path packageJson = angularPackageJson(projectContext(project));
+        Path packageJson = angularPackageJson(workspaceContext());
         if (!Files.isRegularFile(packageJson)) {
             throw new IllegalArgumentException("src/angular/package.json not found");
         }
@@ -177,7 +177,7 @@ public class ProjectScaffoldService {
     }
 
     public CommandResult npmInstall(String project, String packageName, String version, boolean dev, BuildLogger logger) throws IOException, InterruptedException {
-        ProjectContext context = projectContext(project);
+        ProjectContext context = workspaceContext();
         Path angularRoot = angularRoot(context);
         if (!Files.isRegularFile(angularRoot.resolve("package.json"))) {
             throw new IllegalArgumentException("src/angular/package.json not found");
@@ -193,7 +193,7 @@ public class ProjectScaffoldService {
     }
 
     public CommandResult npmUninstall(String project, String packageName, BuildLogger logger) throws IOException, InterruptedException {
-        ProjectContext context = projectContext(project);
+        ProjectContext context = workspaceContext();
         Path angularRoot = angularRoot(context);
         if (!Files.isRegularFile(angularRoot.resolve("package.json"))) {
             throw new IllegalArgumentException("src/angular/package.json not found");
@@ -202,8 +202,8 @@ public class ProjectScaffoldService {
         return commandExecutor.run("npm-uninstall", paths.root(), angularRoot, List.of("npm", "uninstall", "--save", name), java.time.Duration.ofMinutes(5), 256 * 1024, logger);
     }
 
-    private ProjectContext projectContext(String project) {
-        return paths.projectContext(blankDefault(project, "main"));
+    private ProjectContext workspaceContext() {
+        return paths.workspaceContext();
     }
 
     private Path appBase(ProjectContext project, String packageName) {

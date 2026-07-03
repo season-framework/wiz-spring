@@ -63,7 +63,7 @@ public class ModelRegistry {
         ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(runtime.classLoader());
         try {
-            ProjectModelFactory factory = runtime.modelFactory(namespace, classCandidates(context.project().name(), namespace))
+            ProjectModelFactory factory = runtime.modelFactory(namespace, classCandidates(context.project().packageRoot(), namespace))
                     .orElseThrow(() -> new IllegalArgumentException("Unknown model namespace: " + namespace
                             + ". Add a Java model under src/model or src/portal/{portal}/model; examples: struct, struct/user, db/user, portal/post/struct."));
             try {
@@ -78,8 +78,8 @@ public class ModelRegistry {
         }
     }
 
-    private List<String> classCandidates(String projectName, String namespace) {
-        String root = "com.wiz.project." + javaPackageSegment(projectName);
+    private List<String> classCandidates(String packageRoot, String namespace) {
+        String root = packageRoot;
         if (namespace.equals("struct")) {
             return List.of(root + ".model.Struct");
         }

@@ -30,7 +30,6 @@ html(lang="en")
 
         link(rel="manifest" href="/manifest.json")
 
-        script(src="/wiz/config.js")
         script(type="text/javascript").
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('/sw.js', {scope: '/'}).then((reg) => {});

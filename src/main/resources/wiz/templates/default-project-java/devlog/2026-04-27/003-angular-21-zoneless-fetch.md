@@ -28,9 +28,9 @@ WIZ 프론트엔드 호출 경로는 jQuery AJAX 대신 fetch 기반으로 전�
 - `src/portal/post/app/list/app.json`, `src/portal/post/app/detail/app.json`: fetch JSON 요청을 읽을 수 있도록 base controller 연결
 
 ## 검증
-- `project/main/src` 기준 `zone.js`, `jquery`, `$.ajax` 참조 없음 확인
+- `src` 기준 `zone.js`, `jquery`, `$.ajax` 참조 없음 확인
 - `src/angular/package.json`, `src/angular/angular.json`, `src/portal/post/portal.json` JSON 파싱 확인
-- `wiz_project_build(clean=true)`로 Angular 21 build 워크스페이스 재생성 및 패키지 설치 확인
-- `wiz_project_build(clean=false)` 성공
-- `project/main/build` 기준 `zone.js`, `jquery`, `$.ajax` 참조 없음 확인
+- `wiz_app_build(clean=true)`로 Angular 21 build 워크스페이스 재생성 및 패키지 설치 확인
+- `wiz_app_build(clean=false)` 성공
+- `build` 기준 `zone.js`, `jquery`, `$.ajax` 참조 없음 확인
 - `npm list` 확인: `@angular/core@21.2.10`, `@angular/cli@21.2.8`, `@angular/material@21.2.8`, `@angular/cdk@21.2.8`, `typescript@5.9.3`

@@ -10,10 +10,10 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.wiz.project</groupId>
-    <artifactId>wiz-sample-project-java</artifactId>
+    <groupId>__WIZ_PACKAGE_ROOT__</groupId>
+    <artifactId>wiz-sample-app-java</artifactId>
     <version>0.0.7</version>
-    <name>WIZ Java Sample Project</name>
+    <name>WIZ Java Sample App</name>
 
     <properties>
         <java.version>21</java.version>
@@ -77,7 +77,7 @@
                 <version>${cyclonedx-maven-plugin.version}</version>
                 <executions>
                     <execution>
-                        <id>wiz-project-bom</id>
+                        <id>wiz-app-bom</id>
                         <phase>package</phase>
                         <goals>
                             <goal>makeAggregateBom</goal>

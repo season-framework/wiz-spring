@@ -1,6 +1,6 @@
 import java.util.Map;
 
-import com.wiz.project.main.model.Struct;
+import __WIZ_PACKAGE_ROOT__.model.Struct;
 import com.wiz.runtime.WizContext;
 import com.wiz.runtime.WizResult;
 

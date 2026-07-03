@@ -47,11 +47,11 @@ final class AppMetadataNormalizer {
                 putDefault(metadata, "name", ProjectJavaNaming.componentName(appId));
                 putNgBuild(metadata, appId);
                 putNg(metadata, appId);
-                String apiHandlerClass = nestedString(metadata, "api", "handler", ProjectJavaNaming.appApiHandlerClass(project.name(), appId));
+                String apiHandlerClass = nestedString(metadata, "api", "handler", ProjectJavaNaming.appApiHandlerClass(project, appId));
                 if (appJavaSourceExists(app, "api.java", apiHandlerClass)) {
                     putNestedDefault(metadata, "api", "handler", apiHandlerClass);
                 }
-                String socketHandlerClass = nestedString(metadata, "socket", "handler", ProjectJavaNaming.appSocketHandlerClass(project.name(), appId));
+                String socketHandlerClass = nestedString(metadata, "socket", "handler", ProjectJavaNaming.appSocketHandlerClass(project, appId));
                 if (appJavaSourceExists(app, "socket.java", socketHandlerClass)) {
                     putNestedDefault(metadata, "socket", "handler", socketHandlerClass);
                 }
@@ -86,7 +86,7 @@ final class AppMetadataNormalizer {
                 if (!metadata.containsKey("methods") && !metadata.containsKey("method")) {
                     metadata.put("methods", List.of());
                 }
-                putDefault(metadata, "handler", ProjectJavaNaming.routeHandlerClass(project.name(), routeId));
+                putDefault(metadata, "handler", ProjectJavaNaming.routeHandlerClass(project, routeId));
                 writeMetadata(appJson, metadata);
             }
         }

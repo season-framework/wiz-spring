@@ -2,29 +2,45 @@ package com.wiz.socket;
 
 import java.util.Optional;
 
-public record SocketNamespace(String project, String appId) {
+import com.wiz.config.WizSocketProperties;
+
+public record SocketNamespace(String appId) {
 
     public static Optional<SocketNamespace> parse(String path) {
+        return parse(path, new WizSocketProperties());
+    }
+
+    public static Optional<SocketNamespace> parse(String path, WizSocketProperties properties) {
         if (path == null) {
             return Optional.empty();
         }
         String normalized = path.startsWith("/") ? path : "/" + path;
-        String prefix = normalized.startsWith("/wiz/ws/app/") ? "/wiz/ws/app/" : "/wiz/app/";
-        if (!normalized.startsWith(prefix)) {
+        WizSocketProperties socketProperties = properties == null ? new WizSocketProperties() : properties;
+        String socketPrefix = socketProperties.getPath() + "/";
+        if (!normalized.startsWith(socketPrefix)) {
             return Optional.empty();
         }
-        String[] parts = normalized.substring(prefix.length()).split("/", 2);
-        if (parts.length != 2 || parts[0].isBlank() || parts[1].isBlank()) {
-            return Optional.empty();
+        String[] parts = normalized.substring(socketPrefix.length()).split("/");
+        if (parts.length == 1 && !parts[0].isBlank()) {
+            return Optional.of(new SocketNamespace(parts[0]));
         }
-        return Optional.of(new SocketNamespace(parts[0], parts[1]));
+        return Optional.empty();
     }
 
     public String socketIoPath() {
-        return "/wiz/app/" + project + "/" + appId;
+        return socketIoPath(new WizSocketProperties());
     }
 
-    public String websocketPath() {
-        return "/wiz/ws/app/" + project + "/" + appId;
+    public String socketIoPath(WizSocketProperties properties) {
+        WizSocketProperties socketProperties = properties == null ? new WizSocketProperties() : properties;
+        return socketProperties.getPath() + "/" + appId;
+    }
+
+    public String path() {
+        return path(new WizSocketProperties());
+    }
+
+    public String path(WizSocketProperties properties) {
+        return socketIoPath(properties);
     }
 }

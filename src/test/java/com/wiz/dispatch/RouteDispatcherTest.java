@@ -33,7 +33,7 @@ class RouteDispatcherTest {
     void handlesProjectAuthCheckBeforeSpaFallback() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         new ProjectBuildService().build(project, true, "bundle");
 
         WizResult result = dispatcher(workspace).dispatch(WizRequest.builder().path("/auth/check").build()).orElseThrow();
@@ -48,7 +48,7 @@ class RouteDispatcherTest {
     void handlesProjectAuthLogoutAsRedirectAndClearsSessionCookie() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         new ProjectBuildService().build(project, true, "bundle");
         MockHttpSession session = new MockHttpSession();
         session.setAttribute("id", "u1");
@@ -65,7 +65,7 @@ class RouteDispatcherTest {
     void logoutRedirectPolicyDefaultsToAnyForExternalRedirects() throws Exception {
         Path workspace = tempDir.resolve("workspace-any-redirect");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         new ProjectBuildService().build(project, true, "bundle");
 
         WizResult result = dispatcher(workspace).dispatch(WizRequest.builder()
@@ -81,7 +81,7 @@ class RouteDispatcherTest {
     void logoutRedirectLocalOnlyPolicyFallsBackForExternalRedirects() throws Exception {
         Path workspace = tempDir.resolve("workspace-local-redirect");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         new ProjectBuildService().build(project, true, "bundle");
         WizRedirectProperties redirectProperties = new WizRedirectProperties();
         redirectProperties.setPolicy(WizRedirectProperties.Policy.LOCAL_ONLY);
@@ -99,7 +99,7 @@ class RouteDispatcherTest {
     void handlesAuthenticatedProjectAuthCheck() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         new ProjectBuildService().build(project, true, "bundle");
         MockHttpSession session = new MockHttpSession();
         session.setAttribute("id", "u1");
@@ -120,7 +120,7 @@ class RouteDispatcherTest {
     void returnsEmptyForNonRoutePaths() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         new ProjectBuildService().build(project, true, "bundle");
 
         assertTrue(dispatcher(workspace).dispatch(WizRequest.builder().path("/dashboard").build()).isEmpty());
@@ -130,7 +130,7 @@ class RouteDispatcherTest {
     void exposesOidcAndSamlAsExplicitExtensionBoundaries() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         new ProjectBuildService().build(project, true, "bundle");
 
         WizResult oidc = dispatcher(workspace).dispatch(WizRequest.builder().path("/auth/oidc/login/main/callback").build()).orElseThrow();
@@ -144,7 +144,7 @@ class RouteDispatcherTest {
     void dispatchesProjectLocalRouteJavaHandlerByConvention() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         java.nio.file.Files.createDirectories(project.routeRoot().resolve("custom.echo"));
         java.nio.file.Files.writeString(project.routeRoot().resolve("custom.echo/app.json"), "{\"id\":\"custom.echo\",\"route\":\"/echo/<name>\",\"methods\":[\"GET\"]}\n");
         java.nio.file.Files.writeString(project.routeRoot().resolve("custom.echo/route.java"), echoRouteJava());

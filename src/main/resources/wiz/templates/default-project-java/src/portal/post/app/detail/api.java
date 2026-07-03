@@ -1,7 +1,7 @@
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import com.wiz.project.main.portal.post.model.PostStruct;
+import __WIZ_PACKAGE_ROOT__.portal.post.model.PostStruct;
 import com.wiz.runtime.WizContext;
 import com.wiz.runtime.WizResult;
 

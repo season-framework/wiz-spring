@@ -50,7 +50,7 @@ public class WizHttpController {
         this.appApiDispatcher = appApiDispatcher;
         this.routeDispatcher = routeDispatcher;
         this.httpProperties = httpProperties;
-        this.apiProperties = apiProperties;
+        this.apiProperties = apiProperties == null ? new WizApiProperties() : apiProperties;
     }
 
     public WizHttpController(StaticFileService staticFiles, AppApiDispatcher appApiDispatcher, RouteDispatcher routeDispatcher, WizHttpProperties httpProperties) {
@@ -63,16 +63,6 @@ public class WizHttpController {
 
     public WizHttpController(StaticFileService staticFiles, AppApiDispatcher appApiDispatcher) {
         this(staticFiles, appApiDispatcher, null);
-    }
-
-    @RequestMapping(path = "/wiz/config.js", method = RequestMethod.GET)
-    public ResponseEntity<String> config() {
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType("text/javascript; charset=UTF-8"))
-                .header(HttpHeaders.CACHE_CONTROL, "no-store")
-                .body("window.__WIZ_CONFIG__ = Object.assign(window.__WIZ_CONFIG__ || {}, { apiPrefix: \""
-                        + escapeJavaScript(apiProperties.getPrefix())
-                        + "\" });\n");
     }
 
     @ExceptionHandler(RequestBodyTooLargeException.class)
@@ -265,13 +255,6 @@ public class WizHttpController {
             total += read;
         }
         return output.toByteArray();
-    }
-
-    private static String escapeJavaScript(String value) {
-        return value.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r");
     }
 
     private static RequestBodyTooLargeException requestBodyTooLarge() {

@@ -17,8 +17,8 @@ Angular Material UI를 사용하지 않는 방향에 맞춰 `@angular/material`�
 - `src/app/page.dashboard/view.pug`: signal 호출 문법(`stats()`, `loading()`, `computed()`)을 반영하고 Count/Step 조작 카드 추가
 
 ## 검증
-- `grep -R "@angular/material\|@angular/cdk" project/main/src` 결과 없음 확인
-- `wiz_project_build(clean=true)` 성공
-- `project/main/build/package.json`에서 `@angular/material`, `@angular/cdk` 직접 의존성 없음 확인
-- `cd project/main/build && npm list @angular/material @angular/cdk --depth=0` 결과 최상위 패키지 없음 확인
+- `grep -R "@angular/material\|@angular/cdk" src` 결과 없음 확인
+- `wiz_app_build(clean=true)` 성공
+- `build/package.json`에서 `@angular/material`, `@angular/cdk` 직접 의존성 없음 확인
+- `cd build && npm list @angular/material @angular/cdk --depth=0` 결과 최상위 패키지 없음 확인
 - `src/app/page.dashboard/view.ts`, `src/app/page.dashboard/view.pug`, `src/angular/package.json` VS Code Problems 오류 없음 확인

@@ -83,7 +83,7 @@ public class AngularBuildService {
             } else {
                 buildLogger.info("[frontend-install] skipped for normal build");
                 if (!frontendDependenciesPresent(angularRoot)) {
-                    return FrontendBuildResult.failed("Frontend dependencies are missing; run project build with --clean to install npm packages", commands);
+                    return FrontendBuildResult.failed("Frontend dependencies are missing; run build with --clean to install npm packages", commands);
                 }
             }
 

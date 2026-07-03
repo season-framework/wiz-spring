@@ -21,7 +21,7 @@ class ConfigServiceTest {
 
     @Test
     void loadsSeasonYamlWithoutCorePortalDefaults() throws Exception {
-        ProjectContext project = createProject();
+        ProjectContext project = createApp();
         Files.writeString(project.configRoot().resolve("season.yml"), "auth_baseuri: /custom-auth\nsmtp_port: 2525\n");
         new ProjectBuildService().build(project, true, "bundle");
 
@@ -33,7 +33,7 @@ class ConfigServiceTest {
 
     @Test
     void acceptsLegacyHyphenatedAuthBaseUriAlias() throws Exception {
-        ProjectContext project = createProject();
+        ProjectContext project = createApp();
         Files.writeString(project.configRoot().resolve("season.yml"), "auth-base-uri: /legacy-auth\n");
         new ProjectBuildService().build(project, true, "bundle");
 
@@ -43,23 +43,22 @@ class ConfigServiceTest {
     }
 
     @Test
-    void mergesWorkspaceProjectAndBundleConfigInOverrideOrder() throws Exception {
-        ProjectContext project = createProject();
-        Path workspaceConfig = project.root().getParent().getParent().resolve("config");
-        Files.writeString(workspaceConfig.resolve("season.yml"), "pwa_title: Workspace Title\nsmtp_port: 1025\n");
-        Files.writeString(project.configRoot().resolve("season.yml"), "auth_baseuri: /project-auth\nsmtp_port: 2525\n");
+    void mergesWorkspaceAndBundleConfigInOverrideOrder() throws Exception {
+        ProjectContext project = createApp();
+        Files.writeString(project.configRoot().resolve("season.yml"), "pwa_title: Workspace Title\nsmtp_port: 1025\n");
         new ProjectBuildService().build(project, true, "bundle");
+        Files.writeString(project.bundleRoot().resolve("config/season.yml"), "auth_baseuri: /bundle-auth\nsmtp_port: 2525\n");
 
         ConfigNamespace config = new ConfigService(project).namespace("season");
 
         assertEquals("Workspace Title", config.get("pwa_title"));
-        assertEquals("/project-auth", config.get("auth_baseuri"));
+        assertEquals("/bundle-auth", config.get("auth_baseuri"));
         assertEquals("2525", String.valueOf(config.get("smtp_port")));
     }
 
     @Test
     void validatesKeysOnlyWhenCallerProvidesDefaults() throws Exception {
-        ProjectContext project = createProject();
+        ProjectContext project = createApp();
         Files.writeString(project.configRoot().resolve("season.yml"), "unknown_key: true\n");
         new ProjectBuildService().build(project, true, "bundle");
 
@@ -69,7 +68,7 @@ class ConfigServiceTest {
 
     @Test
     void ignoresPythonConfigFiles() throws Exception {
-        ProjectContext project = createProject();
+        ProjectContext project = createApp();
         Files.deleteIfExists(project.configRoot().resolve("season.yml"));
         Files.writeString(project.configRoot().resolve("season.py"), "raise RuntimeError('must not execute')\n");
         new ProjectBuildService().build(project, true, "bundle");
@@ -81,7 +80,7 @@ class ConfigServiceTest {
 
     @Test
     void exposesConfigServiceFromWizContext() throws Exception {
-        ProjectContext project = createProject();
+        ProjectContext project = createApp();
         new ProjectBuildService().build(project, true, "bundle");
 
         try (WizContext context = new WizContext(WizRequest.builder().build(), new WizResponse(), project)) {
@@ -89,9 +88,9 @@ class ConfigServiceTest {
         }
     }
 
-    private ProjectContext createProject() throws Exception {
+    private ProjectContext createApp() throws Exception {
         Path workspace = tempDir.resolve("workspace-" + java.util.UUID.randomUUID());
         new WorkspaceService().createWorkspace(workspace);
-        return new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        return new ProjectService(new PathService(workspace)).createApp(null, null);
     }
 }

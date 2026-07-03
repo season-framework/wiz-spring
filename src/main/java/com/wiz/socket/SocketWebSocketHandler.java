@@ -8,6 +8,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.wiz.config.WizSocketProperties;
+
 import jakarta.servlet.http.HttpSession;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,17 +30,23 @@ public class SocketWebSocketHandler extends TextWebSocketHandler {
 
     private final ProjectSocketDispatcher dispatcher;
     private final ObjectMapper objectMapper;
+    private final WizSocketProperties socketProperties;
     private final Map<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
     private final Map<String, SocketSession> socketSessions = new ConcurrentHashMap<>();
 
     @Autowired
-    public SocketWebSocketHandler(ProjectSocketDispatcher dispatcher) {
-        this(dispatcher, new ObjectMapper());
+    public SocketWebSocketHandler(ProjectSocketDispatcher dispatcher, WizSocketProperties socketProperties) {
+        this(dispatcher, new ObjectMapper(), socketProperties);
     }
 
     SocketWebSocketHandler(ProjectSocketDispatcher dispatcher, ObjectMapper objectMapper) {
+        this(dispatcher, objectMapper, new WizSocketProperties());
+    }
+
+    SocketWebSocketHandler(ProjectSocketDispatcher dispatcher, ObjectMapper objectMapper, WizSocketProperties socketProperties) {
         this.dispatcher = dispatcher;
         this.objectMapper = objectMapper;
+        this.socketProperties = socketProperties == null ? new WizSocketProperties() : socketProperties;
     }
 
     @Override
@@ -98,7 +106,7 @@ public class SocketWebSocketHandler extends TextWebSocketHandler {
         if (uri == null) {
             return Optional.empty();
         }
-        return SocketNamespace.parse(uri.getPath())
+        return SocketNamespace.parse(uri.getPath(), socketProperties)
                 .map(namespace -> new SocketSession(session.getId(), namespace, Map.of(), httpSession(session), remoteAddress(session)));
     }
 

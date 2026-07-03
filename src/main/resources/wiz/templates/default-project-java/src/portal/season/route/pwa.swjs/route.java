@@ -15,7 +15,7 @@ public final class PortalSeasonPwaSwjsRouteHandler implements RouteHandler {
 
     @Override
     public WizResult handle(WizContext wiz, WizSegment segment) {
-        Path script = wiz.project().configRoot().resolve("pwa/sw.js");
+        Path script = wiz.workspace().configRoot().resolve("pwa/sw.js");
         try {
             String body = Files.isRegularFile(script) ? Files.readString(script) : "";
             return WizResult.entity(200, body)

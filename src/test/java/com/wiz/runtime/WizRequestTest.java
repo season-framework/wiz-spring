@@ -44,11 +44,11 @@ class WizRequestTest {
     void readsHeadersAndCookies() {
         WizRequest request = WizRequest.builder()
                 .header("X-WIZ", "yes")
-                .cookie("season-wiz-project", "main")
+                .cookie("sample-cookie", "main")
                 .build();
 
         assertEquals("yes", request.header("x-wiz").orElseThrow());
-        assertEquals("main", request.cookie("season-wiz-project").orElseThrow());
+        assertEquals("main", request.cookie("sample-cookie").orElseThrow());
     }
 
     @Test

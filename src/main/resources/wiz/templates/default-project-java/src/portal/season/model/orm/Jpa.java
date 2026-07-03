@@ -54,7 +54,7 @@ public final class Jpa {
                 context,
                 context.getBean(EntityManagerFactory.class),
                 context.getBean(TransactionTemplate.class));
-        wiz.runtimeCache().get(wiz.project()).onClose(() -> {
+        wiz.runtimeCache().get(wiz.workspace()).onClose(() -> {
             RUNTIMES.remove(key, runtime);
             runtime.close();
         });
@@ -76,7 +76,7 @@ public final class Jpa {
         String location = url.substring("jdbc:sqlite:".length());
         Path path = Path.of(location);
         if (!path.isAbsolute()) {
-            path = wiz.project().root().resolve(location).normalize();
+            path = wiz.workspace().root().resolve(location).normalize();
         }
         return "jdbc:sqlite:" + path;
     }
@@ -140,7 +140,7 @@ public final class Jpa {
             Map<String, Object> values = wiz.config().namespace("application").values();
             String url = Jpa.datasourceUrl(wiz, values);
             return new RuntimeKey(
-                    wiz.project().root().toAbsolutePath().normalize().toString(),
+                    wiz.workspace().root().toAbsolutePath().normalize().toString(),
                     url,
                     value(values.get("sample.datasource.driver-class-name"), driverFor(url)),
                     value(values.get("sample.datasource.username"), ""),

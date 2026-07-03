@@ -24,7 +24,7 @@ class RouteRegistryTest {
     void scansBundleRouteMetadataAndCanonicalizesPortalRouteIds() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         Files.createDirectories(project.sourceRoot().resolve("portal/season"));
         Files.writeString(project.sourceRoot().resolve("portal/season/portal.json"), "{\"use_route\":true,\"use_model\":true}\n");
         Path routeRoot = project.sourceRoot().resolve("portal/season/route/auth");
@@ -51,7 +51,7 @@ class RouteRegistryTest {
     void defaultsBlankRouteControllerToBase() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
-        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         Path routeRoot = project.sourceRoot().resolve("route/ping");
         Files.createDirectories(routeRoot);
         Files.writeString(routeRoot.resolve("app.json"), "{\n"
