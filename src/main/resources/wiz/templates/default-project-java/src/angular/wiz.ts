@@ -1,10 +1,118 @@
-import { io } from "socket.io-client";
-
 type WizOptions = string | {
     baseuri?: string;
     baseUri?: string;
     apiPrefix?: string;
 };
+
+type SocketListener = (...args: any[]) => void;
+
+class WizWebSocketClient {
+    public connected = false;
+    private socket?: WebSocket;
+    private readonly listeners = new Map<string, SocketListener[]>();
+    private readonly pending: Array<{ event: string; data: any }> = [];
+    private closedByClient = false;
+
+    constructor(private readonly uri: string) {
+        this.connect();
+    }
+
+    public on(event: string, listener: SocketListener) {
+        const listeners = this.listeners.get(event) || [];
+        listeners.push(listener);
+        this.listeners.set(event, listeners);
+        return this;
+    }
+
+    public emit(event: string, data: any = {}) {
+        if (!this.socket || this.socket.readyState !== WebSocket.OPEN || !this.connected) {
+            if (!this.closedByClient) {
+                this.pending.push({ event, data });
+            }
+            return;
+        }
+        this.send({ event, data });
+    }
+
+    public disconnect() {
+        this.closedByClient = true;
+        this.connected = false;
+        this.pending.length = 0;
+        if (this.socket && this.socket.readyState <= WebSocket.OPEN) {
+            this.socket.close();
+        }
+    }
+
+    private connect() {
+        this.socket = new WebSocket(this.uri);
+        this.socket.onmessage = (event) => this.handleMessage(event.data);
+        this.socket.onerror = () => this.emitLocal("error");
+        this.socket.onclose = () => {
+            const notify = this.connected && !this.closedByClient;
+            this.connected = false;
+            if (notify) {
+                this.emitLocal("disconnect");
+            }
+        };
+    }
+
+    private handleMessage(raw: any) {
+        let envelope: any;
+        try {
+            envelope = JSON.parse(String(raw));
+        } catch (error) {
+            this.emitLocal("error");
+            return;
+        }
+        if (envelope.event === "connect") {
+            if (envelope.accepted === false) {
+                this.emitLocal("error", envelope.message);
+                this.disconnect();
+                return;
+            }
+            this.connected = true;
+            this.emitLocal("connect");
+            this.flushPending();
+            return;
+        }
+        if (envelope.accepted === false) {
+            this.emitLocal("error", envelope.message);
+            return;
+        }
+        this.emitLocal(envelope.event, this.payload(envelope.message));
+    }
+
+    private payload(message: any) {
+        if (typeof message !== "string") {
+            return message;
+        }
+        const trimmed = message.trim();
+        if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+            return message;
+        }
+        try {
+            return JSON.parse(trimmed);
+        } catch (error) {
+            return message;
+        }
+    }
+
+    private emitLocal(event: string, ...args: any[]) {
+        for (const listener of this.listeners.get(event) || []) {
+            listener(...args);
+        }
+    }
+
+    private flushPending() {
+        while (this.connected && this.socket && this.socket.readyState === WebSocket.OPEN && this.pending.length > 0) {
+            this.send(this.pending.shift()!);
+        }
+    }
+
+    private send(message: { event: string; data: any }) {
+        this.socket?.send(JSON.stringify(message));
+    }
+}
 
 export default class Wiz {
     public namespace: any;
@@ -76,11 +184,29 @@ export default class Wiz {
     }
 
     public socket() {
-        let socketns = this.baseuri + "/app/" + this.project();
+        let socketns = this.baseuri + "/ws/app/" + this.project();
         if (this.namespace)
             socketns = socketns + "/" + this.namespace;
-        return io(socketns);
+        return new WizWebSocketClient(this.websocketUri(socketns));
     };
+
+    private websocketUri(uri: string) {
+        if (uri.startsWith("ws://") || uri.startsWith("wss://")) {
+            return uri;
+        }
+        if (uri.startsWith("https://")) {
+            return "wss://" + uri.substring("https://".length);
+        }
+        if (uri.startsWith("http://")) {
+            return "ws://" + uri.substring("http://".length);
+        }
+        if (typeof window === "undefined") {
+            return uri;
+        }
+        const protocol = window.location.protocol === "https:" ? "wss://" : "ws://";
+        const path = uri.startsWith("/") ? uri : "/" + uri;
+        return protocol + window.location.host + path;
+    }
 
     public url(function_name: string) {
         if (function_name[0] == "/") function_name = function_name.substring(1);

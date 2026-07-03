@@ -60,7 +60,10 @@ class JavaSampleProjectTest {
         SocketRoomRegistry rooms = new SocketRoomRegistry();
         ProjectSocketDispatcher socketDispatcher = new ProjectSocketDispatcher(new PathService(workspace), rooms);
         SocketNamespace chatNamespace = new SocketNamespace("main", "page.chat");
-        SocketSession chatSession = new SocketSession("chat-1", chatNamespace);
+        MockHttpSession chatHttpSession = new MockHttpSession();
+        chatHttpSession.setAttribute("id", "admin");
+        chatHttpSession.setAttribute("role", "admin");
+        SocketSession chatSession = new SocketSession("chat-1", chatNamespace, Map.of(), chatHttpSession, "127.0.0.1");
         assertTrue(socketDispatcher.dispatch(chatSession, "join", Map.of("room", "lobby")).accepted());
         SocketEventResult chat = socketDispatcher.dispatch(chatSession, "send", Map.of("room", "lobby", "name", "Admin", "text", "hello"));
         assertEquals("chat.message", chat.event());

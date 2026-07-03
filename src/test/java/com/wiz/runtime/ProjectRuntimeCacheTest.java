@@ -91,6 +91,29 @@ class ProjectRuntimeCacheTest {
         assertEquals(1, closeCount.get());
     }
 
+    @Test
+    void productionProfileUsesBuildMarkerWithoutWalkingCompiledArtifacts() throws Exception {
+        ProjectContext project = projectWithApi("one");
+        ProjectRuntimeCache cache = new ProjectRuntimeCache(new ObjectMapper(), "prod", URLClassLoader::new);
+        Path marker = project.bundleRoot().resolve(BuildMarkerService.MARKER_FILE);
+        String markerContents = Files.readString(marker);
+        FileTime markerTime = Files.getLastModifiedTime(marker);
+
+        ProjectRuntimeCache.CachedProjectRuntime firstRuntime = cache.get(project);
+        assertEquals("one", invokeVersion(project, firstRuntime));
+
+        Files.writeString(project.appRoot().resolve("page.dashboard/api.java"), versionApi("two"));
+        BuildResult rebuild = new ProjectBuildService().build(project, true, "bundle");
+        assertTrue(rebuild.success(), rebuild.message());
+        Files.writeString(marker, markerContents);
+        Files.setLastModifiedTime(marker, markerTime);
+
+        ProjectRuntimeCache.CachedProjectRuntime secondRuntime = cache.get(project);
+
+        assertSame(firstRuntime, secondRuntime);
+        assertEquals("one", invokeVersion(project, secondRuntime));
+    }
+
     private ProjectContext projectWithApi(String version) throws Exception {
         Path workspace = tempDir.resolve("workspace-" + version + "-" + java.util.UUID.randomUUID());
         new WorkspaceService().createWorkspace(workspace);

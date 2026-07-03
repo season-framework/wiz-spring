@@ -16,6 +16,10 @@ import java.util.function.LongSupplier;
 
 import com.wiz.config.WizSocketProperties;
 
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpSession;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -64,9 +68,14 @@ public class SocketIoHttpController {
         this.clock = clock == null ? System::currentTimeMillis : clock;
     }
 
+    public ResponseEntity<String> poll(String sid, String origin) {
+        return poll(sid, origin, null);
+    }
+
     @GetMapping(path = {"/socket.io/", "/socket.io"}, produces = MediaType.TEXT_PLAIN_VALUE)
     public ResponseEntity<String> poll(@RequestParam(name = "sid", required = false) String sid,
-            @RequestHeader(name = HttpHeaders.ORIGIN, required = false) String origin) {
+            @RequestHeader(name = HttpHeaders.ORIGIN, required = false) String origin,
+            HttpServletRequest request) {
         if (!socketProperties.isOriginAllowed(origin)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("origin not allowed");
         }
@@ -77,7 +86,7 @@ public class SocketIoHttpController {
                 if (maxSessionsReached()) {
                     return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body("too many polling sessions");
                 }
-                session = new PollingSession(UUID.randomUUID().toString(), now(), socketProperties.getPollingQueueCapacity());
+                session = new PollingSession(UUID.randomUUID().toString(), now(), socketProperties.getPollingQueueCapacity(), cookies(request), httpSession(request), remoteAddress(request));
                 sessions.put(session.id(), session);
             }
             return ResponseEntity.ok("0" + engineOpen(session.id()));
@@ -90,10 +99,15 @@ public class SocketIoHttpController {
         return ResponseEntity.ok(nextPayload(session));
     }
 
+    public ResponseEntity<String> receive(String sid, String body, String origin) {
+        return receive(sid, body, origin, null);
+    }
+
     @PostMapping(path = {"/socket.io/", "/socket.io"}, consumes = MediaType.ALL_VALUE, produces = MediaType.TEXT_PLAIN_VALUE)
     public ResponseEntity<String> receive(@RequestParam(name = "sid", required = false) String sid,
             @RequestBody(required = false) String body,
-            @RequestHeader(name = HttpHeaders.ORIGIN, required = false) String origin) {
+            @RequestHeader(name = HttpHeaders.ORIGIN, required = false) String origin,
+            HttpServletRequest request) {
         if (!socketProperties.isOriginAllowed(origin)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("origin not allowed");
         }
@@ -144,7 +158,7 @@ public class SocketIoHttpController {
         if (namespace.isEmpty()) {
             return;
         }
-        SocketSession socket = new SocketSession(session.id(), namespace.get());
+        SocketSession socket = new SocketSession(session.id(), namespace.get(), session.cookies(), session.httpSession(), session.remoteAddress());
         SocketEventResult connect = dispatcher.dispatch(socket, "connect", Map.of());
         if (!connect.accepted() && !"socket event handler not found".equals(connect.message())) {
             offer(session, "44" + namespacePath(namespace.get()) + "," + errorPayload(connect.message()));
@@ -328,14 +342,33 @@ public class SocketIoHttpController {
         return objectMapper.writeValueAsString(Map.of("message", message));
     }
 
+    private Map<String, String> cookies(HttpServletRequest request) {
+        if (request == null || request.getCookies() == null) {
+            return Map.of();
+        }
+        LinkedHashMap<String, String> values = new LinkedHashMap<>();
+        for (Cookie cookie : request.getCookies()) {
+            values.put(cookie.getName(), cookie.getValue());
+        }
+        return Map.copyOf(values);
+    }
+
+    private HttpSession httpSession(HttpServletRequest request) {
+        return request == null ? null : request.getSession(false);
+    }
+
+    private String remoteAddress(HttpServletRequest request) {
+        return request == null ? "" : request.getRemoteAddr();
+    }
+
     private String namespacePath(SocketNamespace namespace) {
         return namespace.socketIoPath();
     }
 
-    private record PollingSession(String id, AtomicLong lastAccessedAtMillis, BlockingQueue<String> queue, Map<String, SocketSession> namespaces) {
+    private record PollingSession(String id, AtomicLong lastAccessedAtMillis, BlockingQueue<String> queue, Map<String, SocketSession> namespaces, Map<String, String> cookies, HttpSession httpSession, String remoteAddress) {
 
-        PollingSession(String id, long createdAtMillis, int queueCapacity) {
-            this(id, new AtomicLong(createdAtMillis), new LinkedBlockingQueue<>(Math.max(1, queueCapacity)), new ConcurrentHashMap<>());
+        PollingSession(String id, long createdAtMillis, int queueCapacity, Map<String, String> cookies, HttpSession httpSession, String remoteAddress) {
+            this(id, new AtomicLong(createdAtMillis), new LinkedBlockingQueue<>(Math.max(1, queueCapacity)), new ConcurrentHashMap<>(), cookies == null ? Map.of() : Map.copyOf(cookies), httpSession, remoteAddress == null ? "" : remoteAddress);
         }
 
         void touch(long timeMillis) {

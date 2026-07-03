@@ -157,11 +157,21 @@ public class ProjectRuntimeCache implements AutoCloseable {
 
     private String runtimeVersion(ProjectContext project) {
         Path marker = project.bundleRoot().resolve(BuildMarkerService.MARKER_FILE);
-        String runtimeArtifactFingerprint = runtimeArtifactFingerprint(project);
         if (Files.isRegularFile(marker)) {
-            return "marker:" + modifiedTime(marker) + ":" + digest(marker) + ":artifact:" + runtimeArtifactFingerprint;
+            String markerVersion = "marker:" + modifiedTime(marker) + ":" + digest(marker);
+            if (isProductionProfile()) {
+                return markerVersion;
+            }
+            return markerVersion + ":artifact:" + runtimeArtifactFingerprint(project);
         }
+        String runtimeArtifactFingerprint = runtimeArtifactFingerprint(project);
         return "mtime:" + runtimeArtifactFingerprint + ":source:" + fingerprint(project.sourceRoot());
+    }
+
+    private boolean isProductionProfile() {
+        return Arrays.stream(profile.split(","))
+                .map(String::trim)
+                .anyMatch(value -> value.equalsIgnoreCase("prod") || value.equalsIgnoreCase("production"));
     }
 
     private String runtimeArtifactFingerprint(ProjectContext project) {

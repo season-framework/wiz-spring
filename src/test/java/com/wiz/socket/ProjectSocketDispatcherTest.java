@@ -15,6 +15,7 @@ import com.wiz.runtime.ProjectContext;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.mock.web.MockHttpSession;
 
 class ProjectSocketDispatcherTest {
 
@@ -33,12 +34,28 @@ class ProjectSocketDispatcherTest {
         SocketRoomRegistry rooms = new SocketRoomRegistry();
         ProjectSocketDispatcher dispatcher = new ProjectSocketDispatcher(new PathService(workspace), rooms);
         SocketNamespace namespace = new SocketNamespace("main", "page.dashboard");
-        SocketSession session = new SocketSession("sid-1", namespace);
+        SocketSession session = authenticatedSocket("sid-1", namespace);
 
         assertTrue(dispatcher.dispatch(session, "connect", Map.of()).accepted());
         assertTrue(dispatcher.dispatch(session, "join", Map.of("id", "room-1")).accepted());
         assertTrue(rooms.contains(namespace, "room-1", "sid-1"));
         assertFalse(dispatcher.dispatch(session, "missing", Map.of()).accepted());
+    }
+
+    @Test
+    void appliesAppControllerPolicyBeforeSocketDispatch() throws Exception {
+        Path workspace = tempDir.resolve("auth-workspace");
+        new WorkspaceService().createWorkspace(workspace);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createProject("main", null, null);
+        java.nio.file.Files.writeString(project.appRoot().resolve("page.dashboard/socket.java"), dashboardSocketJava());
+        BuildResult build = new ProjectBuildService().build(project, true, "bundle");
+        assertTrue(build.success(), build.message());
+
+        ProjectSocketDispatcher dispatcher = new ProjectSocketDispatcher(new PathService(workspace), new SocketRoomRegistry());
+        SocketNamespace namespace = new SocketNamespace("main", "page.dashboard");
+
+        assertFalse(dispatcher.dispatch(new SocketSession("sid-1", namespace), "connect", Map.of()).accepted());
+        assertTrue(dispatcher.dispatch(authenticatedSocket("sid-2", namespace), "connect", Map.of()).accepted());
     }
 
     @Test
@@ -52,7 +69,7 @@ class ProjectSocketDispatcherTest {
         assertTrue(firstBuild.success(), firstBuild.message());
 
         ProjectSocketDispatcher dispatcher = new ProjectSocketDispatcher(new PathService(workspace), new SocketRoomRegistry());
-        SocketSession session = new SocketSession("sid-1", new SocketNamespace("main", "page.dashboard"));
+        SocketSession session = authenticatedSocket("sid-1", new SocketNamespace("main", "page.dashboard"));
         assertTrue(dispatcher.dispatch(session, "version", Map.of()).message().contains("one"));
 
         java.nio.file.Files.writeString(socketSource, versionSocketJava("two"));
@@ -60,6 +77,13 @@ class ProjectSocketDispatcherTest {
         assertTrue(secondBuild.success(), secondBuild.message());
 
         assertTrue(dispatcher.dispatch(session, "version", Map.of()).message().contains("two"));
+    }
+
+    private SocketSession authenticatedSocket(String id, SocketNamespace namespace) {
+        MockHttpSession httpSession = new MockHttpSession();
+        httpSession.setAttribute("id", "user-1");
+        httpSession.setAttribute("role", "user");
+        return new SocketSession(id, namespace, Map.of(), httpSession, "127.0.0.1");
     }
 
     private String dashboardSocketJava() {

@@ -54,6 +54,7 @@ class SocketWebSocketIntegrationTest {
     void dispatchesCompiledProjectSocketThroughDirectWebSocketBridgePath() throws Exception {
         ProjectContext project = new ProjectService(new PathService(WORKSPACE)).createProject("main", null, null);
         Files.writeString(project.appRoot().resolve("page.dashboard/socket.java"), dashboardSocketJava());
+        allowSocketWithoutLogin(project, "page.dashboard");
         BuildResult build = new ProjectBuildService().build(project, true, "bundle");
         assertTrue(build.success(), build.message());
 
@@ -86,6 +87,7 @@ class SocketWebSocketIntegrationTest {
     void acceptsSocketIoClientStyleNamespaceOverHttpPollingPath() throws Exception {
         ProjectContext project = new ProjectService(new PathService(WORKSPACE)).createProject("socketio", null, null);
         Files.writeString(project.appRoot().resolve("page.dashboard/socket.java"), dashboardSocketJava());
+        allowSocketWithoutLogin(project, "page.dashboard");
         BuildResult build = new ProjectBuildService().build(project, true, "bundle");
         assertTrue(build.success(), build.message());
 
@@ -112,6 +114,7 @@ class SocketWebSocketIntegrationTest {
     void broadcastsRoomResultToJoinedWebSocketSessions() throws Exception {
         ProjectContext project = new ProjectService(new PathService(WORKSPACE)).createProject("broadcast", null, null);
         Files.writeString(project.appRoot().resolve("page.dashboard/socket.java"), broadcastSocketJava());
+        allowSocketWithoutLogin(project, "page.dashboard");
         BuildResult build = new ProjectBuildService().build(project, true, "bundle");
         assertTrue(build.success(), build.message());
 
@@ -158,6 +161,11 @@ class SocketWebSocketIntegrationTest {
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build(), HttpResponse.BodyHandlers.ofString());
         assertEquals(200, response.statusCode(), response.body());
+    }
+
+    private static void allowSocketWithoutLogin(ProjectContext project, String appId) throws IOException {
+        Path appJson = project.appRoot().resolve(appId).resolve("app.json");
+        Files.writeString(appJson, Files.readString(appJson).replace("\"controller\": \"user\"", "\"controller\": \"base\""));
     }
 
     private static Path workspace() {

@@ -98,6 +98,7 @@ The `page.dashboard`, `page.members`, and `page.mypage` apps use the built-in `u
 ## Implemented Socket
 
 - frontend usage: `wiz.socket()`
-- HTTP(S) namespace: `/wiz/app/main/page.chat`
+- native WebSocket endpoint: `/wiz/ws/app/main/page.chat`
+- Socket.IO polling compatibility namespace: `/wiz/app/main/page.chat`
 - events: `connect`, `join`, `send`, `disconnect`
 - unauthenticated guests are labeled by socket session id, for example `Guest-1a2b3c`, so different browsers are distinguishable before login.

@@ -8,6 +8,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import jakarta.servlet.http.HttpSession;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
@@ -20,6 +22,9 @@ import tools.jackson.databind.ObjectMapper;
 
 @Component
 public class SocketWebSocketHandler extends TextWebSocketHandler {
+
+    static final String HTTP_SESSION_ATTRIBUTE = SocketWebSocketHandler.class.getName() + ".HTTP_SESSION";
+    static final String REMOTE_ADDRESS_ATTRIBUTE = SocketWebSocketHandler.class.getName() + ".REMOTE_ADDRESS";
 
     private final ProjectSocketDispatcher dispatcher;
     private final ObjectMapper objectMapper;
@@ -38,17 +43,26 @@ public class SocketWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
-        socketSession(session).ifPresent(socket -> {
-            sessions.put(session.getId(), session);
-            socketSessions.put(session.getId(), socket);
-            sendResult(session, socket, dispatcher.dispatch(socket, "connect", Map.of()));
-        });
+        Optional<SocketSession> socket = socketSession(session);
+        if (socket.isEmpty()) {
+            session.close(CloseStatus.BAD_DATA.withReason("invalid socket namespace"));
+            return;
+        }
+        SocketEventResult connect = dispatcher.dispatch(socket.get(), "connect", Map.of());
+        if (!connect.accepted()) {
+            send(session, connect);
+            session.close(CloseStatus.POLICY_VIOLATION.withReason(connect.message()));
+            return;
+        }
+        sessions.put(session.getId(), session);
+        socketSessions.put(session.getId(), socket.get());
+        sendResult(session, socket.get(), connect);
     }
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
-        Optional<SocketSession> socket = socketSession(session);
-        if (socket.isEmpty()) {
+        SocketSession socket = socketSessions.get(session.getId());
+        if (socket == null) {
             send(session, new SocketEventResult(false, "message", "invalid socket namespace"));
             return;
         }
@@ -60,7 +74,7 @@ public class SocketWebSocketHandler extends TextWebSocketHandler {
                 send(session, new SocketEventResult(false, "message", "missing event"));
                 return;
             }
-            sendResult(session, socket.get(), dispatcher.dispatch(socket.get(), event, ProjectSocketDispatcher.payload(envelope.get("data"))));
+            sendResult(session, socket, dispatcher.dispatch(socket, event, ProjectSocketDispatcher.payload(envelope.get("data"))));
         } catch (RuntimeException exception) {
             send(session, new SocketEventResult(false, "message", "invalid json message"));
         }
@@ -85,7 +99,25 @@ public class SocketWebSocketHandler extends TextWebSocketHandler {
             return Optional.empty();
         }
         return SocketNamespace.parse(uri.getPath())
-                .map(namespace -> new SocketSession(session.getId(), namespace));
+                .map(namespace -> new SocketSession(session.getId(), namespace, Map.of(), httpSession(session), remoteAddress(session)));
+    }
+
+    private HttpSession httpSession(WebSocketSession session) {
+        Object value = session.getAttributes().get(HTTP_SESSION_ATTRIBUTE);
+        return value instanceof HttpSession httpSession ? httpSession : null;
+    }
+
+    private String remoteAddress(WebSocketSession session) {
+        Object value = session.getAttributes().get(REMOTE_ADDRESS_ATTRIBUTE);
+        if (value != null && !value.toString().isBlank()) {
+            return value.toString();
+        }
+        if (session.getRemoteAddress() == null) {
+            return "";
+        }
+        return session.getRemoteAddress().getAddress() == null
+                ? session.getRemoteAddress().toString()
+                : session.getRemoteAddress().getAddress().getHostAddress();
     }
 
     private void send(WebSocketSession session, SocketEventResult result) {

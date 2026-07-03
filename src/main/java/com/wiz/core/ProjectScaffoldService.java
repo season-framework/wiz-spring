@@ -340,12 +340,12 @@ public class ProjectScaffoldService {
 
     private String appApiJava(String appId) {
         String className = ProjectJavaNaming.className(appId) + "Api";
-        return "import java.util.Map;\n"
-                + "import com.wiz.runtime.WizContext;\n"
+        return "import com.wiz.runtime.WizContext;\n"
                 + "import com.wiz.runtime.WizResult;\n\n"
                 + "public final class " + className + " {\n"
+                + "    public record StatusResponse(String app, String status) {}\n\n"
                 + "    public WizResult status(WizContext wiz) {\n"
-                + "        return wiz.response().status(200, Map.of(\"app\", \"" + appId + "\", \"status\", \"ok\"));\n"
+                + "        return wiz.response().ok(new StatusResponse(\"" + appId + "\", \"ok\"));\n"
                 + "    }\n"
                 + "}\n";
     }
