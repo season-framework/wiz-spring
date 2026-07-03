@@ -26,6 +26,8 @@ public class WizProjectProperties {
 
     private boolean cookieSelectionEnabled = true;
 
+    private boolean warmupEnabled = true;
+
     public String getDefaultName() {
         return defaultName;
     }
@@ -56,6 +58,14 @@ public class WizProjectProperties {
 
     public void setCookieSelectionEnabled(boolean cookieSelectionEnabled) {
         this.cookieSelectionEnabled = cookieSelectionEnabled;
+    }
+
+    public boolean isWarmupEnabled() {
+        return warmupEnabled;
+    }
+
+    public void setWarmupEnabled(boolean warmupEnabled) {
+        this.warmupEnabled = warmupEnabled;
     }
 
     private String trim(String value) {

@@ -16,7 +16,7 @@ cd /root/workspace/wiz-java/wiz-spring
 실행 파일은 `target/wiz-spring-*.jar`에 생성됩니다.
 
 ```bash
-jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.0.6.jar
+jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.0.7.jar
 workspace=/tmp/wiz-spring-demo
 
 rm -rf "$workspace"
@@ -43,7 +43,7 @@ java -jar "$jar" project create --root "$workspace" --project main --skip-build
 자주 쓸 때는 shell alias를 두면 편합니다.
 
 ```bash
-alias wiz-spring='java -jar /root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.0.6.jar'
+alias wiz-spring='java -jar /root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.0.7.jar'
 
 wiz-spring create ./demo
 wiz-spring project create --root ./demo --project main
@@ -114,17 +114,17 @@ runtime의 핵심 정의 파일은 [`pom.xml`](pom.xml)입니다. 여기에는 S
 WIZ Spring MCP 서버는 `wiz-vscode` 확장 코드와 분리된 Spring runtime jar 내부 기능입니다. backend source는 `api.java`, `route.java`, `socket.java`, `src/controller`, `src/portal` 규칙으로 처리합니다. Python virtualenv/pip 관리 도구는 Spring 프로젝트에서 사용하지 않으므로 도구 목록에 노출하지 않고, 대신 standalone `project jar`, Java controller 생성/삭제, portal package 삭제, project dependency 위치 확인 도구를 제공합니다. 상태 파일은 기본적으로 workspace의 `.wiz/mcp-state.json`에 저장하며, `--state`로 명시 위치를 지정할 수 있습니다.
 
 ```bash
-java -jar target/wiz-spring-0.0.6.jar mcp --root /path/to/workspace --project main
+java -jar target/wiz-spring-0.0.7.jar mcp --root /path/to/workspace --project main
 ```
 
-MCP client 설정에서는 서버 이름을 `wiz-spring`으로 두고, `command`를 `java`, `args`를 `["-jar", "/path/to/wiz-spring-0.0.6.jar", "mcp", "--root", "/path/to/workspace"]`처럼 지정합니다. VS Code에서 사용할 경우에도 별도 extension code가 아니라 이 jar 명령을 직접 가리키면 됩니다.
+MCP client 설정에서는 서버 이름을 `wiz-spring`으로 두고, `command`를 `java`, `args`를 `["-jar", "/path/to/wiz-spring-0.0.7.jar", "mcp", "--root", "/path/to/workspace"]`처럼 지정합니다. VS Code에서 사용할 경우에도 별도 extension code가 아니라 이 jar 명령을 직접 가리키면 됩니다.
 
 Codex 설정은 `wiz-spring codex`로 생성할 수 있습니다. 기존 `.codex/config.toml` 또는 `.codex/AGENTS.md`가 생성 기준과 다르면 기본적으로 경고와 종료 코드 `2`를 반환하고, `--force`를 주면 덮어씁니다.
 
 ```bash
-java -jar target/wiz-spring-0.0.6.jar codex --root /path/to/workspace --project main
-java -jar target/wiz-spring-0.0.6.jar codex --root /path/to/workspace --project main --force
-java -jar target/wiz-spring-0.0.6.jar codex --root /path/to/workspace --project main --check
+java -jar target/wiz-spring-0.0.7.jar codex --root /path/to/workspace --project main
+java -jar target/wiz-spring-0.0.7.jar codex --root /path/to/workspace --project main --force
+java -jar target/wiz-spring-0.0.7.jar codex --root /path/to/workspace --project main --check
 ```
 
 ## Runtime 지원 범위
@@ -250,6 +250,8 @@ package declaration이 없으면 build 중 `com.wiz.project.{project}.api.PageXy
 
 `wiz.project.cookie-selection-enabled`는 dev profile에서 기본 `true`, prod/standalone jar profile에서 기본 `false`입니다. 운영에서 여러 project를 한 runtime에 노출해야 할 때는 cookie 전환을 켜는 대신 host/path 기반 routing과 project별 auth/tenant ACL을 별도 경계로 설계하세요.
 
+`wiz.project.warmup-enabled`는 기본 `true`입니다. 서버 시작 시 선택된 기본 project의 선택적 `Struct.warmup(WizContext)` hook을 호출해, 기본 sample처럼 JPA/Hikari pool과 seed data를 첫 로그인 전에 초기화할 수 있습니다. 외부 DB를 서버 기동과 분리해야 하는 환경에서는 `false`로 끌 수 있습니다.
+
 ```yaml
 server:
   port: 3001
@@ -271,6 +273,8 @@ sample:
     connection-timeout-millis: 30000
 
 wiz:
+  project:
+    warmup-enabled: true
   auth:
     service-class: com.example.project.auth.CustomAuthService
   session:
@@ -349,7 +353,7 @@ WIZ Spring Runtime is a Java Spring port based on the Python WIZ `2.5.2` runtime
 cd /root/workspace/wiz-java/wiz-spring
 ./mvnw clean package
 
-jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.0.6.jar
+jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.0.7.jar
 workspace=/tmp/wiz-spring-demo
 
 rm -rf "$workspace"
@@ -382,7 +386,7 @@ java -jar /tmp/wiz-main.jar
 
 ### Dependencies
 
-WIZ Spring is distributed as a Spring Boot jar, not as a Python package. Core runtime dependencies live in `wiz-spring/pom.xml`; add Java/Spring libraries there only when the runtime itself needs them. Project Java dependencies live in `project/<name>/pom.xml` and are resolved into `target/dependency` during `wiz-spring project build`. Frontend dependencies live in each project at `project/<name>/src/angular/package.json`; use `wiz-spring project npm install` or edit the file and run `wiz-spring project build --clean` when dependencies need to be installed again. Normal project builds preserve `build/src/angular/node_modules` and skip npm install. Project Spring/runtime settings live in `project/<name>/config/application.yml`, `application-dev.yml`, and `application-prod.yml`; `wiz-spring run` defaults to the `dev` profile, while standalone project jars default to `prod`.
+WIZ Spring is distributed as a Spring Boot jar, not as a Python package. Core runtime dependencies live in `wiz-spring/pom.xml`; add Java/Spring libraries there only when the runtime itself needs them. Project Java dependencies live in `project/<name>/pom.xml` and are resolved into `target/dependency` during `wiz-spring project build`. Frontend dependencies live in each project at `project/<name>/src/angular/package.json`; use `wiz-spring project npm install` or edit the file and run `wiz-spring project build --clean` when dependencies need to be installed again. Normal project builds preserve `build/src/angular/node_modules` and skip npm install. Project Spring/runtime settings live in `project/<name>/config/application.yml`, `application-dev.yml`, and `application-prod.yml`; `wiz-spring run` defaults to the `dev` profile, while standalone project jars default to `prod`. `wiz.project.warmup-enabled` defaults to `true` and calls an optional `Struct.warmup(WizContext)` hook for the default project during startup.
 
 Successful project bundle builds also write `bundle/.wiz-dependencies.json`, `bundle/.wiz-build.json` dependency digest fields, and `target/bom.json` CycloneDX metadata. `project jar` writes `<name>.jar.sha256` next to the standalone jar. Runtime Maven package builds write `target/bom.json` through the CycloneDX Maven plugin. Archive-handling dependencies such as `commons-compress` should be treated as security-priority updates.
 
@@ -390,7 +394,7 @@ Successful project bundle builds also write `bundle/.wiz-dependencies.json`, `bu
 
 With the `wiz-spring` alias, supported commands are `create`, `run`, `bundle`, `kill`, `service`, `mcp`, `codex`, `project create`, `project build`, `project list`, `project delete`, `project export`, `project app`, `project controller`, `project route`, `project package`, and `project npm`. Separate `wiz-spring server`, web IDE, plugin management, and Python backend auto-conversion/execution are outside the Spring port scope.
 
-`wiz-spring mcp` runs the standalone Spring MCP server. MCP client settings should use the server name `wiz-spring` and run `java -jar /path/to/wiz-spring-0.0.6.jar mcp --root /path/to/workspace --project main`. `wiz-spring codex --root /path/to/workspace --project main` generates `.codex/config.toml` and `.codex/AGENTS.md`; it warns with exit code `2` when existing files differ, and `--force` overwrites them. `wiz-spring service list` prints systemd services as a table and resolves configured ports when possible. `wiz-spring run --log <file>` tees server stdout/stderr into the file, including project API `System.out.println` output.
+`wiz-spring mcp` runs the standalone Spring MCP server. MCP client settings should use the server name `wiz-spring` and run `java -jar /path/to/wiz-spring-0.0.7.jar mcp --root /path/to/workspace --project main`. `wiz-spring codex --root /path/to/workspace --project main` generates `.codex/config.toml` and `.codex/AGENTS.md`; it warns with exit code `2` when existing files differ, and `--force` overwrites them. `wiz-spring service list` prints systemd services as a table and resolves configured ports when possible. `wiz-spring run --log <file>` tees server stdout/stderr into the file, including project API `System.out.println` output.
 
 ### Runtime Coverage
 

@@ -26,7 +26,7 @@ class WizCommandTest {
         command.setOut(new PrintWriter(output));
 
         assertEquals(0, command.execute("--version"));
-        assertTrue(output.toString().contains("wiz-spring 0.0.6"));
+        assertTrue(output.toString().contains("wiz-spring 0.0.7"));
 
         output.getBuffer().setLength(0);
         assertEquals(0, command.execute("--help"));

@@ -16,6 +16,10 @@ public final class Struct {
         this.post.seedDefaults(this.user);
     }
 
+    public static void warmup(WizContext wiz) {
+        new Struct(wiz);
+    }
+
     public UserStruct user() {
         return user;
     }

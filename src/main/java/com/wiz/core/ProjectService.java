@@ -216,7 +216,7 @@ public class ProjectService {
                 + "    <modelVersion>4.0.0</modelVersion>\n"
                 + "    <groupId>com.wiz.project</groupId>\n"
                 + "    <artifactId>wiz-project-" + ProjectJavaNaming.packageSegment(project.name()) + "</artifactId>\n"
-                + "    <version>0.0.6</version>\n"
+                + "    <version>0.0.7</version>\n"
                 + "    <properties>\n"
                 + "        <java.version>21</java.version>\n"
                 + "    </properties>\n"

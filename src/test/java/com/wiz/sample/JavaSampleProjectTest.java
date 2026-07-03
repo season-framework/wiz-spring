@@ -12,13 +12,18 @@ import java.util.Map;
 
 import com.wiz.build.BuildResult;
 import com.wiz.build.ProjectBuildService;
+import com.wiz.config.WizProjectProperties;
+import com.wiz.config.WizRedirectProperties;
 import com.wiz.core.ProjectService;
 import com.wiz.core.WorkspaceService;
 import com.wiz.dispatch.AppApiDispatcher;
+import com.wiz.domain.ModelRegistry;
 import com.wiz.http.ResponseEnvelope;
 import com.wiz.runtime.PathService;
 import com.wiz.runtime.ProjectContext;
 import com.wiz.runtime.ProjectRegistry;
+import com.wiz.runtime.ProjectRuntimeCache;
+import com.wiz.runtime.ProjectWarmupService;
 import com.wiz.runtime.WizRequest;
 import com.wiz.runtime.WizResult;
 import com.wiz.runtime.WizRuntime;
@@ -196,7 +201,10 @@ class JavaSampleProjectTest {
         BuildResult build = new ProjectBuildService().build(project, true, "bundle");
         assertTrue(build.success(), build.message());
 
-        AppApiDispatcher dispatcher = dispatcher(workspace);
+        ProjectRuntimeCache cache = warmup(workspace);
+        assertTrue(Files.exists(project.root().resolve("data/app.db")));
+
+        AppApiDispatcher dispatcher = dispatcher(workspace, cache);
         MockHttpSession session = new MockHttpSession();
         ResponseEnvelope login = envelope(dispatch(dispatcher, WizRequest.builder()
                 .method("POST")
@@ -222,6 +230,23 @@ class JavaSampleProjectTest {
 
     private AppApiDispatcher dispatcher(Path workspace) {
         return new AppApiDispatcher(new WizRuntime(new ProjectRegistry(new PathService(workspace))));
+    }
+
+    private AppApiDispatcher dispatcher(Path workspace, ProjectRuntimeCache cache) {
+        ProjectRegistry registry = new ProjectRegistry(new PathService(workspace));
+        return new AppApiDispatcher(new WizRuntime(registry, new ModelRegistry(cache), new WizRedirectProperties(), cache));
+    }
+
+    private ProjectRuntimeCache warmup(Path workspace) {
+        ProjectRuntimeCache cache = new ProjectRuntimeCache();
+        new ProjectWarmupService(
+                new ProjectRegistry(new PathService(workspace)),
+                cache,
+                new ModelRegistry(cache),
+                new WizRedirectProperties(),
+                new WizProjectProperties())
+                .run(null);
+        return cache;
     }
 
     private WizRequest request(MockHttpSession session) {

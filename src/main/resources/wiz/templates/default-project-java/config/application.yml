@@ -76,6 +76,10 @@ wiz:
     # dev profile은 true, prod profile은 false를 권장합니다.
     # 운영 multi-project hosting은 cookie 전환 대신 host/path routing과 ACL로 분리하세요.
     # cookie-selection-enabled: true
+    # 서버 시작 시 기본 project의 선택적 warmup hook을 실행합니다.
+    # 기본 sample은 여기서 JPA/Hikari pool, SQLite 파일, seed data를 미리 초기화해 첫 로그인 지연을 줄입니다.
+    # 외부 DB가 늦게 뜨는 환경에서 서버 기동을 DB와 분리하고 싶으면 false로 바꾸세요.
+    # warmup-enabled: true
 
   # Auth/session service는 아래 위치에서 자동 탐지됩니다.
   # - src/model/AuthService.java

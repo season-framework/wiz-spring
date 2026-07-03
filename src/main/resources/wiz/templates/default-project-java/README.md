@@ -12,7 +12,7 @@ Spring WIZ runtime에서 실행되는 Java backend 샘플 프로젝트입니다.
 | carol@example.com | carol123 | Carol Lee | editor |
 | dave@example.com | dave1234 | Dave Choi | viewer |
 
-The Java Struct layer seeds these accounts and starter posts idempotently on first API access. The login page also shows the admin sample account so a freshly generated project can be tested immediately.
+The Java Struct layer seeds these accounts and starter posts idempotently. With the default `wiz.project.warmup-enabled` setting, this runs during server startup so the first login does not pay the JPA/Hikari initialization cost. The login page also shows the admin sample account so a freshly generated project can be tested immediately.
 
 ## Source Layout
 

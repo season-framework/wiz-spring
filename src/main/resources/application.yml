@@ -32,3 +32,4 @@ wiz:
     cookie-name: season-wiz-project
     devmode-cookie-name: season-wiz-devmode
     cookie-selection-enabled: true
+    warmup-enabled: true

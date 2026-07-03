@@ -10,5 +10,6 @@
 | [`0.0.4`](0.0.4.md) | tagged | runtime config hardening, project runtime cache, supply-chain manifests |
 | [`0.0.5`](0.0.5.md) | tagged | service command parity, port/config resolution, service script hardening |
 | [`0.0.6`](0.0.6.md) | tagged | Java API rebuild correctness, run log stdout capture, normal build npm reuse |
+| [`0.0.7`](0.0.7.md) | tagged | project warmup hook, first-login latency reduction, sample seed preloading |
 
 릴리즈를 실제로 배포할 때는 `pom.xml`의 `<version>`과 Git tag, GitHub/GitLab release note가 이 로그와 일치해야 한다.
