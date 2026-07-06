@@ -39,7 +39,7 @@ public class ControllerChain {
             return Optional.empty();
         }
 
-        ProjectRuntimeCache.CachedProjectRuntime runtime = runtimeCache.get(context.project());
+        ProjectRuntimeCache.CachedProjectRuntime runtime = context.projectRuntime();
         ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(runtime.classLoader());
         try {

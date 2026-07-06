@@ -145,7 +145,7 @@ public class AngularBuildService {
         String index = string(options, "index", "src/index.html");
         String main = string(options, "main", "src/main.ts");
         String tsConfig = string(options, "tsConfig", "tsconfig.app.json");
-        String outputPath = string(options, "outputPath", "dist/build");
+        String outputPath = outputPath(options);
         if (!Files.isRegularFile(angularRoot.resolve(index))
                 || !Files.isRegularFile(angularRoot.resolve(main))
                 || !Files.isRegularFile(angularRoot.resolve(tsConfig))) {
@@ -224,6 +224,15 @@ public class AngularBuildService {
     private String string(Map<String, Object> metadata, String key, String defaultValue) {
         Object value = metadata.get(key);
         return value == null || value.toString().isBlank() ? defaultValue : value.toString();
+    }
+
+    private String outputPath(Map<String, Object> options) {
+        Object value = options.get("outputPath");
+        if (value instanceof Map<?, ?> outputPath) {
+            Object base = outputPath.get("base");
+            return base == null || base.toString().isBlank() ? "dist/build" : base.toString();
+        }
+        return value == null || value.toString().isBlank() ? "dist/build" : value.toString();
     }
 
     private void copyDirectory(Path source, Path target) throws IOException {

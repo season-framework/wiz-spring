@@ -10,6 +10,7 @@ import com.wiz.dispatch.ControllerChain;
 import com.wiz.domain.ModelRegistry;
 import com.wiz.http.ResponseEnvelope;
 import com.wiz.runtime.PathService;
+import com.wiz.runtime.ProjectObservabilityRegistry;
 import com.wiz.runtime.ProjectContext;
 import com.wiz.runtime.ProjectRuntimeCache;
 import com.wiz.runtime.ProjectRuntimeCache.ProjectReflectionException;
@@ -34,15 +35,21 @@ public class ProjectSocketDispatcher {
     private final ControllerChain controllerChain;
     private final ModelRegistry modelRegistry;
     private final WizRedirectProperties redirectProperties;
+    private final ProjectObservabilityRegistry observability;
 
     @Autowired
-    public ProjectSocketDispatcher(PathService paths, SocketRoomRegistry rooms, ProjectRuntimeCache runtimeCache, ControllerChain controllerChain, ModelRegistry modelRegistry, WizRedirectProperties redirectProperties) {
+    public ProjectSocketDispatcher(PathService paths, SocketRoomRegistry rooms, ProjectRuntimeCache runtimeCache, ControllerChain controllerChain, ModelRegistry modelRegistry, WizRedirectProperties redirectProperties, ProjectObservabilityRegistry observability) {
         this.paths = paths;
         this.rooms = rooms;
         this.runtimeCache = runtimeCache == null ? new ProjectRuntimeCache() : runtimeCache;
         this.controllerChain = controllerChain == null ? new ControllerChain(this.runtimeCache) : controllerChain;
         this.modelRegistry = modelRegistry == null ? new ModelRegistry(this.runtimeCache) : modelRegistry;
         this.redirectProperties = redirectProperties == null ? new WizRedirectProperties() : redirectProperties;
+        this.observability = observability == null ? new ProjectObservabilityRegistry() : observability;
+    }
+
+    public ProjectSocketDispatcher(PathService paths, SocketRoomRegistry rooms, ProjectRuntimeCache runtimeCache, ControllerChain controllerChain, ModelRegistry modelRegistry, WizRedirectProperties redirectProperties) {
+        this(paths, rooms, runtimeCache, controllerChain, modelRegistry, redirectProperties, null);
     }
 
     public ProjectSocketDispatcher(PathService paths, SocketRoomRegistry rooms, ProjectRuntimeCache runtimeCache) {
@@ -59,22 +66,21 @@ public class ProjectSocketDispatcher {
 
     public SocketEventResult dispatch(SocketSession session, String event, Map<String, Object> payload) {
         ProjectContext project = paths.workspaceContext();
-        Optional<Map<String, Object>> metadata = appMetadata(project, session.namespace().appId());
-        Optional<SocketEventResult> controllerResult = authorize(project, session, event, metadata.orElse(Map.of()));
-        if (controllerResult.isPresent()) {
-            return controllerResult.get();
+        try (WizContext context = new WizContext(socketRequest(session), new WizResponse(), project, modelRegistry, redirectProperties, runtimeCache, observability)) {
+            ProjectRuntimeCache.CachedProjectRuntime projectRuntime = context.projectRuntime();
+            Optional<Map<String, Object>> metadata = projectRuntime.appMetadata(session.namespace().appId());
+            Optional<SocketEventResult> controllerResult = authorize(context, event, metadata.orElse(Map.of()));
+            if (controllerResult.isPresent()) {
+                return controllerResult.get();
+            }
+            String handlerClass = metadata.flatMap(this::socketHandlerClass)
+                    .orElseGet(() -> ProjectJavaNaming.appSocketHandlerClass(project, session.namespace().appId()));
+            return dispatchProjectSocket(projectRuntime, session, handlerClass, event, payload);
         }
-        String handlerClass = metadata.flatMap(this::socketHandlerClass)
-                .orElseGet(() -> ProjectJavaNaming.appSocketHandlerClass(project, session.namespace().appId()));
-        return dispatchProjectSocket(project, session, handlerClass, event, payload);
     }
 
     public SocketRoomRegistry rooms() {
         return rooms;
-    }
-
-    private Optional<Map<String, Object>> appMetadata(ProjectContext project, String appId) {
-        return runtimeCache.get(project).appMetadata(appId);
     }
 
     private Optional<String> socketHandlerClass(Map<String, Object> metadata) {
@@ -89,14 +95,12 @@ public class ProjectSocketDispatcher {
         return Optional.of(handler.toString());
     }
 
-    private Optional<SocketEventResult> authorize(ProjectContext project, SocketSession session, String event, Map<String, Object> metadata) {
+    private Optional<SocketEventResult> authorize(WizContext context, String event, Map<String, Object> metadata) {
         if ("disconnect".equals(event)) {
             return Optional.empty();
         }
-        try (WizContext context = new WizContext(socketRequest(session), new WizResponse(), project, modelRegistry, redirectProperties, runtimeCache)) {
-            return controllerChain.before(context, metadata)
-                    .map(result -> new SocketEventResult(false, event, rejectionMessage(result)));
-        }
+        return controllerChain.before(context, metadata)
+                .map(result -> new SocketEventResult(false, event, rejectionMessage(result)));
     }
 
     private WizRequest socketRequest(SocketSession session) {
@@ -124,8 +128,7 @@ public class ProjectSocketDispatcher {
         return result.httpStatus() == 401 ? "unauthorized" : "socket request rejected";
     }
 
-    private SocketEventResult dispatchProjectSocket(ProjectContext project, SocketSession session, String handlerClass, String event, Map<String, Object> payload) {
-        ProjectRuntimeCache.CachedProjectRuntime projectRuntime = runtimeCache.get(project);
+    private SocketEventResult dispatchProjectSocket(ProjectRuntimeCache.CachedProjectRuntime projectRuntime, SocketSession session, String handlerClass, String event, Map<String, Object> payload) {
         ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(projectRuntime.classLoader());
         try {

@@ -50,7 +50,7 @@ public class RouteDispatcher {
 
     public Optional<WizResult> dispatch(WizRequest request) {
         try (WizContext context = runtime.createContext(request)) {
-            for (RouteDefinition definition : routeRegistry.definitions(context.project())) {
+            for (RouteDefinition definition : routeRegistry.definitions(context)) {
                 if (!definition.acceptsMethod(request.method())) {
                     continue;
                 }
@@ -78,7 +78,7 @@ public class RouteDispatcher {
         if (definition.handlerClass() == null || definition.handlerClass().isBlank()) {
             return context.response().status(404, Map.of("error", "route handler not found"));
         }
-        ProjectRuntimeCache.CachedProjectRuntime projectRuntime = runtimeCache.get(context.project());
+        ProjectRuntimeCache.CachedProjectRuntime projectRuntime = context.projectRuntime();
         ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(projectRuntime.classLoader());
         try {

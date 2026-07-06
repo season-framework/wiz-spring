@@ -4,6 +4,7 @@ import java.util.List;
 
 import com.wiz.runtime.ProjectContext;
 import com.wiz.runtime.ProjectRuntimeCache;
+import com.wiz.runtime.WizContext;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -30,5 +31,9 @@ public class RouteRegistry {
 
     public List<RouteDefinition> definitions(ProjectContext project) {
         return runtimeCache.get(project).routeDefinitions();
+    }
+
+    public List<RouteDefinition> definitions(WizContext context) {
+        return context.projectRuntime().routeDefinitions();
     }
 }

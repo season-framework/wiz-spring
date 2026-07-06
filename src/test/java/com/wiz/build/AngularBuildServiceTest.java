@@ -62,6 +62,21 @@ class AngularBuildServiceTest {
     }
 
     @Test
+    void supportsAngularObjectOutputPath() throws Exception {
+        ProjectContext project = newProject();
+        Path angularRoot = project.buildRoot().resolve("src/angular");
+        writeReadyAngularPackage(angularRoot);
+        Files.writeString(angularRoot.resolve("angular.json"), minimalAngularJsonWithObjectOutputPath());
+
+        FakeCommandExecutor executor = new FakeCommandExecutor();
+        FrontendBuildResult result = new AngularBuildService(executor).build(project);
+
+        assertTrue(result.success(), result.message());
+        assertTrue(result.built());
+        assertTrue(Files.exists(project.buildRoot().resolve("dist/build/index.html")));
+    }
+
+    @Test
     void normalBuildSkipsNpmInstallWhenDependenciesExist() throws Exception {
         ProjectContext project = newProject();
         Path angularRoot = project.buildRoot().resolve("src/angular");
@@ -160,6 +175,25 @@ class AngularBuildServiceTest {
                 + "        \"build\": {\n"
                 + "          \"options\": {\n"
                 + "            \"outputPath\": \"dist/build\",\n"
+                + "            \"index\": \"src/index.html\",\n"
+                + "            \"main\": \"src/main.ts\",\n"
+                + "            \"tsConfig\": \"tsconfig.app.json\"\n"
+                + "          }\n"
+                + "        }\n"
+                + "      }\n"
+                + "    }\n"
+                + "  }\n"
+                + "}\n";
+    }
+
+    private String minimalAngularJsonWithObjectOutputPath() {
+        return "{\n"
+                + "  \"projects\": {\n"
+                + "    \"build\": {\n"
+                + "      \"architect\": {\n"
+                + "        \"build\": {\n"
+                + "          \"options\": {\n"
+                + "            \"outputPath\": { \"base\": \"dist/build\", \"browser\": \"\" },\n"
                 + "            \"index\": \"src/index.html\",\n"
                 + "            \"main\": \"src/main.ts\",\n"
                 + "            \"tsConfig\": \"tsconfig.app.json\"\n"

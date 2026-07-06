@@ -22,15 +22,17 @@ public class WizContext implements AutoCloseable {
     private final ModelRegistry models;
     private final WizRedirectProperties redirectProperties;
     private final ProjectRuntimeCache runtimeCache;
+    private final ProjectObservabilityRegistry observability;
     private final Map<String, Object> modelRegistry;
     private final List<Runnable> cleanupHooks;
+    private volatile ProjectRuntimeCache.CachedProjectRuntime projectRuntime;
 
     public WizContext(WizRequest request, WizResponse response, ProjectContext project) {
-        this(request, response, project, new ProjectRuntimeCache(), new WizRedirectProperties());
+        this(request, response, project, new ProjectRuntimeCache(), new WizRedirectProperties(), new ProjectObservabilityRegistry());
     }
 
-    private WizContext(WizRequest request, WizResponse response, ProjectContext project, ProjectRuntimeCache runtimeCache, WizRedirectProperties redirectProperties) {
-        this(request, response, project, new ModelRegistry(runtimeCache), redirectProperties, runtimeCache);
+    private WizContext(WizRequest request, WizResponse response, ProjectContext project, ProjectRuntimeCache runtimeCache, WizRedirectProperties redirectProperties, ProjectObservabilityRegistry observability) {
+        this(request, response, project, new ModelRegistry(runtimeCache), redirectProperties, runtimeCache, observability);
     }
 
     public WizContext(WizRequest request, WizResponse response, ProjectContext project, ModelRegistry models) {
@@ -38,19 +40,24 @@ public class WizContext implements AutoCloseable {
     }
 
     public WizContext(WizRequest request, WizResponse response, ProjectContext project, ModelRegistry models, WizRedirectProperties redirectProperties) {
-        this(request, response, project, models, redirectProperties, new ProjectRuntimeCache());
+        this(request, response, project, models, redirectProperties, new ProjectRuntimeCache(), new ProjectObservabilityRegistry());
     }
 
     public WizContext(WizRequest request, WizResponse response, ProjectContext project, ModelRegistry models, WizRedirectProperties redirectProperties, ProjectRuntimeCache runtimeCache) {
+        this(request, response, project, models, redirectProperties, runtimeCache, new ProjectObservabilityRegistry());
+    }
+
+    public WizContext(WizRequest request, WizResponse response, ProjectContext project, ModelRegistry models, WizRedirectProperties redirectProperties, ProjectRuntimeCache runtimeCache, ProjectObservabilityRegistry observability) {
         this.request = request;
         this.response = response;
         this.project = project;
         this.models = models;
         this.redirectProperties = redirectProperties == null ? new WizRedirectProperties() : redirectProperties;
         this.runtimeCache = runtimeCache == null ? new ProjectRuntimeCache() : runtimeCache;
+        this.observability = observability == null ? new ProjectObservabilityRegistry() : observability;
         this.modelRegistry = new LinkedHashMap<>();
         this.cleanupHooks = new ArrayList<>();
-        this.config = new ConfigService(project);
+        this.config = new ConfigService(project, projectRuntime());
         this.session = ProjectExtensionLoader.session(this, request.httpSession());
         this.auth = ProjectExtensionLoader.auth(this);
     }
@@ -89,6 +96,19 @@ public class WizContext implements AutoCloseable {
 
     public ProjectRuntimeCache runtimeCache() {
         return runtimeCache;
+    }
+
+    public ProjectRuntimeCache.CachedProjectRuntime projectRuntime() {
+        ProjectRuntimeCache.CachedProjectRuntime runtime = projectRuntime;
+        if (runtime == null) {
+            runtime = runtimeCache.get(project);
+            projectRuntime = runtime;
+        }
+        return runtime;
+    }
+
+    public ProjectObservabilityRegistry observability() {
+        return observability;
     }
 
     public ModelAccessor models() {

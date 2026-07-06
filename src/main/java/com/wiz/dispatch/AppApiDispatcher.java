@@ -75,11 +75,11 @@ public class AppApiDispatcher {
     }
 
     private Optional<Map<String, Object>> appMetadata(WizContext context, String appId) {
-        return runtimeCache.get(context.project()).appMetadata(appId);
+        return context.projectRuntime().appMetadata(appId);
     }
 
     private WizResult dispatchProjectJavaApi(WizContext context, String handlerClass, String function) {
-        ProjectRuntimeCache.CachedProjectRuntime projectRuntime = runtimeCache.get(context.project());
+        ProjectRuntimeCache.CachedProjectRuntime projectRuntime = context.projectRuntime();
         ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(projectRuntime.classLoader());
         try {

@@ -2,7 +2,7 @@
 
 - Review ID: `wltutdnfhhgwszfvzxtxktttmuxaywdk`
 - 대상: `wiz-spring`, `wiz-spring-instruction`, 기본 Java sample project template
-- 반영 범위: socket 인증/전송 기본값, runtime cache 성능, DTO 기본 가이드, SSE/실시간 통신 경계 문서화
+- 반영 범위: socket 인증/전송 기본값, runtime cache 성능, project-local observability, DTO 기본 가이드, SSE/실시간 통신 경계 문서화
 
 ## 결정 요약
 
@@ -32,8 +32,8 @@ WIZ의 자유로운 response 형식은 유지하되, 새 scaffold와 guide는 �
 
 반영:
 
-- 기본 Angular helper의 `wiz.socket()`을 Socket.IO client 의존성 없이 native WebSocket(`/wiz/ws/app/{project}/{app_id}`)으로 연결하도록 바꿨다.
-- 기존 Socket.IO polling(`/socket.io/`, namespace `/wiz/app/{project}/{app_id}`)은 호환 경로로 유지했다.
+- 기본 Angular helper의 `wiz.socket()`을 Socket.IO client 의존성 없이 native WebSocket(`wiz.socket.path/{app_id}`, 기본 `/wiz/app/{app_id}`)으로 연결하도록 바꿨다.
+- 기존 Socket.IO polling(`/socket.io/`)은 같은 namespace path를 쓰는 호환 경로로 유지했다.
 - default template과 sample package에서 `socket.io-client` 의존성을 제거했다.
 - README와 instruction은 native WebSocket이 기본, Socket.IO polling은 호환용이라고 설명하도록 수정했다.
 
@@ -41,12 +41,22 @@ WIZ의 자유로운 response 형식은 유지하되, 새 scaffold와 guide는 �
 
 반영:
 
-- production profile에서는 `bundle/.wiz-build.json` marker 기반 version을 우선 사용해 runtime cache hit마다 compiled artifact tree를 반복 순회하지 않도록 줄였다.
-- dev profile은 기존처럼 artifact fingerprint를 함께 반영해 hot reload 감지 범위를 유지한다.
+- `bundle/.wiz-build.json` marker 기반 version을 우선 사용해 runtime cache hit마다 compiled artifact tree를 반복 순회하지 않도록 줄였다.
+- `WizContext.projectRuntime()`이 요청 단위 runtime reference를 보관하므로 API/controller/route/model/socket dispatch 내부의 중복 `runtimeCache.get(...)` 호출을 줄였다.
+- `ProjectRuntimeCache`는 build marker가 바뀌면 이전 project runtime을 닫고 새 runtime을 생성한다. Watch 기반 자동 감지는 두지 않는다.
+- `ConfigService`는 runtime cache 생명주기 안에서 namespace별 config 파일 값을 캐시한다. source/config 수정 후 bundle build 또는 명시적 runtime invalidate가 일어나면 새 config 값을 읽는다.
 
 남은 경계:
 
-- request 단위 runtime reference 재사용, `WatchService` 기반 dev invalidation, config namespace cache는 별도 개선 과제로 남는다.
+- source/config/pom 변경 후에는 `wiz-spring build --root <workspace> --clean`으로 bundle과 marker를 갱신해야 한다. 빌드 전 runtime은 기존 bundle 기준으로 동작한다.
+
+### P1. project-local Spring/JPA context 관측성
+
+반영:
+
+- core에 `ProjectObservabilityRegistry`와 `projectRuntimeHealth` health indicator를 추가했다.
+- project code는 `wiz.observability()`로 health supplier, gauge, transaction/timer metric을 등록할 수 있다.
+- 기본 sample JPA runtime은 Hikari pool gauge, JPA health, transaction duration metric을 등록하고, `wiz.projectRuntime().onClose(...)`로 runtime cache 폐기 시 등록과 context를 함께 닫는다.
 
 ### P1. SSE 표면
 
@@ -77,6 +87,5 @@ WIZ의 자유로운 response 형식은 유지하되, 새 scaffold와 guide는 �
 ## 계속 추적할 구조 리스크
 
 - `ProjectBuildService`, `WizMcpToolService`는 여전히 큰 책임을 가진 클래스다. build phase와 MCP tool group 단위 분리가 필요하다.
-- project-local Spring/JPA context는 core Spring context와 분리되어 있어 metrics/health/transaction 관측성 연결이 제한적이다.
 - static asset cache 정책, prod origin/body/session limit template, socket/session metrics는 운영 기본값 강화 과제로 남는다.
 - 긴 연결 soak test, proxy timeout/upgrade 설정 검증, multi-instance broadcast 검증은 별도 환경에서 수행해야 한다.

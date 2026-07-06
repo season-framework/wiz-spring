@@ -12,6 +12,7 @@ import com.wiz.domain.ModelRegistry;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Service;
@@ -26,6 +27,23 @@ public class ProjectWarmupService implements ApplicationRunner {
     private final ModelRegistry modelRegistry;
     private final WizRedirectProperties redirectProperties;
     private final WizRuntimeProperties runtimeProperties;
+    private final ProjectObservabilityRegistry observability;
+
+    @Autowired
+    public ProjectWarmupService(
+            ProjectRegistry projectRegistry,
+            ProjectRuntimeCache runtimeCache,
+            ModelRegistry modelRegistry,
+            WizRedirectProperties redirectProperties,
+            WizRuntimeProperties runtimeProperties,
+            ProjectObservabilityRegistry observability) {
+        this.projectRegistry = projectRegistry;
+        this.runtimeCache = runtimeCache == null ? new ProjectRuntimeCache() : runtimeCache;
+        this.modelRegistry = modelRegistry == null ? new ModelRegistry(this.runtimeCache) : modelRegistry;
+        this.redirectProperties = redirectProperties == null ? new WizRedirectProperties() : redirectProperties;
+        this.runtimeProperties = runtimeProperties == null ? new WizRuntimeProperties() : runtimeProperties;
+        this.observability = observability == null ? new ProjectObservabilityRegistry() : observability;
+    }
 
     public ProjectWarmupService(
             ProjectRegistry projectRegistry,
@@ -33,11 +51,7 @@ public class ProjectWarmupService implements ApplicationRunner {
             ModelRegistry modelRegistry,
             WizRedirectProperties redirectProperties,
             WizRuntimeProperties runtimeProperties) {
-        this.projectRegistry = projectRegistry;
-        this.runtimeCache = runtimeCache == null ? new ProjectRuntimeCache() : runtimeCache;
-        this.modelRegistry = modelRegistry == null ? new ModelRegistry(this.runtimeCache) : modelRegistry;
-        this.redirectProperties = redirectProperties == null ? new WizRedirectProperties() : redirectProperties;
-        this.runtimeProperties = runtimeProperties == null ? new WizRuntimeProperties() : runtimeProperties;
+        this(projectRegistry, runtimeCache, modelRegistry, redirectProperties, runtimeProperties, new ProjectObservabilityRegistry());
     }
 
     @Override
@@ -122,7 +136,8 @@ public class ProjectWarmupService implements ApplicationRunner {
                 project,
                 modelRegistry,
                 redirectProperties,
-                runtimeCache)) {
+                runtimeCache,
+                observability)) {
             warmup.invoke(null, context);
         }
     }

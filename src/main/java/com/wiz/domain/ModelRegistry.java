@@ -59,7 +59,7 @@ public class ModelRegistry {
     }
 
     private Object instantiateProjectModel(WizContext context, String namespace) {
-        ProjectRuntimeCache.CachedProjectRuntime runtime = runtimeCache.get(context.project());
+        ProjectRuntimeCache.CachedProjectRuntime runtime = context.projectRuntime();
         ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(runtime.classLoader());
         try {

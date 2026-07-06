@@ -51,7 +51,7 @@ src/
 
 Frontend files such as `view.pug`, `view.ts`, `view.scss`, `app.json`, `src/angular/**`, and portal frontend assets are preserved from the original sample.
 
-Database access is workspace-local. This sample uses Spring ORM with JPA/Hibernate and SQLite through the workspace `pom.xml`; the runtime core does not contain DB/ORM implementation code. Common DB setup lives under `src/portal/season/model/orm`, and entity-specific repository helpers are nested inside each entity class. Change `config/application.yml` key `sample.datasource.url` or replace the app entity/helper classes when using another database.
+Database access is workspace-local. This sample uses Spring ORM with JPA/Hibernate and SQLite through the workspace `pom.xml`; the runtime core does not contain DB/ORM implementation code. Common DB setup lives under `src/portal/season/model/orm`, and entity-specific repository helpers are nested inside each entity class. The sample JPA runtime registers health, Hikari pool gauges, and transaction duration metrics through `wiz.observability()`, and unregisters them when the project runtime cache is closed. Change `config/application.yml` key `sample.datasource.url` or replace the app entity/helper classes when using another database.
 
 ## Run With Spring WIZ
 

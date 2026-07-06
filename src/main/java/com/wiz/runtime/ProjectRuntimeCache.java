@@ -69,7 +69,8 @@ public class ProjectRuntimeCache implements AutoCloseable {
     }
 
     public CachedProjectRuntime get(ProjectContext project) {
-        RuntimeKey key = runtimeKey(project);
+        RuntimeIdentity identity = identity(project);
+        RuntimeKey key = runtimeKey(project, identity);
         synchronized (runtimes) {
             evictStaleProjectEntries(key);
             CachedProjectRuntime runtime = runtimes.get(key);
@@ -107,7 +108,7 @@ public class ProjectRuntimeCache implements AutoCloseable {
             }
             URL[] urls = ProjectClassPath.apiUrls(project);
             URLClassLoader classLoader = classLoaderFactory.create(urls, parent);
-            return new CachedProjectRuntime(project, objectMapper, classLoader);
+            return new CachedProjectRuntime(project, objectMapper, classLoader, key);
         } catch (IOException exception) {
             throw new IllegalStateException("Failed to create project runtime cache: " + key.projectName(), exception);
         }
@@ -135,7 +136,10 @@ public class ProjectRuntimeCache implements AutoCloseable {
     }
 
     private RuntimeKey runtimeKey(ProjectContext project) {
-        RuntimeIdentity identity = identity(project);
+        return runtimeKey(project, identity(project));
+    }
+
+    private RuntimeKey runtimeKey(ProjectContext project, RuntimeIdentity identity) {
         return new RuntimeKey(identity, project.name(), runtimeVersion(project));
     }
 
@@ -158,20 +162,10 @@ public class ProjectRuntimeCache implements AutoCloseable {
     private String runtimeVersion(ProjectContext project) {
         Path marker = project.bundleRoot().resolve(BuildMarkerService.MARKER_FILE);
         if (Files.isRegularFile(marker)) {
-            String markerVersion = "marker:" + modifiedTime(marker) + ":" + digest(marker);
-            if (isProductionProfile()) {
-                return markerVersion;
-            }
-            return markerVersion + ":artifact:" + runtimeArtifactFingerprint(project);
+            return "marker:" + modifiedTime(marker) + ":" + digest(marker);
         }
         String runtimeArtifactFingerprint = runtimeArtifactFingerprint(project);
         return "mtime:" + runtimeArtifactFingerprint + ":source:" + fingerprint(project.sourceRoot());
-    }
-
-    private boolean isProductionProfile() {
-        return Arrays.stream(profile.split(","))
-                .map(String::trim)
-                .anyMatch(value -> value.equalsIgnoreCase("prod") || value.equalsIgnoreCase("production"));
     }
 
     private String runtimeArtifactFingerprint(ProjectContext project) {
@@ -278,6 +272,7 @@ public class ProjectRuntimeCache implements AutoCloseable {
         return Arrays.stream(active).sorted().collect(Collectors.joining(","));
     }
 
+
     @FunctionalInterface
     interface ClassLoaderFactory {
         URLClassLoader create(URL[] urls, ClassLoader parent);
@@ -297,7 +292,9 @@ public class ProjectRuntimeCache implements AutoCloseable {
         private final ProjectContext project;
         private final ObjectMapper objectMapper;
         private final URLClassLoader classLoader;
+        private final RuntimeKey key;
         private final ConcurrentHashMap<String, Optional<Map<String, Object>>> appMetadata = new ConcurrentHashMap<>();
+        private final ConcurrentHashMap<String, Map<String, Object>> configValues = new ConcurrentHashMap<>();
         private final ConcurrentHashMap<ApiHandlerKey, Optional<ProjectApiHandler>> apiHandlers = new ConcurrentHashMap<>();
         private final ConcurrentHashMap<String, Optional<ProjectControllerHook>> controllerHooks = new ConcurrentHashMap<>();
         private final ConcurrentHashMap<String, Optional<ProjectRouteHandler>> routeHandlers = new ConcurrentHashMap<>();
@@ -307,14 +304,19 @@ public class ProjectRuntimeCache implements AutoCloseable {
         private final CopyOnWriteArrayList<AutoCloseable> closeHooks = new CopyOnWriteArrayList<>();
         private volatile List<RouteDefinition> routeDefinitions;
 
-        private CachedProjectRuntime(ProjectContext project, ObjectMapper objectMapper, URLClassLoader classLoader) {
+        private CachedProjectRuntime(ProjectContext project, ObjectMapper objectMapper, URLClassLoader classLoader, RuntimeKey key) {
             this.project = project;
             this.objectMapper = objectMapper;
             this.classLoader = classLoader;
+            this.key = key;
         }
 
         public ClassLoader classLoader() {
             return classLoader;
+        }
+
+        RuntimeKey key() {
+            return key;
         }
 
         public void onClose(AutoCloseable closeHook) {
@@ -325,6 +327,10 @@ public class ProjectRuntimeCache implements AutoCloseable {
 
         public Optional<Map<String, Object>> appMetadata(String appId) {
             return appMetadata.computeIfAbsent(appId, this::readAppMetadata);
+        }
+
+        public Map<String, Object> configValues(String name) {
+            return configValues.computeIfAbsent(name, this::readConfigValues);
         }
 
         public List<RouteDefinition> routeDefinitions() {
@@ -409,6 +415,10 @@ public class ProjectRuntimeCache implements AutoCloseable {
             } catch (IllegalArgumentException | IOException exception) {
                 return Optional.empty();
             }
+        }
+
+        private Map<String, Object> readConfigValues(String name) {
+            return Collections.unmodifiableMap(new LinkedHashMap<>(ProjectConfigLoader.read(project, objectMapper, name)));
         }
 
         private List<RouteDefinition> readRouteDefinitions() {

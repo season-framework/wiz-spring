@@ -67,10 +67,9 @@ class ProjectRuntimeCacheTest {
     }
 
     @Test
-    void invalidatesProjectRuntimeWhenCompiledArtifactsChangeEvenIfBuildMarkerIsRestored() throws Exception {
+    void defaultProfileUsesBuildMarkerWithoutWalkingCompiledArtifacts() throws Exception {
         ProjectContext project = projectWithApi("one");
-        AtomicInteger closeCount = new AtomicInteger();
-        ProjectRuntimeCache cache = new ProjectRuntimeCache(new ObjectMapper(), "test", (urls, parent) -> countingClassLoader(urls, parent, closeCount));
+        ProjectRuntimeCache cache = new ProjectRuntimeCache(new ObjectMapper(), "test", URLClassLoader::new);
         Path marker = project.bundleRoot().resolve(BuildMarkerService.MARKER_FILE);
         String markerContents = Files.readString(marker);
         FileTime markerTime = Files.getLastModifiedTime(marker);
@@ -86,9 +85,8 @@ class ProjectRuntimeCacheTest {
 
         ProjectRuntimeCache.CachedProjectRuntime secondRuntime = cache.get(project);
 
-        assertNotSame(firstRuntime, secondRuntime);
-        assertEquals("two", invokeVersion(project, secondRuntime));
-        assertEquals(1, closeCount.get());
+        assertSame(firstRuntime, secondRuntime);
+        assertEquals("one", invokeVersion(project, secondRuntime));
     }
 
     @Test

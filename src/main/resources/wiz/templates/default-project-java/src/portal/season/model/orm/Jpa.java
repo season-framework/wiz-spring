@@ -1,15 +1,28 @@
 import java.nio.file.Path;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
+import javax.sql.DataSource;
+
+import com.wiz.runtime.ProjectResourceHealth;
 import com.wiz.runtime.WizContext;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 
+import com.zaxxer.hikari.HikariDataSource;
+
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.orm.jpa.SharedEntityManagerCreator;
+import org.springframework.transaction.TransactionException;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
 public final class Jpa {
@@ -30,7 +43,7 @@ public final class Jpa {
     }
 
     public TransactionTemplate transaction() {
-        return runtime.transactionTemplate();
+        return runtime.observedTransactionTemplate();
     }
 
     private static SharedRuntime createRuntime(WizContext wiz, RuntimeKey key) {
@@ -52,13 +65,65 @@ public final class Jpa {
 
         SharedRuntime runtime = new SharedRuntime(
                 context,
+                context.getBean(DataSource.class),
                 context.getBean(EntityManagerFactory.class),
-                context.getBean(TransactionTemplate.class));
-        wiz.runtimeCache().get(wiz.workspace()).onClose(() -> {
+                context.getBean(TransactionTemplate.class),
+                new ObservedTransactionTemplate(wiz, context.getBean(TransactionTemplate.class)));
+        runtime.setObservation(registerObservability(wiz, runtime));
+        wiz.projectRuntime().onClose(() -> {
             RUNTIMES.remove(key, runtime);
             runtime.close();
         });
         return runtime;
+    }
+
+    private static AutoCloseable registerObservability(WizContext wiz, SharedRuntime runtime) {
+        List<AutoCloseable> registrations = new ArrayList<>();
+        registrations.add(wiz.observability().registerHealth(wiz.workspace(), "sample.jpa", () -> health(runtime)));
+        if (runtime.dataSource() instanceof HikariDataSource hikari) {
+            registrations.add(wiz.observability().registerGauge(wiz.workspace(), "sample.jpa", "pool.active", () -> hikari.getHikariPoolMXBean() == null ? 0 : hikari.getHikariPoolMXBean().getActiveConnections()));
+            registrations.add(wiz.observability().registerGauge(wiz.workspace(), "sample.jpa", "pool.idle", () -> hikari.getHikariPoolMXBean() == null ? 0 : hikari.getHikariPoolMXBean().getIdleConnections()));
+            registrations.add(wiz.observability().registerGauge(wiz.workspace(), "sample.jpa", "pool.total", () -> hikari.getHikariPoolMXBean() == null ? 0 : hikari.getHikariPoolMXBean().getTotalConnections()));
+            registrations.add(wiz.observability().registerGauge(wiz.workspace(), "sample.jpa", "pool.pending", () -> hikari.getHikariPoolMXBean() == null ? 0 : hikari.getHikariPoolMXBean().getThreadsAwaitingConnection()));
+        }
+        return () -> {
+            RuntimeException failure = null;
+            for (AutoCloseable registration : registrations.reversed()) {
+                try {
+                    registration.close();
+                } catch (Exception exception) {
+                    if (failure == null) {
+                        failure = new IllegalStateException("Failed to close project observability registration", exception);
+                    } else {
+                        failure.addSuppressed(exception);
+                    }
+                }
+            }
+            if (failure != null) {
+                throw failure;
+            }
+        };
+    }
+
+    private static ProjectResourceHealth health(SharedRuntime runtime) {
+        if (!runtime.context().isActive()) {
+            return ProjectResourceHealth.down("JPA application context is not active");
+        }
+        if (!runtime.entityManagerFactory().isOpen()) {
+            return ProjectResourceHealth.down("EntityManagerFactory is closed");
+        }
+        LinkedHashMap<String, Object> details = new LinkedHashMap<>();
+        details.put("entityManagerFactory", "open");
+        if (runtime.dataSource() instanceof HikariDataSource hikari) {
+            details.put("pool", hikari.getPoolName());
+            details.put("poolClosed", hikari.isClosed());
+            if (hikari.isClosed()) {
+                return ProjectResourceHealth.down("Hikari pool is closed");
+            }
+        } else {
+            details.put("dataSource", runtime.dataSource().getClass().getName());
+        }
+        return ProjectResourceHealth.up(details);
     }
 
     private static String value(Object value, String defaultValue) {
@@ -107,13 +172,92 @@ public final class Jpa {
         return "org.hibernate.community.dialect.SQLiteDialect";
     }
 
-    private record SharedRuntime(
-            AnnotationConfigApplicationContext context,
-            EntityManagerFactory entityManagerFactory,
-            TransactionTemplate transactionTemplate) implements AutoCloseable {
+    private static final class ObservedTransactionTemplate extends TransactionTemplate {
+
+        private final WizContext wiz;
+
+        private ObservedTransactionTemplate(WizContext wiz, TransactionTemplate delegate) {
+            super(delegate.getTransactionManager(), delegate);
+            this.wiz = wiz;
+        }
+
+        @Override
+        public <T> T execute(TransactionCallback<T> action) throws TransactionException {
+            long startedAt = System.nanoTime();
+            boolean success = false;
+            try {
+                T result = super.execute(action);
+                success = true;
+                return result;
+            } finally {
+                wiz.observability().recordDuration(wiz.workspace(), "sample.jpa", "transaction", Duration.ofNanos(System.nanoTime() - startedAt), success);
+            }
+        }
+
+        @Override
+        public void executeWithoutResult(Consumer<TransactionStatus> action) throws TransactionException {
+            execute(status -> {
+                action.accept(status);
+                return null;
+            });
+        }
+    }
+
+    private static final class SharedRuntime implements AutoCloseable {
+
+        private final AnnotationConfigApplicationContext context;
+        private final DataSource dataSource;
+        private final EntityManagerFactory entityManagerFactory;
+        private final TransactionTemplate transactionTemplate;
+        private final TransactionTemplate observedTransactionTemplate;
+        private AutoCloseable observation;
+
+        private SharedRuntime(
+                AnnotationConfigApplicationContext context,
+                DataSource dataSource,
+                EntityManagerFactory entityManagerFactory,
+                TransactionTemplate transactionTemplate,
+                TransactionTemplate observedTransactionTemplate) {
+            this.context = context;
+            this.dataSource = dataSource;
+            this.entityManagerFactory = entityManagerFactory;
+            this.transactionTemplate = transactionTemplate;
+            this.observedTransactionTemplate = observedTransactionTemplate;
+        }
+
+        AnnotationConfigApplicationContext context() {
+            return context;
+        }
+
+        DataSource dataSource() {
+            return dataSource;
+        }
+
+        EntityManagerFactory entityManagerFactory() {
+            return entityManagerFactory;
+        }
+
+        TransactionTemplate transactionTemplate() {
+            return transactionTemplate;
+        }
+
+        TransactionTemplate observedTransactionTemplate() {
+            return observedTransactionTemplate;
+        }
+
+        void setObservation(AutoCloseable observation) {
+            this.observation = observation;
+        }
 
         @Override
         public void close() {
+            if (observation != null) {
+                try {
+                    observation.close();
+                } catch (Exception exception) {
+                    throw new IllegalStateException("Failed to close JPA observability", exception);
+                }
+            }
             context.close();
         }
     }

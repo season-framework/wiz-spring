@@ -1,6 +1,7 @@
 package com.wiz.runtime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.nio.file.Files;
@@ -85,6 +86,49 @@ class ConfigServiceTest {
 
         try (WizContext context = new WizContext(WizRequest.builder().build(), new WizResponse(), project)) {
             assertEquals("/auth", context.config().namespace("season").get("auth_baseuri"));
+        }
+    }
+
+    @Test
+    void cachesConfigFileValuesInsideCachedProjectRuntime() throws Exception {
+        ProjectContext project = createApp();
+        Files.writeString(project.configRoot().resolve("season.yml"), "auth_baseuri: /one\n");
+        new ProjectBuildService().build(project, true, "bundle");
+        ProjectRuntimeCache cache = new ProjectRuntimeCache();
+        ProjectRuntimeCache.CachedProjectRuntime runtime = cache.get(project);
+        ConfigService config = new ConfigService(project, runtime);
+
+        assertEquals("/one", config.namespace("season").get("auth_baseuri"));
+        Files.writeString(project.configRoot().resolve("season.yml"), "auth_baseuri: /two\n");
+        Files.writeString(project.bundleRoot().resolve("config/season.yml"), "auth_baseuri: /two\n");
+
+        assertEquals("/one", config.namespace("season").get("auth_baseuri"));
+
+        cache.invalidate(project);
+        ConfigService refreshed = new ConfigService(project, cache.get(project));
+        assertEquals("/two", refreshed.namespace("season").get("auth_baseuri"));
+    }
+
+    @Test
+    void refreshesCachedProjectRuntimeAfterRebuildChangesConfig() throws Exception {
+        ProjectContext project = createApp();
+        Path configFile = project.configRoot().resolve("season.yml");
+        Files.writeString(configFile, "auth_baseuri: /one\n");
+        new ProjectBuildService().build(project, true, "bundle");
+        ProjectRuntimeCache cache = new ProjectRuntimeCache();
+
+        try {
+            ProjectRuntimeCache.CachedProjectRuntime first = cache.get(project);
+            assertEquals("/one", new ConfigService(project, first).namespace("season").get("auth_baseuri"));
+
+            Files.writeString(configFile, "auth_baseuri: /two\n");
+            new ProjectBuildService().build(project, true, "bundle");
+            ProjectRuntimeCache.CachedProjectRuntime second = cache.get(project);
+
+            assertNotSame(first, second);
+            assertEquals("/two", new ConfigService(project, second).namespace("season").get("auth_baseuri"));
+        } finally {
+            cache.close();
         }
     }
 

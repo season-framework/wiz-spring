@@ -81,7 +81,7 @@ final class ProjectExtensionLoader {
     }
 
     private static <T> Optional<T> instantiate(WizContext context, String className, Class<T> type, Object preferredArgument, Class<?> preferredArgumentType) {
-        ProjectRuntimeCache.CachedProjectRuntime runtime = context.runtimeCache().get(context.project());
+        ProjectRuntimeCache.CachedProjectRuntime runtime = context.projectRuntime();
         ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(runtime.classLoader());
         try {

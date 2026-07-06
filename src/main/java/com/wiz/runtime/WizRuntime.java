@@ -16,14 +16,20 @@ public class WizRuntime {
     private final ModelRegistry modelRegistry;
     private final WizRedirectProperties redirectProperties;
     private final ProjectRuntimeCache runtimeCache;
+    private final ProjectObservabilityRegistry observability;
     private final BuildMarkerService buildMarkerService = new BuildMarkerService();
 
     @Autowired
-    public WizRuntime(ProjectRegistry projectRegistry, ModelRegistry modelRegistry, WizRedirectProperties redirectProperties, ProjectRuntimeCache runtimeCache) {
+    public WizRuntime(ProjectRegistry projectRegistry, ModelRegistry modelRegistry, WizRedirectProperties redirectProperties, ProjectRuntimeCache runtimeCache, ProjectObservabilityRegistry observability) {
         this.projectRegistry = projectRegistry;
         this.modelRegistry = modelRegistry;
         this.redirectProperties = redirectProperties == null ? new WizRedirectProperties() : redirectProperties;
         this.runtimeCache = runtimeCache == null ? new ProjectRuntimeCache() : runtimeCache;
+        this.observability = observability == null ? new ProjectObservabilityRegistry() : observability;
+    }
+
+    public WizRuntime(ProjectRegistry projectRegistry, ModelRegistry modelRegistry, WizRedirectProperties redirectProperties, ProjectRuntimeCache runtimeCache) {
+        this(projectRegistry, modelRegistry, redirectProperties, runtimeCache, new ProjectObservabilityRegistry());
     }
 
     public WizRuntime(ProjectRegistry projectRegistry, ModelRegistry modelRegistry, WizRedirectProperties redirectProperties) {
@@ -57,6 +63,6 @@ public class WizRuntime {
             response.header(DEVMODE_HEADER, "true");
             buildMarkerService.debugHeader(project).ifPresent(value -> response.header(BUILD_MARKER_HEADER, value));
         }
-        return new WizContext(request, response, project, modelRegistry, redirectProperties, runtimeCache);
+        return new WizContext(request, response, project, modelRegistry, redirectProperties, runtimeCache, observability);
     }
 }
