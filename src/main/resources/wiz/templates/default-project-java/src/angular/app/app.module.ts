@@ -8,7 +8,6 @@ import { RouterModule, RouterOutlet } from '@angular/router';
 import { NgbModule } from '@ng-bootstrap/ng-bootstrap';
 import { NuMonacoEditorComponent, provideNuMonacoEditorConfig } from '@ng-util/monaco-editor';
 import { SortablejsModule } from "@wiz/libs/portal/season/ngx-sortablejs";
-import { KeyboardShortcutsModule } from 'ng-keyboard-shortcuts';
 import { DomSanitizer } from '@angular/platform-browser';
 
 @Pipe({ name: 'safe' })
@@ -37,7 +36,6 @@ import { TranslateHttpLoader, TRANSLATE_HTTP_LOADER_CONFIG } from '@ngx-translat
         FormsModule,
         NgbModule,
         SortablejsModule,
-        KeyboardShortcutsModule.forRoot(),
         NuMonacoEditorComponent,
         TranslateModule.forRoot({
             loader: {

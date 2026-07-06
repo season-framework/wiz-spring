@@ -46,7 +46,7 @@
 기존 Angular 18 기반 구성은 `zone.js` polyfill에 기대고 있었지만, 현재 샘플은 `zone.js` polyfill을 제거하고 bootstrap 시 no-op zone을 사용한다.
 
 ```ts
-platformBrowserDynamic().bootstrapModule(AppModule, { ngZone: 'noop' })
+platformBrowser().bootstrapModule(AppModule, { ngZone: 'noop' })
     .catch(err => console.error(err));
 ```
 

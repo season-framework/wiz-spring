@@ -21,7 +21,7 @@ cd /root/workspace/wiz-java/wiz-spring
 ## 앱 생성
 
 ```bash
-jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.0.7.jar
+jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.1.0.jar
 workspace=/tmp/demo2
 
 rm -rf "$workspace"
@@ -151,3 +151,11 @@ MCP 도구는 workspace/source/package/app 기준 이름을 사용합니다. 예
 ```bash
 ./mvnw test
 ```
+
+Angular `platformBrowser()` 전환 후 실제 브라우저에서 WIZ render와 routerLink까지 확인하려면:
+
+```bash
+node scripts/verify-angular-platform-browser.mjs
+```
+
+이 검증은 임시 workspace에 전용 probe 페이지를 주입해 `service.render()` 이후 부모 변수, `@Input`, `@Output` DOM 갱신과 주요 routerLink 이동을 확인합니다. Playwright는 `/tmp` 아래 도구 디렉터리에 설치됩니다.

@@ -1,9 +1,9 @@
 import '@angular/compiler';
-import { platformBrowserDynamic } from '@angular/platform-browser-dynamic';
+import { platformBrowser } from '@angular/platform-browser';
 import { enableProdMode } from '@angular/core';
 import { AppModule } from './app/app.module';
 
 enableProdMode();
 
-platformBrowserDynamic().bootstrapModule(AppModule, { ngZone: 'noop' })
+platformBrowser().bootstrapModule(AppModule, { ngZone: 'noop' })
   .catch(err => console.error(err));
