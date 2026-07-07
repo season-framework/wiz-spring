@@ -25,7 +25,7 @@ final class AngularSourceStagingService {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     void stage(ProjectContext project) throws IOException {
-        Path buildSourceRoot = project.buildRoot().resolve("src");
+        Path buildSourceRoot = ProjectBuildLayout.stagedSourceRoot(project);
         Path angularRoot = buildSourceRoot.resolve("angular");
         if (!Files.isRegularFile(angularRoot.resolve("package.json")) || !Files.isRegularFile(angularRoot.resolve("angular.json"))) {
             return;

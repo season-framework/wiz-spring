@@ -81,9 +81,9 @@ wiz:
   # 다른 위치로 옮겼을 때만 명시 class 이름을 설정하세요.
   # 기본값: convention 자동 탐지
   # auth:
-  #   service-class: __WIZ_PACKAGE_ROOT__.model.AuthService
+  #   service-class: __WIZ_PACKAGE_ROOT__.application.model.AuthService
   # session:
-  #   service-class: __WIZ_PACKAGE_ROOT__.model.SessionService
+  #   service-class: __WIZ_PACKAGE_ROOT__.application.model.SessionService
 
 sample:
   # Sample app database settings.

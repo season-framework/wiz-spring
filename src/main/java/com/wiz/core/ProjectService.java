@@ -130,7 +130,7 @@ public class ProjectService {
                 + "    <modelVersion>4.0.0</modelVersion>\n"
                 + "    <groupId>" + project.packageRoot() + "</groupId>\n"
                 + "    <artifactId>wiz-app</artifactId>\n"
-                + "    <version>0.1.0</version>\n"
+                + "    <version>0.2.0</version>\n"
                 + "    <properties>\n"
                 + "        <java.version>21</java.version>\n"
                 + "    </properties>\n"

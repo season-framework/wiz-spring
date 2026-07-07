@@ -3,6 +3,7 @@ package com.wiz.runtime;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.List;
 import java.util.Optional;
 
 import com.wiz.config.WizRuntimeProperties;
@@ -69,7 +70,6 @@ public class ProjectWarmupService implements ApplicationRunner {
     }
 
     boolean warmup(ProjectContext project) {
-        String className = ProjectJavaNaming.packageRoot(project) + ".model.Struct";
         ProjectRuntimeCache.CachedProjectRuntime runtime;
         try {
             runtime = runtimeCache.get(project);
@@ -81,17 +81,20 @@ public class ProjectWarmupService implements ApplicationRunner {
         ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(runtime.classLoader());
         try {
-            Class<?> type = Class.forName(className, true, runtime.classLoader());
-            Method warmup = warmupMethod(type).orElse(null);
-            if (warmup == null) {
-                LOGGER.debug("WIZ app warmup hook not found: {}", className);
-                return false;
+            for (String className : warmupClassCandidates(project)) {
+                Class<?> type = loadWarmupClass(runtime, className).orElse(null);
+                if (type == null) {
+                    continue;
+                }
+                Method warmup = warmupMethod(type).orElse(null);
+                if (warmup == null) {
+                    LOGGER.debug("WIZ app warmup hook not found: {}", className);
+                    continue;
+                }
+                invokeWarmup(project, warmup);
+                LOGGER.info("WIZ app warmup completed");
+                return true;
             }
-            invokeWarmup(project, warmup);
-            LOGGER.info("WIZ app warmup completed");
-            return true;
-        } catch (ClassNotFoundException exception) {
-            LOGGER.debug("WIZ app warmup hook class not found: {}", className);
             return false;
         } catch (InvocationTargetException exception) {
             LOGGER.warn("WIZ app warmup failed", exception.getCause());
@@ -104,6 +107,20 @@ public class ProjectWarmupService implements ApplicationRunner {
             return false;
         } finally {
             Thread.currentThread().setContextClassLoader(previousLoader);
+        }
+    }
+
+    private List<String> warmupClassCandidates(ProjectContext project) {
+        String root = ProjectJavaNaming.packageRoot(project);
+        return List.of(root + ".application.model.Struct", root + ".model.Struct");
+    }
+
+    private Optional<Class<?>> loadWarmupClass(ProjectRuntimeCache.CachedProjectRuntime runtime, String className) {
+        try {
+            return Optional.of(Class.forName(className, true, runtime.classLoader()));
+        } catch (ClassNotFoundException exception) {
+            LOGGER.debug("WIZ app warmup hook class not found: {}", className);
+            return Optional.empty();
         }
     }
 

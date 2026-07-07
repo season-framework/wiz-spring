@@ -47,13 +47,15 @@ final class AppMetadataNormalizer {
                 putDefault(metadata, "name", ProjectJavaNaming.componentName(appId));
                 putNgBuild(metadata, appId);
                 putNg(metadata, appId);
-                String apiHandlerClass = nestedString(metadata, "api", "handler", ProjectJavaNaming.appApiHandlerClass(project, appId));
+                String apiHandlerClass = ProjectJavaNaming.modernizeProjectPackage(project,
+                        nestedString(metadata, "api", "handler", ProjectJavaNaming.appApiHandlerClass(project, appId)));
                 if (appJavaSourceExists(app, "api.java", apiHandlerClass)) {
-                    putNestedDefault(metadata, "api", "handler", apiHandlerClass);
+                    putNested(metadata, "api", "handler", apiHandlerClass);
                 }
-                String socketHandlerClass = nestedString(metadata, "socket", "handler", ProjectJavaNaming.appSocketHandlerClass(project, appId));
+                String socketHandlerClass = ProjectJavaNaming.modernizeProjectPackage(project,
+                        nestedString(metadata, "socket", "handler", ProjectJavaNaming.appSocketHandlerClass(project, appId)));
                 if (appJavaSourceExists(app, "socket.java", socketHandlerClass)) {
-                    putNestedDefault(metadata, "socket", "handler", socketHandlerClass);
+                    putNested(metadata, "socket", "handler", socketHandlerClass);
                 }
                 writeMetadata(appJson, metadata);
             }
@@ -86,7 +88,9 @@ final class AppMetadataNormalizer {
                 if (!metadata.containsKey("methods") && !metadata.containsKey("method")) {
                     metadata.put("methods", List.of());
                 }
-                putDefault(metadata, "handler", ProjectJavaNaming.routeHandlerClass(project, routeId));
+                String handlerClass = ProjectJavaNaming.modernizeProjectPackage(project,
+                        string(metadata, "handler", ProjectJavaNaming.routeHandlerClass(project, routeId)));
+                metadata.put("handler", handlerClass);
                 writeMetadata(appJson, metadata);
             }
         }
@@ -120,9 +124,9 @@ final class AppMetadataNormalizer {
         ng.putIfAbsent("outputs", List.of());
     }
 
-    private void putNestedDefault(LinkedHashMap<String, Object> metadata, String key, String nestedKey, String defaultValue) {
+    private void putNested(LinkedHashMap<String, Object> metadata, String key, String nestedKey, String defaultValue) {
         LinkedHashMap<String, Object> nested = nestedMap(metadata, key);
-        putDefault(nested, nestedKey, defaultValue);
+        nested.put(nestedKey, defaultValue);
     }
 
     private LinkedHashMap<String, Object> nestedMap(LinkedHashMap<String, Object> metadata, String key) {
@@ -196,6 +200,11 @@ final class AppMetadataNormalizer {
     private String string(Map<String, Object> metadata, String key) {
         Object value = metadata.get(key);
         return value == null ? "" : value.toString().trim();
+    }
+
+    private String string(Map<String, Object> metadata, String key, String fallback) {
+        String value = string(metadata, key);
+        return value.isBlank() ? fallback : value;
     }
 
     private String nestedString(Map<String, Object> metadata, String key, String nestedKey, String fallback) {

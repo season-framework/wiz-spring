@@ -68,7 +68,7 @@ public class AppApiDispatcher {
             if (controllerResult.isPresent()) {
                 return controllerResult.get();
             }
-            Optional<String> handlerClass = metadata.flatMap(this::javaHandlerClass)
+            Optional<String> handlerClass = metadata.flatMap(value -> javaHandlerClass(context, value))
                     .or(() -> Optional.of(ProjectJavaNaming.appApiHandlerClass(context.project(), appId)));
             return dispatchProjectJavaApi(context, handlerClass.get(), function);
         }
@@ -109,7 +109,7 @@ public class AppApiDispatcher {
         }
     }
 
-    private Optional<String> javaHandlerClass(Map<String, Object> metadata) {
+    private Optional<String> javaHandlerClass(WizContext context, Map<String, Object> metadata) {
         Object api = metadata.get("api");
         if (!(api instanceof Map<?, ?> apiMap)) {
             return Optional.empty();
@@ -118,7 +118,7 @@ public class AppApiDispatcher {
         if (handler == null || handler.toString().isBlank()) {
             return Optional.empty();
         }
-        return Optional.of(handler.toString());
+        return Optional.of(ProjectJavaNaming.modernizeProjectPackage(context.project(), handler.toString()));
     }
 
 }

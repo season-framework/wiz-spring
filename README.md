@@ -21,14 +21,14 @@ cd /root/workspace/wiz-java/wiz-spring
 ## 앱 생성
 
 ```bash
-jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.1.0.jar
+jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.2.0.jar
 workspace=/tmp/demo2
 
 rm -rf "$workspace"
 java -jar "$jar" create "$workspace" --package a.b.c
 ```
 
-`--package`는 필수이며, 생성/빌드되는 Java package root가 됩니다. 위 예시는 build 결과를 `build/classes/a/b/c/...` 아래에 만듭니다.
+`--package`는 필수이며, 생성/빌드되는 Java package root가 됩니다. 위 예시는 build 결과를 `build/src/main/java/a/b/c/...`와 `build/target/classes/a/b/c/...` 아래에 만듭니다.
 
 기본 생성은 sample source를 만들고 clean bundle build까지 실행합니다. 생성만 하려면:
 
@@ -96,10 +96,26 @@ demo2/
 ```
 
 - `src/**`: WIZ source
-- `build/**`: 재구성/컴파일 중간 산출물
+- `build/**`: 외부 공유 시 열어볼 수 있는 Spring Boot/Maven 표준형 build 산출물
 - `bundle/**`: runtime이 읽는 실행 산출물
 - `pom.xml`: 앱 Java dependency
 - `config/application.yml`: 서버와 앱 runtime 설정
+
+`build/`는 아래처럼 정리됩니다.
+
+```text
+build/
+  pom.xml
+  src/main/java/
+  src/main/resources/
+  target/classes/
+  target/dependency/
+  target/app-api.jar
+  target/frontend/
+  .wiz/source/
+```
+
+`build/src/main/java`, `build/src/main/resources`, `build/target/**`는 외부에서 보아도 일반 Spring Boot/Maven project에 가까운 공개 산출물입니다. `build/.wiz/source`는 WIZ app, portal, Angular 입력을 평탄화한 내부 staging 경로이며 직접 수정하지 않습니다.
 
 ## 주요 설정
 
@@ -134,6 +150,18 @@ Angular frontend는 build 단계에서 이 값을 `wiz-runtime-config.ts`로 편
 - Portal package: `src/portal/{package}/...`
 
 Source 파일에 package 선언이 없으면 build 단계에서 `wiz.java.package-root` 기준 package가 자동으로 붙습니다.
+build 산출물의 Java package는 Spring 계층형 명칭을 사용합니다.
+
+| Source | Generated package |
+| --- | --- |
+| `src/app/{appId}/api.java` | `{packageRoot}.web.api.{AppId}Api` |
+| `src/app/{appId}/socket.java` | `{packageRoot}.realtime.socket.{AppId}SocketController` |
+| `src/route/{routeId}/route.java` | `{packageRoot}.web.route.{RouteId}RouteHandler` |
+| `src/controller/**/*.java` | `{packageRoot}.security.guard...` |
+| `src/model/Struct.java` | `{packageRoot}.application.model.Struct` |
+| `src/model/struct/**/*.java` | `{packageRoot}.application.service...` |
+| `src/model/db/**/*.java` | `{packageRoot}.domain.entity...` |
+| `src/portal/{package}/model/**/*.java` | `{packageRoot}.module.{package}.application|domain|infrastructure...` |
 
 ## MCP와 Codex
 

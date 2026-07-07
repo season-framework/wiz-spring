@@ -127,7 +127,7 @@ public class ProjectBuildService {
                             supplyChain.digestAlgorithm(),
                             supplyChain.dependencyDigest(),
                             supplyChain.dependencyCount(),
-                            "target/" + SupplyChainManifestService.CYCLONEDX_BOM_FILE));
+                            project.buildRoot().relativize(ProjectBuildLayout.cyclonedxBom(project)).toString().replace('\\', '/')));
             return finish(buildLogger, totalStarted, new BuildResult(0, phases, "Generated Java WIZ app bundle"));
         } finally {
             lock.unlock();
@@ -139,8 +139,10 @@ public class ProjectBuildService {
     }
 
     private void reconstruct(ProjectContext project, boolean preserveFrontendDependencies) throws IOException {
-        SafePath root = new SafePath(project.root());
-        Path buildSourceRoot = root.resolveForWrite("build/src");
+        Files.createDirectories(project.buildRoot());
+        deleteLegacyBuildArtifacts(project);
+        SafePath root = new SafePath(project.buildRoot());
+        Path buildSourceRoot = root.resolveForWrite(".wiz/source");
         if (preserveFrontendDependencies) {
             deleteBuildSourceRootExceptFrontendDependencies(buildSourceRoot);
         } else {
@@ -150,6 +152,28 @@ public class ProjectBuildService {
         copyIfExists(project.sourceRoot(), buildSourceRoot);
         flattenPortals(project.sourceRoot().resolve("portal"), buildSourceRoot);
         new AppMetadataNormalizer(objectMapper).normalize(project, buildSourceRoot);
+    }
+
+    private void deleteLegacyBuildArtifacts(ProjectContext project) throws IOException {
+        for (String path : List.of(
+                "main",
+                "classes",
+                "app-api.jar",
+                "dist",
+                "compiler-classpath",
+                "src/angular",
+                "src/app",
+                "src/assets",
+                "src/auth",
+                "src/controller",
+                "src/libs",
+                "src/model",
+                "src/portal",
+                "src/route",
+                "src/session",
+                "src/styles")) {
+            delete(project.buildRoot().resolve(path));
+        }
     }
 
     private void deleteBuildSourceRootExceptFrontendDependencies(Path buildSourceRoot) throws IOException {
@@ -204,8 +228,10 @@ public class ProjectBuildService {
     }
 
     private void reconstructProjectJava(ProjectContext project) throws IOException {
-        delete(project.buildRoot().resolve("main/java"));
-        Path appRoot = project.buildRoot().resolve("src/app");
+        delete(ProjectBuildLayout.generatedJavaSourceRoot(project));
+        delete(ProjectBuildLayout.generatedResourcesRoot(project));
+        writeGeneratedProjectMetadata(project);
+        Path appRoot = ProjectBuildLayout.stagedAppRoot(project);
         if (Files.isDirectory(appRoot)) {
             try (Stream<Path> apps = Files.list(appRoot)) {
                 for (Path app : apps.filter(Files::isDirectory).toList()) {
@@ -228,12 +254,12 @@ public class ProjectBuildService {
         reconstructModelJava(project);
         reconstructRouteJava(project);
 
-        Path controllerRoot = project.buildRoot().resolve("src/controller");
-        reconstructJavaTree(project, controllerRoot, ProjectJavaNaming.packageRoot(project) + ".controller");
+        Path controllerRoot = ProjectBuildLayout.stagedControllerRoot(project);
+        reconstructJavaTree(project, controllerRoot, ProjectJavaNaming.packageRoot(project) + ".security.guard");
         // Legacy extension locations are still compiled for existing projects.
         // New projects should place auth/session implementations under src/model.
-        reconstructJavaTree(project, project.buildRoot().resolve("src/auth"), ProjectJavaNaming.packageRoot(project) + ".auth");
-        reconstructJavaTree(project, project.buildRoot().resolve("src/session"), ProjectJavaNaming.packageRoot(project) + ".session");
+        reconstructJavaTree(project, ProjectBuildLayout.stagedSourceRoot(project).resolve("auth"), ProjectJavaNaming.packageRoot(project) + ".security.auth");
+        reconstructJavaTree(project, ProjectBuildLayout.stagedSourceRoot(project).resolve("session"), ProjectJavaNaming.packageRoot(project) + ".security.session");
     }
 
     private Optional<Path> appJavaSource(Path app, String conventionalName, String handlerClass) {
@@ -250,7 +276,7 @@ public class ProjectBuildService {
     }
 
     private void reconstructRouteJava(ProjectContext project) throws IOException {
-        Path routeRoot = project.buildRoot().resolve("src/route");
+        Path routeRoot = ProjectBuildLayout.stagedRouteRoot(project);
         if (!Files.isDirectory(routeRoot)) {
             return;
         }
@@ -267,7 +293,7 @@ public class ProjectBuildService {
     }
 
     private void reconstructModelJava(ProjectContext project) throws IOException {
-        Path modelRoot = project.buildRoot().resolve("src/model");
+        Path modelRoot = ProjectBuildLayout.stagedModelRoot(project);
         if (!Files.isDirectory(modelRoot)) {
             return;
         }
@@ -284,11 +310,51 @@ public class ProjectBuildService {
         String relativeName = relative.toString().substring(0, relative.toString().length() - ".java".length()).replace('\\', '/');
         String[] parts = relativeName.split("/");
         if (parts.length >= 3 && parts[0].equals("portal")) {
-            String nested = java.util.Arrays.stream(parts, 2, parts.length)
-                    .collect(java.util.stream.Collectors.joining("."));
-            return ProjectJavaNaming.packageRoot(project) + ".portal." + ProjectJavaNaming.packageSegment(parts[1]) + ".model." + nested;
+            return portalModelHandlerClass(project, parts);
         }
-        return ProjectJavaNaming.packageRoot(project) + ".model." + relativeName.replace('/', '.');
+        String root = ProjectJavaNaming.packageRoot(project);
+        if (parts.length >= 2 && parts[0].equals("struct")) {
+            return root + ".application.service." + relativeClass(parts, 1);
+        }
+        if (parts.length >= 2 && parts[0].equals("db")) {
+            return root + ".domain.entity." + relativeClass(parts, 1);
+        }
+        if (parts.length >= 2 && parts[0].equals("orm")) {
+            return root + ".infrastructure.orm." + relativeClass(parts, 1);
+        }
+        if (parts.length >= 2 && parts[0].equals("security")) {
+            return root + ".security." + relativeClass(parts, 1);
+        }
+        return root + ".application.model." + relativeClass(parts, 0);
+    }
+
+    private String portalModelHandlerClass(ProjectContext project, String[] parts) {
+        String root = ProjectJavaNaming.packageRoot(project) + ".module." + ProjectJavaNaming.packageSegment(parts[1]);
+        if (parts.length >= 4 && parts[2].equals("struct")) {
+            return root + ".application.service." + relativeClass(parts, 3);
+        }
+        if (parts.length >= 4 && parts[2].equals("db")) {
+            return root + ".domain.entity." + relativeClass(parts, 3);
+        }
+        if (parts.length >= 4 && parts[2].equals("orm")) {
+            return root + ".infrastructure.orm." + relativeClass(parts, 3);
+        }
+        if (parts.length >= 4 && parts[2].equals("security")) {
+            return root + ".security." + relativeClass(parts, 3);
+        }
+        return root + ".application.model." + relativeClass(parts, 2);
+    }
+
+    private String relativeClass(String[] parts, int start) {
+        if (start >= parts.length) {
+            return "Generated";
+        }
+        List<String> segments = new ArrayList<>();
+        for (int index = start; index < parts.length - 1; index++) {
+            segments.add(ProjectJavaNaming.packageSegment(parts[index]));
+        }
+        segments.add(parts[parts.length - 1]);
+        return String.join(".", segments);
     }
 
     private void reconstructJavaTree(ProjectContext project, Path sourceRoot, String packagePrefix) throws IOException {
@@ -305,9 +371,36 @@ public class ProjectBuildService {
     }
 
     private void writeJavaSource(ProjectContext project, String handlerClass, Path source) throws IOException {
-        Path target = project.buildRoot().resolve("main/java").resolve(handlerClass.replace('.', '/') + ".java");
+        Path target = ProjectBuildLayout.generatedJavaSourceRoot(project).resolve(handlerClass.replace('.', '/') + ".java");
         Files.createDirectories(target.getParent());
-        Files.writeString(target, javaSource(handlerClass, Files.readString(source)));
+        Files.writeString(target, javaSource(project, handlerClass, Files.readString(source)));
+    }
+
+    private void writeGeneratedProjectMetadata(ProjectContext project) throws IOException {
+        Path pom = project.root().resolve("pom.xml");
+        if (Files.isRegularFile(pom)) {
+            copyFileIfExists(pom, ProjectBuildLayout.generatedPom(project));
+        } else {
+            Files.createDirectories(ProjectBuildLayout.generatedPom(project).getParent());
+            Files.writeString(ProjectBuildLayout.generatedPom(project), generatedPom(project));
+        }
+        Files.createDirectories(ProjectBuildLayout.generatedResourcesRoot(project));
+        copyIfExists(project.configRoot(), ProjectBuildLayout.generatedResourcesRoot(project));
+    }
+
+    private String generatedPom(ProjectContext project) {
+        return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                + "<project xmlns=\"http://maven.apache.org/POM/4.0.0\"\n"
+                + "         xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n"
+                + "         xsi:schemaLocation=\"http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd\">\n"
+                + "    <modelVersion>4.0.0</modelVersion>\n"
+                + "    <groupId>" + project.packageRoot() + "</groupId>\n"
+                + "    <artifactId>wiz-generated-app</artifactId>\n"
+                + "    <version>0.2.0</version>\n"
+                + "    <properties>\n"
+                + "        <java.version>21</java.version>\n"
+                + "    </properties>\n"
+                + "</project>\n";
     }
 
     private BuildResult compileProjectJava(ProjectContext project) throws IOException {
@@ -315,7 +408,7 @@ public class ProjectBuildService {
     }
 
     private BuildResult compileProjectJava(ProjectContext project, BuildLogger logger) throws IOException {
-        Path sourceRoot = project.buildRoot().resolve("main/java");
+        Path sourceRoot = ProjectBuildLayout.generatedJavaSourceRoot(project);
         if (!Files.isDirectory(sourceRoot)) {
             logger.info("[java-compile] No Java app sources");
             return new BuildResult(0, List.of("reconstruct", "java-source", "app-dependencies", "java-compile"), "No Java app sources");
@@ -335,7 +428,7 @@ public class ProjectBuildService {
             return new BuildResult(1, List.of("reconstruct", "java-source", "app-dependencies", "java-compile"), "JDK compiler is required to build Java app APIs");
         }
 
-        Path classesRoot = project.buildRoot().resolve("classes");
+        Path classesRoot = ProjectBuildLayout.classesRoot(project);
         delete(classesRoot);
         Files.createDirectories(classesRoot);
         logger.info("[java-compile] source files: " + sources.size());
@@ -364,7 +457,7 @@ public class ProjectBuildService {
         }
 
         packageProjectJar(project, classesRoot);
-        logger.info("[java-compile] packaged " + project.buildRoot().resolve("app-api.jar"));
+        logger.info("[java-compile] packaged " + ProjectBuildLayout.appApiJar(project));
         return new BuildResult(0, List.of("reconstruct", "java-source", "app-dependencies", "java-compile"), "Compiled Java app APIs");
     }
 
@@ -382,10 +475,30 @@ public class ProjectBuildService {
                 }
             }
         }
-        for (Path dependency : ProjectClassPath.dependencyJars(project)) {
+        for (Path dependency : compilerDependencyJars(project)) {
             entries.add(dependency.toString());
         }
         return String.join(File.pathSeparator, entries);
+    }
+
+    private List<Path> compilerDependencyJars(ProjectContext project) throws IOException {
+        LinkedHashSet<Path> jars = new LinkedHashSet<>();
+        jars.addAll(jarsIn(ProjectBuildLayout.dependencyRoot(project)));
+        jars.addAll(ProjectClassPath.dependencyJars(project));
+        return List.copyOf(jars);
+    }
+
+    private List<Path> jarsIn(Path directory) throws IOException {
+        if (!Files.isDirectory(directory)) {
+            return List.of();
+        }
+        try (Stream<Path> paths = Files.list(directory)) {
+            return paths
+                    .filter(path -> Files.isRegularFile(path) && path.getFileName().toString().endsWith(".jar"))
+                    .sorted(Comparator.comparing(path -> path.getFileName().toString()))
+                    .map(path -> path.toAbsolutePath().normalize())
+                    .toList();
+        }
     }
 
     private void resolveProjectDependencies(ProjectContext project, BuildLogger logger) throws IOException {
@@ -394,7 +507,7 @@ public class ProjectBuildService {
             logger.info("[app-dependencies] no workspace pom.xml");
             return;
         }
-        Path output = project.root().resolve("target/dependency");
+        Path output = ProjectBuildLayout.dependencyRoot(project);
         Files.createDirectories(output);
         logger.info("[app-dependencies] pom: " + pom);
         logger.info("[app-dependencies] output: " + output);
@@ -437,7 +550,7 @@ public class ProjectBuildService {
     }
 
     private List<String> extractBootJarClasspath(ProjectContext project, Path jarPath) throws IOException {
-        Path classpathRoot = project.buildRoot().resolve("compiler-classpath");
+        Path classpathRoot = ProjectBuildLayout.compilerClasspathRoot(project);
         Path classes = classpathRoot.resolve("classes");
         Path libs = classpathRoot.resolve("lib");
         delete(classpathRoot);
@@ -479,25 +592,25 @@ public class ProjectBuildService {
     public void bundle(ProjectContext project) throws IOException {
         delete(project.bundleRoot());
         Files.createDirectories(project.bundleRoot());
-        copyIfExists(project.buildRoot().resolve("dist/build"), project.bundleWwwRoot());
-        copyIfExists(project.buildRoot().resolve("src/assets"), project.bundleAssetsRoot());
-        copyIfExists(project.buildRoot().resolve("src/controller"), project.bundleRoot().resolve("src/controller"));
-        copyIfExists(project.buildRoot().resolve("src/model"), project.bundleRoot().resolve("src/model"));
-        copyIfExists(project.buildRoot().resolve("src/route"), project.bundleRoot().resolve("src/route"));
+        copyIfExists(ProjectBuildLayout.frontendOutputRoot(project), project.bundleWwwRoot());
+        copyIfExists(ProjectBuildLayout.stagedAssetsRoot(project), project.bundleAssetsRoot());
+        copyIfExists(ProjectBuildLayout.stagedControllerRoot(project), project.bundleRoot().resolve("src/controller"));
+        copyIfExists(ProjectBuildLayout.stagedModelRoot(project), project.bundleRoot().resolve("src/model"));
+        copyIfExists(ProjectBuildLayout.stagedRouteRoot(project), project.bundleRoot().resolve("src/route"));
         copyIfExists(project.configRoot(), project.bundleRoot().resolve("config"));
-        copyIfExists(project.buildRoot().resolve("src/app"), project.bundleRoot().resolve("src/app"));
-        copyIfExists(project.root().resolve("target/dependency"), project.bundleRoot().resolve("lib"));
+        copyIfExists(ProjectBuildLayout.stagedAppRoot(project), project.bundleRoot().resolve("src/app"));
+        copyIfExists(ProjectBuildLayout.dependencyRoot(project), project.bundleRoot().resolve("lib"));
         copyIfExists(project.root().resolve("lib"), project.bundleRoot().resolve("lib"));
-        copyIfExists(project.buildRoot().resolve("classes"), project.bundleRoot().resolve("classes"));
-        copyFileIfExists(project.buildRoot().resolve("app-api.jar"), project.bundleRoot().resolve("app-api.jar"));
-        copyFileIfExists(project.root().resolve("pom.xml"), project.bundleRoot().resolve("pom.xml"));
+        copyIfExists(ProjectBuildLayout.classesRoot(project), project.bundleRoot().resolve("classes"));
+        copyFileIfExists(ProjectBuildLayout.appApiJar(project), project.bundleRoot().resolve("app-api.jar"));
+        copyFileIfExists(ProjectBuildLayout.generatedPom(project), project.bundleRoot().resolve("pom.xml"));
     }
 
     private String handlerClass(ProjectContext project, String appId, Path appJson) throws IOException {
         if (Files.isRegularFile(appJson)) {
             Map<String, Object> metadata = objectMapper.readValue(Files.readAllBytes(appJson), new TypeReference<>() {
             });
-            Optional<String> configured = javaHandlerClass(metadata);
+            Optional<String> configured = javaHandlerClass(project, metadata);
             if (configured.isPresent()) {
                 return configured.get();
             }
@@ -505,7 +618,7 @@ public class ProjectBuildService {
         return ProjectJavaNaming.appApiHandlerClass(project, appId);
     }
 
-    private Optional<String> javaHandlerClass(Map<String, Object> metadata) {
+    private Optional<String> javaHandlerClass(ProjectContext project, Map<String, Object> metadata) {
         Object api = metadata.get("api");
         if (!(api instanceof Map<?, ?> apiMap)) {
             return Optional.empty();
@@ -514,14 +627,14 @@ public class ProjectBuildService {
         if (handler == null || handler.toString().isBlank()) {
             return Optional.empty();
         }
-        return Optional.of(handler.toString());
+        return Optional.of(ProjectJavaNaming.modernizeProjectPackage(project, handler.toString()));
     }
 
     private String socketHandlerClass(ProjectContext project, String appId, Path appJson) throws IOException {
         if (Files.isRegularFile(appJson)) {
             Map<String, Object> metadata = objectMapper.readValue(Files.readAllBytes(appJson), new TypeReference<>() {
             });
-            Optional<String> configured = javaSocketHandlerClass(metadata);
+            Optional<String> configured = javaSocketHandlerClass(project, metadata);
             if (configured.isPresent()) {
                 return configured.get();
             }
@@ -529,7 +642,7 @@ public class ProjectBuildService {
         return ProjectJavaNaming.appSocketHandlerClass(project, appId);
     }
 
-    private Optional<String> javaSocketHandlerClass(Map<String, Object> metadata) {
+    private Optional<String> javaSocketHandlerClass(ProjectContext project, Map<String, Object> metadata) {
         Object socket = metadata.get("socket");
         if (!(socket instanceof Map<?, ?> socketMap)) {
             return Optional.empty();
@@ -538,7 +651,7 @@ public class ProjectBuildService {
         if (handler == null || handler.toString().isBlank()) {
             return Optional.empty();
         }
-        return Optional.of(handler.toString());
+        return Optional.of(ProjectJavaNaming.modernizeProjectPackage(project, handler.toString()));
     }
 
     private String routeHandlerClass(ProjectContext project, String routeId, Path appJson) throws IOException {
@@ -547,22 +660,23 @@ public class ProjectBuildService {
             });
             Object handler = metadata.get("handler");
             if (handler != null && !handler.toString().isBlank()) {
-                return handler.toString();
+                return ProjectJavaNaming.modernizeProjectPackage(project, handler.toString());
             }
         }
         return ProjectJavaNaming.routeHandlerClass(project, routeId);
     }
 
-    private String javaSource(String handlerClass, String source) {
-        if (source.stripLeading().startsWith("package ")) {
-            return source;
+    private String javaSource(ProjectContext project, String handlerClass, String source) {
+        String rewritten = ProjectJavaNaming.modernizeProjectPackages(project, source);
+        if (rewritten.stripLeading().startsWith("package ")) {
+            return rewritten;
         }
         int classStart = handlerClass.lastIndexOf('.');
-        return "package " + handlerClass.substring(0, classStart) + ";\n\n" + source;
+        return "package " + handlerClass.substring(0, classStart) + ";\n\n" + rewritten;
     }
 
     private void packageProjectJar(ProjectContext project, Path classesRoot) throws IOException {
-        Path jar = project.buildRoot().resolve("app-api.jar");
+        Path jar = ProjectBuildLayout.appApiJar(project);
         Files.createDirectories(jar.getParent());
         try (JarOutputStream output = new JarOutputStream(Files.newOutputStream(jar));
                 Stream<Path> paths = Files.walk(classesRoot)) {
@@ -609,7 +723,7 @@ public class ProjectBuildService {
     }
 
     private Path entryAppFile(ProjectContext project, String filename) {
-        Path appRoot = project.buildRoot().resolve("src/app");
+        Path appRoot = ProjectBuildLayout.stagedAppRoot(project);
         for (String appId : List.of("page.access", "page.dashboard", "page.main")) {
             Path candidate = appRoot.resolve(appId).resolve(filename);
             if (Files.exists(candidate)) {

@@ -55,7 +55,7 @@ class JavaSampleProjectTest {
         BuildResult build = new ProjectBuildService().build(project, true, "bundle");
         assertTrue(build.success(), build.message());
         assertTrue(Files.exists(project.bundleRoot().resolve("app-api.jar")));
-        assertTrue(Files.exists(project.bundleRoot().resolve("classes/com/wiz/app/socket/PageChatSocketController.class")));
+        assertTrue(Files.exists(project.bundleRoot().resolve("classes/com/wiz/app/realtime/socket/PageChatSocketController.class")));
 
         SocketRoomRegistry rooms = new SocketRoomRegistry();
         ProjectSocketDispatcher socketDispatcher = new ProjectSocketDispatcher(new PathService(workspace), rooms);

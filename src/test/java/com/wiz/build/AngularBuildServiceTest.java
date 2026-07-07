@@ -35,7 +35,7 @@ class AngularBuildServiceTest {
         assertTrue(missing.skipped());
         assertEquals("frontend-fallback", missing.phase());
 
-        Path angularRoot = project.buildRoot().resolve("src/angular");
+        Path angularRoot = ProjectBuildLayout.stagedAngularRoot(project);
         Files.createDirectories(angularRoot);
         Files.writeString(angularRoot.resolve("package.json"), "{\"scripts\":{\"build\":\"ng build\"}}\n");
         Files.writeString(angularRoot.resolve("angular.json"), minimalAngularJson());
@@ -49,7 +49,7 @@ class AngularBuildServiceTest {
     @Test
     void buildsReadyAngularPackageAndCopiesDist() throws Exception {
         ProjectContext project = newProject();
-        Path angularRoot = project.buildRoot().resolve("src/angular");
+        Path angularRoot = ProjectBuildLayout.stagedAngularRoot(project);
         writeReadyAngularPackage(angularRoot);
 
         FakeCommandExecutor executor = new FakeCommandExecutor();
@@ -58,13 +58,13 @@ class AngularBuildServiceTest {
         assertTrue(result.success());
         assertTrue(result.built());
         assertEquals(List.of("frontend-install", "frontend-build"), executor.phases);
-        assertTrue(Files.exists(project.buildRoot().resolve("dist/build/index.html")));
+        assertTrue(Files.exists(ProjectBuildLayout.frontendOutputRoot(project).resolve("index.html")));
     }
 
     @Test
     void supportsAngularObjectOutputPath() throws Exception {
         ProjectContext project = newProject();
-        Path angularRoot = project.buildRoot().resolve("src/angular");
+        Path angularRoot = ProjectBuildLayout.stagedAngularRoot(project);
         writeReadyAngularPackage(angularRoot);
         Files.writeString(angularRoot.resolve("angular.json"), minimalAngularJsonWithObjectOutputPath());
 
@@ -73,13 +73,13 @@ class AngularBuildServiceTest {
 
         assertTrue(result.success(), result.message());
         assertTrue(result.built());
-        assertTrue(Files.exists(project.buildRoot().resolve("dist/build/index.html")));
+        assertTrue(Files.exists(ProjectBuildLayout.frontendOutputRoot(project).resolve("index.html")));
     }
 
     @Test
     void normalBuildSkipsNpmInstallWhenDependenciesExist() throws Exception {
         ProjectContext project = newProject();
-        Path angularRoot = project.buildRoot().resolve("src/angular");
+        Path angularRoot = ProjectBuildLayout.stagedAngularRoot(project);
         writeReadyAngularPackage(angularRoot);
         Files.createDirectories(angularRoot.resolve("node_modules/pug"));
 
@@ -94,7 +94,7 @@ class AngularBuildServiceTest {
     @Test
     void normalBuildFailsWithoutInstallingWhenDependenciesAreMissing() throws Exception {
         ProjectContext project = newProject();
-        Path angularRoot = project.buildRoot().resolve("src/angular");
+        Path angularRoot = ProjectBuildLayout.stagedAngularRoot(project);
         writeReadyAngularPackage(angularRoot);
         delete(angularRoot.resolve("node_modules"));
 
@@ -114,28 +114,28 @@ class AngularBuildServiceTest {
         FrontendBuildResult result = new AngularBuildService(new FakeCommandExecutor()).build(project);
 
         assertTrue(result.success(), result.message());
-        Path component = project.buildRoot().resolve("src/angular/src/app/page.access/page.access.component.ts");
+        Path component = ProjectBuildLayout.stagedAngularRoot(project).resolve("src/app/page.access/page.access.component.ts");
         String source = Files.readString(component);
         assertTrue(source.indexOf("import { OnInit } from '@angular/core';") < source.indexOf("@Component({"));
         assertTrue(source.indexOf("@Component({") < source.indexOf("export class PageAccessComponent"));
         assertTrue(source.contains("let wiz = new Wiz().app('page.access');"));
 
-        String declarations = Files.readString(project.buildRoot().resolve("src/angular/src/types.d.ts"));
+        String declarations = Files.readString(ProjectBuildLayout.stagedAngularRoot(project).resolve("src/types.d.ts"));
         assertFalse(declarations.contains("__WIZ_CONFIG__"));
 
-        String index = Files.readString(project.buildRoot().resolve("src/angular/src/index.pug"));
+        String index = Files.readString(ProjectBuildLayout.stagedAngularRoot(project).resolve("src/index.pug"));
         assertFalse(index.contains("config.js"));
 
-        String runtimeConfig = Files.readString(project.buildRoot().resolve("src/angular/src/wiz-runtime-config.ts"));
+        String runtimeConfig = Files.readString(ProjectBuildLayout.stagedAngularRoot(project).resolve("src/wiz-runtime-config.ts"));
         assertTrue(runtimeConfig.contains("WIZ_API_PREFIX = \"/wiz/api\""));
         assertTrue(runtimeConfig.contains("WIZ_SOCKET_PATH = \"/wiz/app\""));
         assertFalse(runtimeConfig.contains("WIZ_SOCKET_WEBSOCKET_PATH"));
 
-        String routing = Files.readString(project.buildRoot().resolve("src/angular/src/app/app-routing.module.ts"));
+        String routing = Files.readString(ProjectBuildLayout.stagedAngularRoot(project).resolve("src/app/app-routing.module.ts"));
         assertTrue(routing.contains("data: { app_id: \"page.access\" }"));
         assertFalse(routing.contains("component: PageAccessComponent, app_id:"));
 
-        String service = Files.readString(project.buildRoot().resolve("src/angular/src/libs/portal/season/service.ts"));
+        String service = Files.readString(ProjectBuildLayout.stagedAngularRoot(project).resolve("src/libs/portal/season/service.ts"));
         assertTrue(service.contains("public status: any;"));
     }
 

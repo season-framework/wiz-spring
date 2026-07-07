@@ -247,8 +247,8 @@ class AppApiDispatcherTest {
 
     private String modelApi() {
         return "import com.wiz.runtime.WizContext;\n"
-                + "import com.wiz.app.model.Struct;\n"
-                + "import com.wiz.app.model.struct.UserStruct;\n"
+                + "import com.wiz.app.application.model.Struct;\n"
+                + "import com.wiz.app.application.service.UserStruct;\n"
                 + "import java.util.Map;\n\n"
                 + "public final class PageDashboardApi {\n"
                 + "    public Object models(WizContext wiz) {\n"

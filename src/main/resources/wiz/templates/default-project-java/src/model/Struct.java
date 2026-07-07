@@ -1,6 +1,6 @@
-import __WIZ_PACKAGE_ROOT__.model.struct.UserStruct;
-import __WIZ_PACKAGE_ROOT__.portal.post.model.PostStruct;
-import __WIZ_PACKAGE_ROOT__.portal.season.model.orm.Jpa;
+import __WIZ_PACKAGE_ROOT__.application.service.UserStruct;
+import __WIZ_PACKAGE_ROOT__.module.post.application.model.PostStruct;
+import __WIZ_PACKAGE_ROOT__.module.season.infrastructure.orm.Jpa;
 import com.wiz.runtime.WizContext;
 
 public final class Struct {

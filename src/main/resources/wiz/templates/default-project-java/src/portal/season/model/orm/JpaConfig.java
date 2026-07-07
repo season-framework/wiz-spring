@@ -144,8 +144,13 @@ public class JpaConfig {
 
     private String projectPackageRoot() {
         String packageName = getClass().getPackageName();
-        int marker = packageName.indexOf(".portal.season.");
-        return marker > 0 ? packageName.substring(0, marker) : packageName;
+        for (String markerName : java.util.List.of(".module.season.", ".portal.season.")) {
+            int marker = packageName.indexOf(markerName);
+            if (marker > 0) {
+                return packageName.substring(0, marker);
+            }
+        }
+        return packageName;
     }
 
     private String value(Object value, String defaultValue) {

@@ -38,7 +38,7 @@ class ModelRegistryTest {
             Object postService = context.models().get("portal/post/struct/post", Object.class);
             Object seasonSession = context.models().get("portal/season/session", Object.class);
 
-            assertEquals("com.wiz.app.model.Struct", rootStruct.getClass().getName());
+            assertEquals("com.wiz.app.application.model.Struct", rootStruct.getClass().getName());
             assertEquals("root", invoke(rootStruct, "name"));
             assertEquals("main", invoke(userStruct, "projectName"));
             assertEquals("entity", invoke(userEntity, "kind"));

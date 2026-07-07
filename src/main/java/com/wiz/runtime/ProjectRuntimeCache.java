@@ -464,7 +464,7 @@ public class ProjectRuntimeCache implements AutoCloseable {
         private String handlerClass(String routeId, Map<String, Object> metadata) {
             String configured = string(metadata, "handler", "");
             if (!configured.isBlank()) {
-                return configured;
+                return ProjectJavaNaming.modernizeProjectPackage(project, configured);
             }
             return ProjectJavaNaming.routeHandlerClass(project, routeId);
         }

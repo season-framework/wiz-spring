@@ -44,6 +44,11 @@ final class ProjectExtensionLoader {
                 "wiz.session.class-name"))
                 .map(List::of)
                 .orElseGet(() -> List.of(
+                        root + ".application.model.SessionService",
+                        root + ".application.model.session.SessionService",
+                        root + ".application.service.SessionService",
+                        root + ".security.session.SessionService",
+                        root + ".security.session.ProjectSessionService",
                         root + ".model.SessionService",
                         root + ".model.session.SessionService",
                         root + ".model.session.ProjectSessionService",
@@ -59,6 +64,11 @@ final class ProjectExtensionLoader {
                 "wiz.auth.class-name"))
                 .map(List::of)
                 .orElseGet(() -> List.of(
+                        root + ".application.model.AuthService",
+                        root + ".application.model.auth.AuthService",
+                        root + ".application.service.AuthService",
+                        root + ".security.auth.AuthService",
+                        root + ".security.auth.ProjectAuthService",
                         root + ".model.AuthService",
                         root + ".model.auth.AuthService",
                         root + ".model.auth.ProjectAuthService",
@@ -77,6 +87,7 @@ final class ProjectExtensionLoader {
                 .map(values::get)
                 .filter(value -> value != null && !value.toString().isBlank())
                 .map(Object::toString)
+                .map(value -> ProjectJavaNaming.modernizeProjectPackage(context.project(), value))
                 .findFirst();
     }
 

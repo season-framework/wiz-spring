@@ -66,8 +66,8 @@ class ProjectServiceTest {
         ProjectContext project = service.createApp("com.example.demo", null, null);
 
         String dashboardApi = Files.readString(project.appRoot().resolve("page.dashboard/api.java"));
-        assertTrue(dashboardApi.contains("com.example.demo.model.Struct"));
-        assertFalse(dashboardApi.contains("com.wiz.app.model.Struct"));
+        assertTrue(dashboardApi.contains("com.example.demo.application.model.Struct"));
+        assertFalse(dashboardApi.contains("com.wiz.app.application.model.Struct"));
     }
 
     @Test

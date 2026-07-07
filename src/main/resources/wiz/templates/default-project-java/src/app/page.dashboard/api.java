@@ -3,8 +3,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import __WIZ_PACKAGE_ROOT__.model.Struct;
-import __WIZ_PACKAGE_ROOT__.portal.post.model.PostStruct;
+import __WIZ_PACKAGE_ROOT__.application.model.Struct;
+import __WIZ_PACKAGE_ROOT__.module.post.application.model.PostStruct;
 import com.wiz.runtime.WizContext;
 
 public final class PageDashboardApi {

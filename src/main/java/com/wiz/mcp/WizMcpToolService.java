@@ -24,6 +24,7 @@ import java.util.zip.ZipOutputStream;
 import com.wiz.build.BuildLogger;
 import com.wiz.build.BuildResult;
 import com.wiz.build.CommandResult;
+import com.wiz.build.ProjectBuildLayout;
 import com.wiz.build.ProjectBuildService;
 import com.wiz.build.StandaloneProjectJarService;
 import com.wiz.core.ProjectScaffoldService;
@@ -289,7 +290,7 @@ public class WizMcpToolService {
         ProjectContext project = workspaceContext();
         Path pom = project.root().resolve("pom.xml");
         Path angularPackage = project.sourceRoot().resolve("angular/package.json");
-        Path dependencyRoot = project.root().resolve("target/dependency");
+        Path dependencyRoot = ProjectBuildLayout.dependencyRoot(project);
         Path libRoot = project.root().resolve("lib");
 
         LinkedHashMap<String, Object> data = new LinkedHashMap<>();
@@ -302,7 +303,7 @@ public class WizMcpToolService {
         data.put("runtime", Map.of("corePomXml", dependencyFileInfo(Path.of("pom.xml").toAbsolutePath().normalize())));
         data.put("notes", List.of(
                 "Java/Spring dependencies belong in workspace pom.xml.",
-                "Resolved Maven dependencies are prepared by build under target/dependency.",
+                "Resolved Maven dependencies are prepared by build under build/target/dependency.",
                 "Workspace-local jars can be placed under lib.",
                 "Frontend dependencies belong in src/angular/package.json."));
         return data;

@@ -35,8 +35,8 @@ class ProjectExtensionLoaderTest {
 
         MockHttpSession httpSession = new MockHttpSession();
         try (WizContext context = new WizContext(WizRequest.builder().session(httpSession).build(), new WizResponse(), project)) {
-            assertEquals("com.wiz.app.model.AuthService", context.auth().getClass().getName());
-            assertEquals("com.wiz.app.model.SessionService", context.session().getClass().getName());
+            assertEquals("com.wiz.app.application.model.AuthService", context.auth().getClass().getName());
+            assertEquals("com.wiz.app.application.model.SessionService", context.session().getClass().getName());
             ResponseEnvelope envelope = (ResponseEnvelope) context.auth().check(context).entity();
             assertEquals(Map.of("projectAuth", true), envelope.data());
         }

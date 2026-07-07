@@ -34,7 +34,7 @@ public class SupplyChainManifestService {
     public Result write(ProjectContext project, Instant generatedAt) throws IOException {
         Instant timestamp = generatedAt == null ? Instant.now() : generatedAt;
         Files.createDirectories(project.bundleRoot());
-        Files.createDirectories(project.root().resolve("target"));
+        Files.createDirectories(ProjectBuildLayout.targetRoot(project));
 
         List<Artifact> dependencies = dependencyArtifacts(project);
         List<Artifact> projectArtifacts = projectArtifacts(project);
@@ -45,7 +45,7 @@ public class SupplyChainManifestService {
         Files.writeString(manifest, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(
                 manifest(project, timestamp, dependencyDigest, dependencies, projectArtifacts, buildInputs)) + "\n");
 
-        Path bom = project.root().resolve("target").resolve(CYCLONEDX_BOM_FILE);
+        Path bom = ProjectBuildLayout.cyclonedxBom(project);
         Files.writeString(bom, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(
                 cyclonedxBom(project, timestamp, dependencies)) + "\n");
 

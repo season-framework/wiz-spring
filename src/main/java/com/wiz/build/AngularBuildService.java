@@ -49,7 +49,7 @@ public class AngularBuildService {
 
     public FrontendBuildResult build(ProjectContext project, boolean clean, BuildLogger logger) throws IOException {
         BuildLogger buildLogger = logger == null ? BuildLogger.quiet() : logger;
-        Path angularRoot = project.buildRoot().resolve("src/angular");
+        Path angularRoot = ProjectBuildLayout.stagedAngularRoot(project);
         if (!Files.isRegularFile(angularRoot.resolve("package.json"))) {
             buildLogger.info("[frontend] No src/angular/package.json; using minimal web bundle fallback");
             return FrontendBuildResult.skipped("No src/angular/package.json; using minimal web bundle fallback");
@@ -118,8 +118,8 @@ public class AngularBuildService {
                 return FrontendBuildResult.failed(build.summary(), commands);
             }
 
-            copyAngularOutput(angularRoot, readiness.get().outputPath(), project.buildRoot().resolve("dist/build"));
-            buildLogger.info("[frontend-build] output copied to " + project.buildRoot().resolve("dist/build"));
+            copyAngularOutput(angularRoot, readiness.get().outputPath(), ProjectBuildLayout.frontendOutputRoot(project));
+            buildLogger.info("[frontend-build] output copied to " + ProjectBuildLayout.frontendOutputRoot(project));
             return FrontendBuildResult.built(commands);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();

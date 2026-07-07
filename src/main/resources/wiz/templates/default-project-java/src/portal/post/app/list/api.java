@@ -1,7 +1,7 @@
 import java.util.Map;
 
-import __WIZ_PACKAGE_ROOT__.portal.post.model.PostStruct;
-import __WIZ_PACKAGE_ROOT__.portal.post.model.struct.PostService;
+import __WIZ_PACKAGE_ROOT__.module.post.application.model.PostStruct;
+import __WIZ_PACKAGE_ROOT__.module.post.application.service.PostService;
 import com.wiz.runtime.WizContext;
 
 public final class PortalPostListApi {

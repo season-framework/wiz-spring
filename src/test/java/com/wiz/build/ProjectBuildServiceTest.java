@@ -37,10 +37,10 @@ class ProjectBuildServiceTest {
 
         assertTrue(result.success(), result.message());
         assertEquals(java.util.List.of("reconstruct"), result.phases());
-        assertTrue(Files.exists(project.buildRoot().resolve("src/app/page.dashboard/api.java")));
-        assertTrue(Files.exists(project.buildRoot().resolve("src/app/portal.post.list/app.json")));
-        assertTrue(Files.exists(project.buildRoot().resolve("src/route/portal.post.auth/app.json")));
-        String appJson = Files.readString(project.buildRoot().resolve("src/app/portal.post.list/app.json"));
+        assertTrue(Files.exists(ProjectBuildLayout.stagedAppRoot(project).resolve("page.dashboard/api.java")));
+        assertTrue(Files.exists(ProjectBuildLayout.stagedAppRoot(project).resolve("portal.post.list/app.json")));
+        assertTrue(Files.exists(ProjectBuildLayout.stagedRouteRoot(project).resolve("portal.post.auth/app.json")));
+        String appJson = Files.readString(ProjectBuildLayout.stagedAppRoot(project).resolve("portal.post.list/app.json"));
         assertTrue(appJson.contains("\"id\" : \"portal.post.list\""));
         assertTrue(appJson.contains("\"mode\" : \"portal\""));
         assertTrue(appJson.contains("\"controller\" : \"portal/post/guard\""));
@@ -67,11 +67,11 @@ class ProjectBuildServiceTest {
         BuildResult result = new ProjectBuildService().build(project, true, "reconstruct");
 
         assertTrue(result.success());
-        assertTrue(Files.notExists(project.buildRoot().resolve("src/app/portal.post.list/app.json")));
-        assertTrue(Files.exists(project.buildRoot().resolve("src/route/portal.post.auth/app.json")));
-        assertTrue(Files.exists(project.buildRoot().resolve("src/controller/portal/post/GuardController.java")));
-        assertTrue(Files.exists(project.buildRoot().resolve("src/model/portal/post/PostStruct.java")));
-        assertTrue(Files.notExists(project.buildRoot().resolve("src/assets/portal/post/logo.txt")));
+        assertTrue(Files.notExists(ProjectBuildLayout.stagedAppRoot(project).resolve("portal.post.list/app.json")));
+        assertTrue(Files.exists(ProjectBuildLayout.stagedRouteRoot(project).resolve("portal.post.auth/app.json")));
+        assertTrue(Files.exists(ProjectBuildLayout.stagedControllerRoot(project).resolve("portal/post/GuardController.java")));
+        assertTrue(Files.exists(ProjectBuildLayout.stagedModelRoot(project).resolve("portal/post/PostStruct.java")));
+        assertTrue(Files.notExists(ProjectBuildLayout.stagedAssetsRoot(project).resolve("portal/post/logo.txt")));
     }
 
     @Test
@@ -89,21 +89,21 @@ class ProjectBuildServiceTest {
         BuildResult result = new ProjectBuildService().build(project, true, "reconstruct");
 
         assertTrue(result.success());
-        String appJson = Files.readString(project.buildRoot().resolve("src/app/custom.echo/app.json"));
+        String appJson = Files.readString(ProjectBuildLayout.stagedAppRoot(project).resolve("custom.echo/app.json"));
         assertTrue(appJson.contains("\"id\" : \"custom.echo\""));
         assertTrue(appJson.contains("\"mode\" : \"app\""));
         assertTrue(appJson.contains("\"controller\" : \"base\""));
         assertTrue(appJson.contains("\"path\" : \"./custom.echo/custom.echo.component\""));
         assertTrue(appJson.contains("\"template\" : \"wiz-custom-echo()\""));
-        assertTrue(appJson.contains("\"handler\" : \"com.wiz.app.api.CustomEchoApi\""));
-        assertTrue(appJson.contains("\"handler\" : \"com.wiz.app.socket.CustomEchoSocketController\""));
+        assertTrue(appJson.contains("\"handler\" : \"com.wiz.app.web.api.CustomEchoApi\""));
+        assertTrue(appJson.contains("\"handler\" : \"com.wiz.app.realtime.socket.CustomEchoSocketController\""));
 
-        String routeJson = Files.readString(project.buildRoot().resolve("src/route/custom.api/app.json"));
+        String routeJson = Files.readString(ProjectBuildLayout.stagedRouteRoot(project).resolve("custom.api/app.json"));
         assertTrue(routeJson.contains("\"id\" : \"custom.api\""));
         assertTrue(routeJson.contains("\"route\" : \"/custom/api\""));
         assertTrue(routeJson.contains("\"path\" : \"/custom/api\""));
         assertTrue(routeJson.contains("\"controller\" : \"base\""));
-        assertTrue(routeJson.contains("\"handler\" : \"com.wiz.app.route.CustomApiRouteHandler\""));
+        assertTrue(routeJson.contains("\"handler\" : \"com.wiz.app.web.route.CustomApiRouteHandler\""));
     }
 
     @Test
@@ -128,17 +128,24 @@ class ProjectBuildServiceTest {
 
         assertTrue(result.success());
         assertEquals(java.util.List.of("reconstruct", "java-source", "app-dependencies", "java-compile", "frontend-fallback", "bundle"), result.phases());
-        assertTrue(Files.exists(project.buildRoot().resolve("main/java/com/wiz/app/api/PageDashboardApi.java")));
-        assertTrue(Files.exists(project.buildRoot().resolve("classes/com/wiz/app/api/PageDashboardApi.class")));
-        assertTrue(Files.exists(project.buildRoot().resolve("app-api.jar")));
+        assertTrue(Files.exists(ProjectBuildLayout.generatedJavaSourceRoot(project).resolve("com/wiz/app/web/api/PageDashboardApi.java")));
+        assertTrue(Files.exists(ProjectBuildLayout.generatedResourcesRoot(project).resolve("application.yml")));
+        assertTrue(Files.exists(ProjectBuildLayout.generatedPom(project)));
+        assertTrue(Files.exists(ProjectBuildLayout.classesRoot(project).resolve("com/wiz/app/web/api/PageDashboardApi.class")));
+        assertTrue(Files.exists(ProjectBuildLayout.appApiJar(project)));
+        assertTrue(Files.notExists(project.buildRoot().resolve("main/java")));
+        assertTrue(Files.notExists(project.buildRoot().resolve("classes")));
+        assertTrue(Files.notExists(project.buildRoot().resolve("app-api.jar")));
+        assertTrue(Files.notExists(project.buildRoot().resolve("src/app")));
+        assertTrue(Files.exists(ProjectBuildLayout.stagedAppRoot(project).resolve("page.dashboard/api.java")));
         assertTrue(Files.exists(project.bundleRoot().resolve("app-api.jar")));
-        assertTrue(Files.exists(project.bundleRoot().resolve("classes/com/wiz/app/api/PageDashboardApi.class")));
+        assertTrue(Files.exists(project.bundleRoot().resolve("classes/com/wiz/app/web/api/PageDashboardApi.class")));
         assertTrue(Files.exists(project.bundleRoot().resolve("src/app/page.dashboard/api.java")));
         assertTrue(Files.exists(project.bundleWwwRoot().resolve("index.html")));
         assertTrue(Files.exists(project.bundleWwwRoot().resolve("app.js")));
         assertFalse(Files.readString(project.bundleWwwRoot().resolve("index.html")).contains("config.js"));
         assertTrue(Files.exists(project.bundleRoot().resolve(SupplyChainManifestService.DEPENDENCY_MANIFEST_FILE)));
-        assertTrue(Files.exists(project.root().resolve("target").resolve(SupplyChainManifestService.CYCLONEDX_BOM_FILE)));
+        assertTrue(Files.exists(ProjectBuildLayout.cyclonedxBom(project)));
         String marker = Files.readString(project.bundleRoot().resolve(BuildMarkerService.MARKER_FILE));
         assertTrue(marker.contains("\"frontendMode\" : \"fallback\""));
         assertTrue(marker.contains("\"buildPhases\""));
@@ -147,7 +154,7 @@ class ProjectBuildServiceTest {
         String dependencies = Files.readString(project.bundleRoot().resolve(SupplyChainManifestService.DEPENDENCY_MANIFEST_FILE));
         assertTrue(dependencies.contains("\"dependencyDigest\""));
         assertTrue(dependencies.contains("\"dependencies\""));
-        String bom = Files.readString(project.root().resolve("target").resolve(SupplyChainManifestService.CYCLONEDX_BOM_FILE));
+        String bom = Files.readString(ProjectBuildLayout.cyclonedxBom(project));
         assertTrue(bom.contains("\"bomFormat\" : \"CycloneDX\""));
     }
 
@@ -166,13 +173,13 @@ class ProjectBuildServiceTest {
         BuildResult rebuild = new ProjectBuildService().build(project, false, "bundle");
 
         assertTrue(rebuild.success(), rebuild.message());
-        Path generated = project.buildRoot().resolve("main/java/com/wiz/app/api/PageAccessApi.java");
+        Path generated = ProjectBuildLayout.generatedJavaSourceRoot(project).resolve("com/wiz/app/web/api/PageAccessApi.java");
         String generatedSource = Files.readString(generated);
         assertTrue(generatedSource.contains("handler-named-api"));
         assertFalse(generatedSource.contains("authenticate"));
-        assertTrue(Files.exists(project.bundleRoot().resolve("classes/com/wiz/app/api/PageAccessApi.class")));
+        assertTrue(Files.exists(project.bundleRoot().resolve("classes/com/wiz/app/web/api/PageAccessApi.class")));
         String appJson = Files.readString(project.bundleRoot().resolve("src/app/page.access/app.json"));
-        assertTrue(appJson.contains("\"handler\" : \"com.wiz.app.api.PageAccessApi\""));
+        assertTrue(appJson.contains("\"handler\" : \"com.wiz.app.web.api.PageAccessApi\""));
     }
 
     @Test
@@ -180,8 +187,8 @@ class ProjectBuildServiceTest {
         Path workspace = tempDir.resolve("normal-reconstruct-workspace");
         new WorkspaceService().createWorkspace(workspace);
         ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
-        Path nodeModuleBinary = project.buildRoot().resolve("src/angular/node_modules/.bin/ng");
-        Path staleApp = project.buildRoot().resolve("src/app/stale/app.json");
+        Path nodeModuleBinary = ProjectBuildLayout.stagedAngularRoot(project).resolve("node_modules/.bin/ng");
+        Path staleApp = ProjectBuildLayout.stagedAppRoot(project).resolve("stale/app.json");
         Files.createDirectories(nodeModuleBinary.getParent());
         Files.createDirectories(staleApp.getParent());
         Files.writeString(nodeModuleBinary, "#!/usr/bin/env node\n");
@@ -192,7 +199,7 @@ class ProjectBuildServiceTest {
         assertTrue(result.success(), result.message());
         assertTrue(Files.exists(nodeModuleBinary));
         assertTrue(Files.notExists(staleApp));
-        assertTrue(Files.exists(project.buildRoot().resolve("src/app/page.access/app.json")));
+        assertTrue(Files.exists(ProjectBuildLayout.stagedAppRoot(project).resolve("page.access/app.json")));
     }
 
     @Test
@@ -238,7 +245,7 @@ class ProjectBuildServiceTest {
             assertTrue(packaged.getEntry("BOOT-INF/classes/wiz/embedded-workspace.files") != null);
             assertTrue(packaged.getEntry("BOOT-INF/classes/wiz/embedded-workspace/config/application.yml") != null);
             assertTrue(packaged.getEntry("BOOT-INF/classes/wiz/embedded-workspace/config/application.yml") != null);
-            assertTrue(packaged.getEntry("BOOT-INF/classes/wiz/embedded-workspace/bundle/classes/com/wiz/app/api/PageDashboardApi.class") != null);
+            assertTrue(packaged.getEntry("BOOT-INF/classes/wiz/embedded-workspace/bundle/classes/com/wiz/app/web/api/PageDashboardApi.class") != null);
             String workspaceConfig = jarEntry(packaged, "BOOT-INF/classes/wiz/embedded-workspace/config/application.yml");
             String projectConfig = jarEntry(packaged, "BOOT-INF/classes/wiz/embedded-workspace/config/application.yml");
             assertTrue(workspaceConfig.contains("server:"));
@@ -258,9 +265,9 @@ class ProjectBuildServiceTest {
         BuildResult result = new ProjectBuildService().build(project, true, "bundle");
 
         assertTrue(result.success());
-        assertTrue(Files.exists(project.buildRoot().resolve("main/java/com/wiz/app/controller/GuardController.java")));
-        assertTrue(Files.exists(project.buildRoot().resolve("classes/com/wiz/app/controller/GuardController.class")));
-        assertTrue(Files.exists(project.bundleRoot().resolve("classes/com/wiz/app/controller/GuardController.class")));
+        assertTrue(Files.exists(ProjectBuildLayout.generatedJavaSourceRoot(project).resolve("com/wiz/app/security/guard/GuardController.java")));
+        assertTrue(Files.exists(ProjectBuildLayout.classesRoot(project).resolve("com/wiz/app/security/guard/GuardController.class")));
+        assertTrue(Files.exists(project.bundleRoot().resolve("classes/com/wiz/app/security/guard/GuardController.class")));
     }
 
     @Test
@@ -279,10 +286,10 @@ class ProjectBuildServiceTest {
         BuildResult result = new ProjectBuildService().build(project, true, "bundle");
 
         assertTrue(result.success(), result.message());
-        assertTrue(Files.exists(project.buildRoot().resolve("main/java/com/wiz/app/socket/PageDashboardSocketController.java")));
-        assertTrue(Files.exists(project.buildRoot().resolve("classes/com/wiz/app/socket/PageDashboardSocketController.class")));
-        assertTrue(Files.exists(project.buildRoot().resolve("classes/com/wiz/app/socket/PortalPostListSocketController.class")));
-        assertTrue(Files.exists(project.bundleRoot().resolve("classes/com/wiz/app/socket/PageDashboardSocketController.class")));
+        assertTrue(Files.exists(ProjectBuildLayout.generatedJavaSourceRoot(project).resolve("com/wiz/app/realtime/socket/PageDashboardSocketController.java")));
+        assertTrue(Files.exists(ProjectBuildLayout.classesRoot(project).resolve("com/wiz/app/realtime/socket/PageDashboardSocketController.class")));
+        assertTrue(Files.exists(ProjectBuildLayout.classesRoot(project).resolve("com/wiz/app/realtime/socket/PortalPostListSocketController.class")));
+        assertTrue(Files.exists(project.bundleRoot().resolve("classes/com/wiz/app/realtime/socket/PageDashboardSocketController.class")));
     }
 
     @Test
@@ -298,9 +305,9 @@ class ProjectBuildServiceTest {
         BuildResult result = new ProjectBuildService().build(project, true, "bundle");
 
         assertTrue(result.success());
-        assertTrue(Files.exists(project.buildRoot().resolve("main/java/com/wiz/app/route/CustomEchoRouteHandler.java")));
-        assertTrue(Files.exists(project.buildRoot().resolve("classes/com/wiz/app/route/CustomEchoRouteHandler.class")));
-        assertTrue(Files.exists(project.bundleRoot().resolve("classes/com/wiz/app/route/CustomEchoRouteHandler.class")));
+        assertTrue(Files.exists(ProjectBuildLayout.generatedJavaSourceRoot(project).resolve("com/wiz/app/web/route/CustomEchoRouteHandler.java")));
+        assertTrue(Files.exists(ProjectBuildLayout.classesRoot(project).resolve("com/wiz/app/web/route/CustomEchoRouteHandler.class")));
+        assertTrue(Files.exists(project.bundleRoot().resolve("classes/com/wiz/app/web/route/CustomEchoRouteHandler.class")));
     }
 
     @Test
@@ -322,10 +329,10 @@ class ProjectBuildServiceTest {
         BuildResult result = new ProjectBuildService().build(project, true, "bundle");
 
         assertTrue(result.success());
-        assertTrue(Files.exists(project.buildRoot().resolve("classes/com/wiz/app/model/Struct.class")));
-        assertTrue(Files.exists(project.buildRoot().resolve("classes/com/wiz/app/model/struct/UserStruct.class")));
-        assertTrue(Files.exists(project.buildRoot().resolve("classes/com/wiz/app/portal/post/model/PostStruct.class")));
-        assertTrue(Files.exists(project.bundleRoot().resolve("classes/com/wiz/app/portal/post/model/struct/PostService.class")));
+        assertTrue(Files.exists(ProjectBuildLayout.classesRoot(project).resolve("com/wiz/app/application/model/Struct.class")));
+        assertTrue(Files.exists(ProjectBuildLayout.classesRoot(project).resolve("com/wiz/app/application/service/UserStruct.class")));
+        assertTrue(Files.exists(ProjectBuildLayout.classesRoot(project).resolve("com/wiz/app/module/post/application/model/PostStruct.class")));
+        assertTrue(Files.exists(project.bundleRoot().resolve("classes/com/wiz/app/module/post/application/service/PostService.class")));
     }
 
     private void writeFakeRuntimeJar(Path jar) throws Exception {

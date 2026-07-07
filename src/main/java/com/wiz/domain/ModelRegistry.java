@@ -81,20 +81,28 @@ public class ModelRegistry {
     private List<String> classCandidates(String packageRoot, String namespace) {
         String root = packageRoot;
         if (namespace.equals("struct")) {
-            return List.of(root + ".model.Struct");
+            return List.of(root + ".application.model.Struct", root + ".model.Struct");
         }
         if (namespace.startsWith("struct/")) {
             String name = namespace.substring("struct/".length());
-            return List.of(root + ".model.struct." + className(name) + "Struct", root + ".model.struct." + className(name));
+            return List.of(
+                    root + ".application.service." + className(name) + "Struct",
+                    root + ".application.service." + className(name),
+                    root + ".model.struct." + className(name) + "Struct",
+                    root + ".model.struct." + className(name));
         }
         if (namespace.startsWith("db/")) {
             String name = namespace.substring("db/".length());
-            return List.of(root + ".model.db." + className(name) + "Entity", root + ".model.db." + className(name));
+            return List.of(
+                    root + ".domain.entity." + className(name) + "Entity",
+                    root + ".domain.entity." + className(name),
+                    root + ".model.db." + className(name) + "Entity",
+                    root + ".model.db." + className(name));
         }
         if (namespace.startsWith("portal/")) {
             return portalClassCandidates(root, namespace);
         }
-        return List.of(root + ".model." + className(namespace));
+        return List.of(root + ".application.model." + className(namespace), root + ".model." + className(namespace));
     }
 
     private List<String> portalClassCandidates(String root, String namespace) {
@@ -102,20 +110,34 @@ public class ModelRegistry {
         if (parts.length < 3) {
             return List.of();
         }
-        String portalRoot = root + ".portal." + javaPackageSegment(parts[1]) + ".model";
+        String portalRoot = root + ".module." + javaPackageSegment(parts[1]);
+        String legacyPortalRoot = root + ".portal." + javaPackageSegment(parts[1]) + ".model";
         if (parts[2].equals("struct") && parts.length == 3) {
-            return List.of(portalRoot + "." + className(parts[1]) + "Struct", portalRoot + ".Struct");
+            return List.of(
+                    portalRoot + ".application.model." + className(parts[1]) + "Struct",
+                    portalRoot + ".application.model.Struct",
+                    legacyPortalRoot + "." + className(parts[1]) + "Struct",
+                    legacyPortalRoot + ".Struct");
         }
         if (parts[2].equals("struct") && parts.length == 4) {
             return List.of(
-                    portalRoot + ".struct." + className(parts[3]) + "Service",
-                    portalRoot + ".struct." + className(parts[3]) + "Struct",
-                    portalRoot + ".struct." + className(parts[3]));
+                    portalRoot + ".application.service." + className(parts[3]) + "Service",
+                    portalRoot + ".application.service." + className(parts[3]) + "Struct",
+                    portalRoot + ".application.service." + className(parts[3]),
+                    legacyPortalRoot + ".struct." + className(parts[3]) + "Service",
+                    legacyPortalRoot + ".struct." + className(parts[3]) + "Struct",
+                    legacyPortalRoot + ".struct." + className(parts[3]));
         }
         if (parts[2].equals("db") && parts.length == 4) {
-            return List.of(portalRoot + ".db." + className(parts[3]) + "Entity", portalRoot + ".db." + className(parts[3]));
+            return List.of(
+                    portalRoot + ".domain.entity." + className(parts[3]) + "Entity",
+                    portalRoot + ".domain.entity." + className(parts[3]),
+                    legacyPortalRoot + ".db." + className(parts[3]) + "Entity",
+                    legacyPortalRoot + ".db." + className(parts[3]));
         }
-        return List.of(portalRoot + "." + className(parts[parts.length - 1]));
+        return List.of(
+                portalRoot + ".application.model." + className(parts[parts.length - 1]),
+                legacyPortalRoot + "." + className(parts[parts.length - 1]));
     }
 
     private void validateNamespace(String namespace) {

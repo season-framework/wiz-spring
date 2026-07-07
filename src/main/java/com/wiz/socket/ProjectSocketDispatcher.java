@@ -73,7 +73,7 @@ public class ProjectSocketDispatcher {
             if (controllerResult.isPresent()) {
                 return controllerResult.get();
             }
-            String handlerClass = metadata.flatMap(this::socketHandlerClass)
+            String handlerClass = metadata.flatMap(value -> socketHandlerClass(project, value))
                     .orElseGet(() -> ProjectJavaNaming.appSocketHandlerClass(project, session.namespace().appId()));
             return dispatchProjectSocket(projectRuntime, session, handlerClass, event, payload);
         }
@@ -83,7 +83,7 @@ public class ProjectSocketDispatcher {
         return rooms;
     }
 
-    private Optional<String> socketHandlerClass(Map<String, Object> metadata) {
+    private Optional<String> socketHandlerClass(ProjectContext project, Map<String, Object> metadata) {
         Object socket = metadata.get("socket");
         if (!(socket instanceof Map<?, ?> socketMap)) {
             return Optional.empty();
@@ -92,7 +92,7 @@ public class ProjectSocketDispatcher {
         if (handler == null || handler.toString().isBlank()) {
             return Optional.empty();
         }
-        return Optional.of(handler.toString());
+        return Optional.of(ProjectJavaNaming.modernizeProjectPackage(project, handler.toString()));
     }
 
     private Optional<SocketEventResult> authorize(WizContext context, String event, Map<String, Object> metadata) {

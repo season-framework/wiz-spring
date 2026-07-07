@@ -26,7 +26,7 @@ class WizCommandTest {
         command.setOut(new PrintWriter(output));
 
         assertEquals(0, command.execute("--version"));
-        assertTrue(output.toString().contains("wiz-spring 0.1.0"));
+        assertTrue(output.toString().contains("wiz-spring 0.2.0"));
 
         output.getBuffer().setLength(0);
         assertEquals(0, command.execute("--help"));
@@ -156,7 +156,9 @@ class WizCommandTest {
         assertTrue(Files.exists(workspace.resolve("src/app/page.dashboard/api.java")));
         deleteIfExists(workspace.resolve("src/angular"));
         assertEquals(0, new CommandLine(new WizCommand()).execute("build", "--root", workspace.toString(), "--clean"));
-        assertTrue(Files.exists(workspace.resolve("build/src/app/page.dashboard/api.java")));
+        assertTrue(Files.exists(workspace.resolve("build/src/main/java/com/wiz/app/web/api/PageDashboardApi.java")));
+        assertTrue(Files.notExists(workspace.resolve("build/src/app/page.dashboard/api.java")));
+        assertTrue(Files.exists(workspace.resolve("build/.wiz/source/app/page.dashboard/api.java")));
         assertTrue(Files.exists(workspace.resolve("bundle/app-api.jar")));
         Path runtimeJar = tempDir.resolve("wiz-runtime.jar");
         writeFakeRuntimeJar(runtimeJar);
