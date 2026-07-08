@@ -26,7 +26,7 @@ class WizCommandTest {
         command.setOut(new PrintWriter(output));
 
         assertEquals(0, command.execute("--version"));
-        assertTrue(output.toString().contains("wiz-spring 0.2.1"));
+        assertTrue(output.toString().contains("wiz-spring 0.2.2"));
 
         output.getBuffer().setLength(0);
         assertEquals(0, command.execute("--help"));
@@ -150,6 +150,37 @@ class WizCommandTest {
         output.getBuffer().setLength(0);
         assertEquals(0, command.execute("service", "rm", "demo", "--dry-run", "--systemd-dir", systemd.toString(), "--bin-dir", bin.toString()));
         assertTrue(output.toString().contains(bin.resolve("wiz.demo").toString()));
+    }
+
+    @Test
+    void serviceUninstallStopsDisablesDeletesAndReloads() throws Exception {
+        Path systemd = tempDir.resolve("uninstall-systemd");
+        Path bin = tempDir.resolve("uninstall-bin");
+        Files.createDirectories(systemd);
+        Files.createDirectories(bin);
+        Path commandPath = bin.resolve("wiz.demo");
+        Path servicePath = systemd.resolve("wiz.demo.service");
+        Files.writeString(commandPath, "#!/bin/sh\n");
+        Files.writeString(servicePath, "[Unit]\nDescription=wiz.demo\n");
+
+        Path calls = tempDir.resolve("systemctl.calls");
+        Path systemctl = tempDir.resolve("systemctl");
+        Files.writeString(systemctl, "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '" + calls + "'\n");
+        systemctl.toFile().setExecutable(true, false);
+
+        CommandLine command = new CommandLine(new WizCommand());
+        assertEquals(0, command.execute(
+                "service", "uninstall", "demo",
+                "--systemd-dir", systemd.toString(),
+                "--bin-dir", bin.toString(),
+                "--systemctl", systemctl.toString()));
+
+        assertFalse(Files.exists(commandPath));
+        assertFalse(Files.exists(servicePath));
+        assertEquals(String.join(System.lineSeparator(),
+                "stop wiz.demo",
+                "disable wiz.demo",
+                "daemon-reload") + System.lineSeparator(), Files.readString(calls));
     }
 
     @Test

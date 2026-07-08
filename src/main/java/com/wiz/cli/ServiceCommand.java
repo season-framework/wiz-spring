@@ -153,6 +153,9 @@ public class ServiceCommand implements Callable<Integer> {
         @Option(names = "--bin-dir", hidden = true)
         private Path binDir = DEFAULT_BIN_DIR;
 
+        @Option(names = "--systemctl", hidden = true)
+        private Path systemctl = Path.of("systemctl");
+
         @Override
         public Integer call() throws Exception {
             ensureLinux();
@@ -165,10 +168,11 @@ public class ServiceCommand implements Callable<Integer> {
                 out.println(servicePath);
                 return 0;
             }
-            runSystemctl("disable", serviceName);
+            runSystemctl(systemctl, "stop", serviceName);
+            runSystemctl(systemctl, "disable", serviceName);
             Files.deleteIfExists(commandPath);
             Files.deleteIfExists(servicePath);
-            runSystemctl("daemon-reload");
+            runSystemctl(systemctl, "daemon-reload");
             spec.commandLine().getOut().println("Service unregistered: " + serviceName);
             return 0;
         }
@@ -336,8 +340,12 @@ public class ServiceCommand implements Callable<Integer> {
     }
 
     private static int runSystemctl(String... args) throws IOException, InterruptedException {
+        return runSystemctl(Path.of("systemctl"), args);
+    }
+
+    private static int runSystemctl(Path systemctl, String... args) throws IOException, InterruptedException {
         java.util.ArrayList<String> argv = new java.util.ArrayList<>();
-        argv.add("systemctl");
+        argv.add(systemctl.toString());
         argv.addAll(List.of(args));
         Process process = new ProcessBuilder(argv).inheritIO().start();
         return process.waitFor();

@@ -21,7 +21,7 @@ cd /root/workspace/wiz-java/wiz-spring
 ## 앱 생성
 
 ```bash
-jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.2.1.jar
+jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.2.2.jar
 workspace=/tmp/demo2
 
 rm -rf "$workspace"
