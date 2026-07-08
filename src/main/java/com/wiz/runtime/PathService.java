@@ -83,11 +83,13 @@ public class PathService {
     public boolean isJavaWorkspace(Path candidate) {
         return (Files.isRegularFile(candidate.resolve("config/application.yml"))
                 || Files.isRegularFile(candidate.resolve("config/application.yaml"))
-                || Files.isRegularFile(candidate.resolve("config/wiz.yml")))
+                || Files.isRegularFile(candidate.resolve("config/wiz.yml"))
+                || Files.isRegularFile(candidate.resolve("config/wiz.yaml")))
                 && (Files.isDirectory(candidate.resolve("src"))
                         || Files.isDirectory(candidate.resolve("bundle"))
                         || Files.isRegularFile(candidate.resolve("pom.xml"))
-                        || Files.isRegularFile(candidate.resolve("config/wiz.yml")));
+                        || Files.isRegularFile(candidate.resolve("config/wiz.yml"))
+                        || Files.isRegularFile(candidate.resolve("config/wiz.yaml")));
     }
 
     public String packageRoot() {

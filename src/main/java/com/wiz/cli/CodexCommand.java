@@ -189,11 +189,7 @@ public class CodexCommand implements Callable<Integer> {
     }
 
     private Path workspaceRoot(Path root) {
-        if (root != null) {
-            return root.toAbsolutePath().normalize();
-        }
-        return new PathService(Path.of(".")).findWorkspaceRoot(Path.of("."))
-                .orElseThrow(() -> new IllegalArgumentException("WIZ workspace root not found"));
+        return WorkspaceRootResolver.resolve(root, "codex");
     }
 
     private Path currentRuntimePath() {

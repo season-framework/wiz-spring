@@ -34,11 +34,6 @@ public class BuildCommand implements Callable<Integer> {
     }
 
     static PathService pathService(Path root) {
-        PathService detector = new PathService(Path.of("."));
-        Path workspaceRoot = root == null
-                ? detector.findWorkspaceRoot(Path.of("."))
-                        .orElseThrow(() -> new IllegalArgumentException("WIZ workspace root not found"))
-                : root.toAbsolutePath().normalize();
-        return new PathService(workspaceRoot);
+        return WorkspaceRootResolver.pathService(root, "build");
     }
 }

@@ -6,13 +6,18 @@ import java.util.concurrent.Callable;
 import com.wiz.WizSpringApplication;
 
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Option;
+import picocli.CommandLine.Spec;
 
 @Command(name = "run", mixinStandardHelpOptions = true, description = "Run the WIZ Spring server.")
 public class RunCommand implements Callable<Integer> {
 
-    @Option(names = "--root", description = "WIZ workspace root.")
-    private Path root = Path.of(".");
+    @Spec
+    private CommandSpec spec;
+
+    @Option(names = "--root", description = "WIZ workspace root. Defaults to auto-detecting from the current directory.")
+    private Path root;
 
     @Option(names = "--host", description = "HTTP bind host.")
     private String host;
@@ -34,30 +39,32 @@ public class RunCommand implements Callable<Integer> {
 
     @Override
     public Integer call() {
+        Path workspaceRoot = WorkspaceRootResolver.resolve(root, "run");
         WizSpringApplication.RunSettings settings = WizSpringApplication.resolveRunSettings(
-                root.toAbsolutePath().normalize().toString(),
+                workspaceRoot.toString(),
                 host,
                 port,
                 bundle,
                 log == null ? null : log.toAbsolutePath().normalize().toString(),
                 profile == null || profile.isBlank() ? WizSpringApplication.DEFAULT_RUN_PROFILE : profile.trim(),
                 profile != null && !profile.isBlank());
+        var out = spec.commandLine().getOut();
         if (dryRun) {
-            System.out.println("root=" + settings.workspace());
-            System.out.println("host=" + settings.host());
-            System.out.println("port=" + settings.port());
+            out.println("root=" + settings.workspace());
+            out.println("host=" + settings.host());
+            out.println("port=" + settings.port());
             if (settings.portChanged()) {
-                System.out.println("requested-port=" + settings.requestedPort());
+                out.println("requested-port=" + settings.requestedPort());
             }
-            System.out.println("bundle=" + settings.bundle());
-            System.out.println("profile=" + settings.profile());
+            out.println("bundle=" + settings.bundle());
+            out.println("profile=" + settings.profile());
             if (settings.log() != null && !settings.log().isBlank()) {
-                System.out.println("log=" + settings.log());
+                out.println("log=" + settings.log());
             }
             return 0;
         }
         if (settings.portChanged()) {
-            System.out.println("Port " + settings.requestedPort() + " is busy; using " + settings.port() + ".");
+            out.println("Port " + settings.requestedPort() + " is busy; using " + settings.port() + ".");
         }
         WizSpringApplication.runServer(
                 settings.workspace().toString(),

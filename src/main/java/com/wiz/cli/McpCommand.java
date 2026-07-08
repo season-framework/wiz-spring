@@ -23,7 +23,12 @@ public class McpCommand implements Callable<Integer> {
 
     @Override
     public Integer call() throws Exception {
-        WizMcpToolService tools = new WizMcpToolService(root, state);
+        Path workspaceRoot = WorkspaceRootResolver.resolve(root, "WIZ_WORKSPACE", "mcp");
+        if (System.console() != null) {
+            System.err.println("WIZ Spring MCP server running for workspace: " + workspaceRoot);
+            System.err.println("Waiting for JSON-RPC messages on stdin.");
+        }
+        WizMcpToolService tools = new WizMcpToolService(workspaceRoot, state);
         new WizMcpServer(tools, System.in, System.out).run();
         return 0;
     }

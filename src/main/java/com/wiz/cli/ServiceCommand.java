@@ -78,8 +78,8 @@ public class ServiceCommand implements Callable<Integer> {
         @Parameters(index = "1..*", arity = "0..2", description = "Optional HTTP port and/or 'bundle'.")
         private List<String> runArgs = List.of();
 
-        @Option(names = "--root", description = "WIZ workspace root.")
-        private Path root = Path.of(".");
+        @Option(names = "--root", description = "WIZ workspace root. Defaults to auto-detecting from the current directory.")
+        private Path root;
 
         @Option(names = "--command", description = "Command used to launch wiz-spring in the generated service script.")
         private String command = "wiz-spring";
@@ -108,7 +108,7 @@ public class ServiceCommand implements Callable<Integer> {
             String serviceName = serviceName(name);
             String shortName = shortServiceName(serviceName);
             String commandName = shellCommand(command);
-            Path rootPath = root.toAbsolutePath().normalize();
+            Path rootPath = WorkspaceRootResolver.resolve(root, "service install");
             Path logPath = log == null ? logDir.resolve(shortName) : log.toAbsolutePath().normalize();
             Path commandPath = binDir.resolve(serviceName);
             Path servicePath = systemdDir.resolve(serviceName + ".service");

@@ -58,7 +58,7 @@ public class WizSpringApplication {
 	}
 
 	public static void runServer(String root, String host, int port, boolean bundle, String log) {
-		runServer(root, host, port, bundle, log);
+		runServer(root, host, Integer.valueOf(port), bundle, log);
 	}
 
 	public static void runServer(String root, String host, Integer port, boolean bundle, String log) {

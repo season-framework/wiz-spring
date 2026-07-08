@@ -26,7 +26,7 @@ class WizCommandTest {
         command.setOut(new PrintWriter(output));
 
         assertEquals(0, command.execute("--version"));
-        assertTrue(output.toString().contains("wiz-spring 0.2.0"));
+        assertTrue(output.toString().contains("wiz-spring 0.2.1"));
 
         output.getBuffer().setLength(0);
         assertEquals(0, command.execute("--help"));
@@ -61,10 +61,17 @@ class WizCommandTest {
     }
 
     @Test
-    void runDryRunDoesNotStartServer() {
-        int exitCode = new CommandLine(new WizCommand()).execute("run", "--dry-run", "--port", "18080", "--bundle", "--profile", "prod", "--log", tempDir.resolve("server.log").toString());
+    void runDryRunDoesNotStartServer() throws Exception {
+        Path workspace = minimalWorkspace("run-workspace");
+        Path child = workspace.resolve("src/app/page.dashboard");
+        StringWriter output = new StringWriter();
+        CommandLine command = new CommandLine(new WizCommand());
+        command.setOut(new PrintWriter(output));
+
+        int exitCode = command.execute("run", "--dry-run", "--root", child.toString(), "--port", "18080", "--bundle", "--profile", "prod", "--log", tempDir.resolve("server.log").toString());
 
         assertEquals(0, exitCode);
+        assertTrue(output.toString().contains("root=" + workspace));
     }
 
     @Test
@@ -78,6 +85,7 @@ class WizCommandTest {
         Path workspace = tempDir.resolve("workspace");
         Files.createDirectories(workspace.resolve("config"));
         Files.writeString(workspace.resolve("config/application.yml"), "server:\n  port: 19191\nwiz:\n  runtime:\n    devmode-cookie-name: season-wiz-devmode\n");
+        Files.writeString(workspace.resolve("config/wiz.yml"), "workspace: java\n");
         Files.writeString(systemd.resolve("wiz.demo.service"), "[Unit]\nDescription=wiz.demo\n");
         Files.writeString(bin.resolve("wiz.demo"), "#!/bin/sh\n"
                 + "# wiz.service.name=demo\n"
@@ -111,9 +119,11 @@ class WizCommandTest {
         Path runtimeJar = tempDir.resolve("wiz-runtime.jar");
         writeFakeRuntimeJar(runtimeJar);
         output.getBuffer().setLength(0);
+        Path serviceRoot = tempDir.resolve("workspace/src/app/page.dashboard");
+        Files.createDirectories(serviceRoot);
         assertEquals(0, command.execute(
                 "service", "install", "demo", "bundle",
-                "--root", tempDir.resolve("workspace").toString(),
+                "--root", serviceRoot.toString(),
                 "--jar", runtimeJar.toString(),
                 "--dry-run",
                 "--systemd-dir", systemd.toString(),
@@ -140,6 +150,29 @@ class WizCommandTest {
         output.getBuffer().setLength(0);
         assertEquals(0, command.execute("service", "rm", "demo", "--dry-run", "--systemd-dir", systemd.toString(), "--bin-dir", bin.toString()));
         assertTrue(output.toString().contains(bin.resolve("wiz.demo").toString()));
+    }
+
+    @Test
+    void workspaceCommandsRejectNonWorkspaceRoots() {
+        Path outside = tempDir.resolve("outside");
+        StringWriter error = new StringWriter();
+
+        CommandLine run = new CommandLine(new WizCommand());
+        run.setErr(new PrintWriter(error));
+        assertEquals(1, run.execute("run", "--dry-run", "--root", outside.toString()));
+        assertTrue(error.toString().contains("WIZ Spring workspace root not found"));
+
+        error.getBuffer().setLength(0);
+        CommandLine mcp = new CommandLine(new WizCommand());
+        mcp.setErr(new PrintWriter(error));
+        assertEquals(1, mcp.execute("mcp", "--root", outside.toString()));
+        assertTrue(error.toString().contains("WIZ Spring workspace root not found"));
+
+        error.getBuffer().setLength(0);
+        CommandLine service = new CommandLine(new WizCommand());
+        service.setErr(new PrintWriter(error));
+        assertEquals(1, service.execute("service", "install", "demo", "--root", outside.toString(), "--dry-run"));
+        assertTrue(error.toString().contains("WIZ Spring workspace root not found"));
     }
 
     @Test
@@ -231,5 +264,14 @@ class WizCommandTest {
             output.write("Manifest-Version: 1.0\nMain-Class: com.wiz.WizSpringApplication\n\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
             output.closeEntry();
         }
+    }
+
+    private Path minimalWorkspace(String name) throws Exception {
+        Path workspace = tempDir.resolve(name);
+        Files.createDirectories(workspace.resolve("config"));
+        Files.createDirectories(workspace.resolve("src/app/page.dashboard"));
+        Files.writeString(workspace.resolve("config/application.yml"), "server:\n  port: 19191\nwiz:\n  java:\n    package-root: com.wiz.app\n");
+        Files.writeString(workspace.resolve("config/wiz.yml"), "workspace: java\n");
+        return workspace.toAbsolutePath().normalize();
     }
 }
