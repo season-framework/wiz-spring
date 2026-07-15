@@ -26,7 +26,7 @@ class WizCommandTest {
         command.setOut(new PrintWriter(output));
 
         assertEquals(0, command.execute("--version"));
-        assertTrue(output.toString().contains("wiz-spring 0.2.2"));
+        assertTrue(output.toString().contains("wiz-spring 0.2.3"));
 
         output.getBuffer().setLength(0);
         assertEquals(0, command.execute("--help"));
@@ -58,6 +58,37 @@ class WizCommandTest {
         assertTrue(codexHelp.contains("exit code 2"));
         assertTrue(codexHelp.contains("generated MCP"));
         assertTrue(codexHelp.contains("args"));
+    }
+
+    @Test
+    void packageRootAliasIsNotAvailable() throws Exception {
+        StringWriter output = new StringWriter();
+        StringWriter error = new StringWriter();
+        CommandLine create = new CommandLine(new WizCommand());
+        create.setOut(new PrintWriter(output));
+        create.setErr(new PrintWriter(error));
+
+        assertEquals(0, create.execute("create", "--help"));
+        assertTrue(output.toString().contains("--package=<packageRoot>"));
+        assertFalse(output.toString().contains("--package-root"));
+
+        Path newWorkspace = tempDir.resolve("package-root-alias");
+        assertEquals(2, create.execute(
+                "create", newWorkspace.toString(), "--package-root", "com.example.alias", "--skip-build"));
+        assertFalse(Files.exists(newWorkspace));
+
+        output.getBuffer().setLength(0);
+        error.getBuffer().setLength(0);
+        Path existingWorkspace = minimalWorkspace("build-package-root-alias");
+        CommandLine build = new CommandLine(new WizCommand());
+        build.setOut(new PrintWriter(output));
+        build.setErr(new PrintWriter(error));
+
+        assertEquals(0, build.execute("build", "--help"));
+        assertTrue(output.toString().contains("--package=<packageRoot>"));
+        assertFalse(output.toString().contains("--package-root"));
+        assertEquals(2, build.execute(
+                "build", "--root", existingWorkspace.toString(), "--package-root", "com.example.alias"));
     }
 
     @Test
@@ -210,20 +241,31 @@ class WizCommandTest {
     void workspaceCommandShellAcceptsExpectedOptions() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         assertEquals(0, new CommandLine(new WizCommand()).execute("create", "--help"));
+        assertEquals(0, new CommandLine(new WizCommand()).execute("build", "--help"));
         assertEquals(0, new CommandLine(new WizCommand()).execute("jar", "--help"));
         assertEquals(0, new CommandLine(new WizCommand()).execute("bundle", "--help"));
         assertEquals(0, new CommandLine(new WizCommand()).execute("kill", "--help"));
         assertEquals(0, new CommandLine(new WizCommand()).execute("service", "--help"));
         assertEquals(0, new CommandLine(new WizCommand()).execute("mcp", "--help"));
         assertEquals(0, new CommandLine(new WizCommand()).execute("codex", "--help"));
-        assertEquals(0, new CommandLine(new WizCommand()).execute("create", workspace.toString(), "--package", "com.wiz.app", "--skip-build"));
+        assertEquals(0, new CommandLine(new WizCommand()).execute("create", workspace.toString(), "--package", "com.wiz.bootstrap", "--skip-build"));
         assertTrue(Files.exists(workspace.resolve("src/app/page.dashboard/api.java")));
         deleteIfExists(workspace.resolve("src/angular"));
-        assertEquals(0, new CommandLine(new WizCommand()).execute("build", "--root", workspace.toString(), "--clean"));
-        assertTrue(Files.exists(workspace.resolve("build/src/main/java/com/wiz/app/web/api/PageDashboardApi.java")));
+        assertEquals(0, new CommandLine(new WizCommand()).execute(
+                "build", "--root", workspace.toString(), "--package", "com.example.initial"));
+        assertTrue(Files.exists(workspace.resolve("build/src/main/java/com/example/initial/web/api/PageDashboardApi.java")));
+        assertFalse(Files.exists(workspace.resolve("build/src/main/java/com/wiz/bootstrap/web/api/PageDashboardApi.java")));
+        assertTrue(Files.readString(workspace.resolve("config/application.yml"))
+                .contains("package-root: com.example.initial"));
         assertTrue(Files.notExists(workspace.resolve("build/src/app/page.dashboard/api.java")));
         assertTrue(Files.exists(workspace.resolve("build/.wiz/source/app/page.dashboard/api.java")));
         assertTrue(Files.exists(workspace.resolve("bundle/app-api.jar")));
+        StringWriter packageError = new StringWriter();
+        CommandLine latePackageChange = new CommandLine(new WizCommand());
+        latePackageChange.setErr(new PrintWriter(packageError));
+        assertEquals(1, latePackageChange.execute(
+                "build", "--root", workspace.toString(), "--package", "com.example.too.late"));
+        assertTrue(packageError.toString().contains("before the first successful bundle build"));
         Path runtimeJar = tempDir.resolve("wiz-runtime.jar");
         writeFakeRuntimeJar(runtimeJar);
         Path appJar = tempDir.resolve("main.jar");

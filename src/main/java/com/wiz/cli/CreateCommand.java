@@ -21,7 +21,7 @@ public class CreateCommand implements Callable<Integer> {
     @Parameters(index = "0", paramLabel = "PATH", description = "Workspace path or name.")
     private Path path;
 
-    @Option(names = {"--package", "--package-root"}, required = true, description = "Base Java package for generated source, for example com.example.demo.")
+    @Option(names = "--package", required = true, description = "Base Java package for generated source, for example com.example.demo.")
     private String packageRoot;
 
     @Option(names = "--uri", description = "Git repository URI to import.")

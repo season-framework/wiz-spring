@@ -21,6 +21,8 @@ public class ProjectService {
 
     private static final String EMBEDDED_JAVA_SAMPLE_ROOT = "/wiz/templates/default-project-java/";
     private static final String EMBEDDED_JAVA_SAMPLE_FILES = "/wiz/templates/default-project-java.files";
+    private static final String EMPTY_DEVLOG = "| 날짜 | ID | 작업 내용 | 상세 |\n"
+            + "|------|-----|----------|------|\n";
 
     private final PathService paths;
 
@@ -52,6 +54,7 @@ public class ProjectService {
             importSource(sourcePath.toAbsolutePath().normalize(), project.root());
         } else {
             createDefaultApp(project);
+            initializeDevlog(project);
         }
 
         ensureAppDirectories(project);
@@ -105,6 +108,13 @@ public class ProjectService {
         Files.createDirectories(project.configRoot());
     }
 
+    private void initializeDevlog(ProjectContext project) throws IOException {
+        Path devlogRoot = project.root().resolve("devlog");
+        delete(devlogRoot);
+        Files.createDirectories(devlogRoot);
+        Files.writeString(project.root().resolve("devlog.md"), EMPTY_DEVLOG);
+    }
+
     private String dashboardAppJson(ProjectContext project) {
         String handler = ProjectJavaNaming.appApiHandlerClass(project, "page.dashboard");
         return "{\n"
@@ -130,7 +140,7 @@ public class ProjectService {
                 + "    <modelVersion>4.0.0</modelVersion>\n"
                 + "    <groupId>" + project.packageRoot() + "</groupId>\n"
                 + "    <artifactId>wiz-app</artifactId>\n"
-                + "    <version>0.2.2</version>\n"
+                + "    <version>0.2.3</version>\n"
                 + "    <properties>\n"
                 + "        <java.version>21</java.version>\n"
                 + "    </properties>\n"

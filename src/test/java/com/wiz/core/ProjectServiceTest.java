@@ -45,6 +45,11 @@ class ProjectServiceTest {
         assertTrue(application.contains("max-request-body-bytes: 0"));
         assertTrue(Files.readString(project.configRoot().resolve("application-dev.yml")).contains("warmup-enabled: true"));
         assertTrue(Files.readString(project.configRoot().resolve("application-prod.yml")).contains("warmup-enabled: true"));
+        assertEquals("| 날짜 | ID | 작업 내용 | 상세 |\n|------|-----|----------|------|\n",
+                Files.readString(project.root().resolve("devlog.md")));
+        try (var devlogs = Files.list(project.root().resolve("devlog"))) {
+            assertEquals(0, devlogs.count());
+        }
     }
 
     @Test
@@ -77,6 +82,9 @@ class ProjectServiceTest {
         Files.createDirectories(source.resolve("src/app/page.local"));
         Files.writeString(source.resolve("src/app/page.local/app.json"), "{}\n");
         Files.writeString(source.resolve("src/app/page.local/readme.txt"), "local source\n");
+        Files.createDirectories(source.resolve("devlog/2026-07-15"));
+        Files.writeString(source.resolve("devlog.md"), "historical devlog\n");
+        Files.writeString(source.resolve("devlog/2026-07-15/001-history.md"), "historical detail\n");
         new WorkspaceService().createWorkspace(workspace);
 
         ProjectService service = new ProjectService(new PathService(workspace));
@@ -87,6 +95,9 @@ class ProjectServiceTest {
         assertTrue(Files.exists(project.sourceRoot().resolve("controller")));
         assertTrue(Files.exists(project.modelRoot()));
         assertTrue(Files.exists(project.routeRoot()));
+        assertEquals("historical devlog\n", Files.readString(project.root().resolve("devlog.md")));
+        assertEquals("historical detail\n",
+                Files.readString(project.root().resolve("devlog/2026-07-15/001-history.md")));
     }
 
     @Test

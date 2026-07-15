@@ -15,5 +15,6 @@
 | [`0.2.0`](0.2.0.md) | tagged | Spring/Maven-shaped build output, hidden WIZ staging, generated package modernization |
 | [`0.2.1`](0.2.1.md) | tagged | CLI workspace root auto-detection, root validation, runServer overload fix |
 | [`0.2.2`](0.2.2.md) | tagged | service uninstall stop/disable/delete/daemon-reload sequence |
+| [`0.2.3`](0.2.3.md) | tagged | Docker development environment, initial package selection, clean sample devlog |
 
 릴리즈를 실제로 배포할 때는 `pom.xml`의 `<version>`과 Git tag, GitHub/GitLab release note가 이 로그와 일치해야 한다.
