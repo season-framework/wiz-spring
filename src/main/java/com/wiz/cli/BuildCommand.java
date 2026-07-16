@@ -22,7 +22,7 @@ public class BuildCommand implements Callable<Integer> {
     @Option(names = "--clean", description = "Clean generated build and bundle directories first.")
     private boolean clean;
 
-    @Option(names = "--package", description = "Set the Java package root before the first successful bundle build.")
+    @Option(names = "--package", description = "Change the Java package root. Package changes automatically use a clean build.")
     private String packageRoot;
 
     @Option(names = "--phase", description = "Build phase to run: reconstruct, compile, bundle.")
@@ -35,7 +35,7 @@ public class BuildCommand implements Callable<Integer> {
                 .selectForBuild(paths, packageRoot);
         ProjectContext context = selection.context();
         if (selection.changed()) {
-            System.out.println("Java package updated for initial build: " + context.packageRoot());
+            System.out.println("Java package updated: " + context.packageRoot());
         }
         BuildResult result = new ProjectBuildService().build(context, clean || selection.changed(), phase, BuildLogger.console());
         System.out.println(result.message());

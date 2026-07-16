@@ -32,7 +32,7 @@ workspace를 host에 영속화하려면 bind target을 사용합니다. 최초 �
 # 기본 저장 위치: ./.wiz-data-bind/app
 ```
 
-두 이미지를 한 번에 build하려면 `./build.sh all`을 사용합니다. 기본 image tag는 runtime이 `registry.nanoha.kr/kwon3286/wiz-spring:0.2.4`, bind가 `registry.nanoha.kr/kwon3286/wiz-spring:0.2.4-bind`입니다. 아래 환경 변수로 값을 바꿀 수 있습니다.
+두 이미지를 한 번에 build하려면 `./build.sh all`을 사용합니다. 기본 image tag는 runtime이 `registry.nanoha.kr/kwon3286/wiz-spring:0.2.5`, bind가 `registry.nanoha.kr/kwon3286/wiz-spring:0.2.5-bind`입니다. 아래 환경 변수로 값을 바꿀 수 있습니다.
 
 - Build: `IMAGE`, `VERSION`, `PLATFORM`, `WIZ_PACKAGE_ROOT`, `WIZ_SPRING_INSTRUCTION_DIR`, `INSTALL_CODEX`, `CODEX_VERSION`
 - Run: `CONTAINER_NAME`, `HOST_HTTP_PORT`, `HOST_SSH_PORT`, `CONTAINER_HTTP_PORT`, `WIZ_ENABLE_SSH`
@@ -69,7 +69,7 @@ cd /root/workspace/wiz-java/wiz-spring
 ## 앱 생성
 
 ```bash
-jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.2.4.jar
+jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.2.5.jar
 workspace=/tmp/demo2
 
 rm -rf "$workspace"
@@ -96,10 +96,9 @@ java -jar "$jar" run --root "$workspace" --port 3000
 java -jar "$jar" build --root "$workspace" --clean
 ```
 
-초기 build에서 create 때 지정한 package root를 바꾸려면 create의 자동 build를 건너뛴 뒤 `build --package`를 사용합니다. 설정, Maven groupId와 WIZ Java source의 package 참조가 함께 변경되며 package 변경 build는 자동으로 clean 처리됩니다. 성공한 bundle build의 `bundle/.wiz-build.json`이 생긴 뒤에는 package를 다시 변경할 수 없습니다.
+package root를 바꾸려면 언제든 `build --package`를 사용합니다. 설정, Maven groupId와 WIZ Java source의 package 참조가 함께 변경되고 기존 generated Spring tree와 bundle을 제거하는 clean build가 자동 적용됩니다. 이미 배포용 standalone JAR을 만들었다면 package 변경 후 다시 패키징해야 합니다.
 
 ```bash
-java -jar "$jar" create "$workspace" --package com.example.bootstrap --skip-build
 java -jar "$jar" build --root "$workspace" --package com.example.product
 ```
 
@@ -121,7 +120,7 @@ java -jar "$jar" bundle --root "$workspace" --output /tmp/demo2-bundle
 | Command | 용도 |
 | --- | --- |
 | `create <path> --package <package>` | 단일 workspace를 생성하고 기본 sample source를 배치합니다. 기본적으로 clean build까지 실행합니다. |
-| `build --root <path> [--package <package>] [--clean] [--phase reconstruct\|compile\|bundle]` | source 재구성, Java compile, frontend build/fallback, bundle 생성을 수행합니다. `--package`는 첫 성공 bundle build 전에만 package root를 변경합니다. |
+| `build --root <path> [--package <package>] [--clean] [--phase reconstruct\|compile\|bundle]` | source 재구성, Java compile, frontend build/fallback, bundle 생성을 수행합니다. `--package`는 package root를 변경하고 자동으로 clean build합니다. |
 | `run --root <path> [--host <host>] [--port <port>] [--profile <profile>]` | WIZ Spring 서버를 실행합니다. 기본 profile은 `dev`입니다. |
 | `jar --root <path> [--clean] [--skip-build] [--output <jar>]` | workspace bundle을 포함한 단일 실행 jar를 만듭니다. |
 | `bundle --root <path> [--output <dir>]` | 이미 build된 bundle과 config를 배포용 디렉터리로 복사합니다. |
@@ -265,12 +264,12 @@ workspace: "java"
 format-version: 1
 runtime:
   name: "wiz-spring"
-  version: "0.2.4"
+  version: "0.2.5"
 ```
 
 `runtime.version`은 workspace를 생성한 `wiz-spring` 실행 파일의 버전입니다. 개발 classpath에서 직접 실행해 manifest version이 없으면 `dev`로 기록됩니다.
 
-`0.2.2`로 생성한 기존 workspace를 업그레이드할 때는 [`release-log/0.2.4.md`](release-log/0.2.4.md)의 config migration 절차를 따르세요. 기존 source를 다시 생성하지 않고 session 설정, `wiz.yml`, Git ignore/example 파일만 custom 값과 병합합니다.
+`0.2.2`로 생성한 기존 workspace를 업그레이드할 때는 [`release-log/0.2.4.md`](release-log/0.2.4.md)의 config migration 절차를 따르세요. 기존 source를 다시 생성하지 않고 session 설정, `wiz.yml`, Git ignore/example 파일만 custom 값과 병합합니다. 첫 build 이후 package 변경이 필요하면 [`release-log/0.2.5.md`](release-log/0.2.5.md)의 절차를 추가로 확인하세요.
 
 ## Source 규칙
 

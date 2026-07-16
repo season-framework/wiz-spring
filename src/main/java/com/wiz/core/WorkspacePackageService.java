@@ -13,11 +13,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
-import com.wiz.runtime.BuildMarkerService;
 import com.wiz.runtime.PathService;
 import com.wiz.runtime.ProjectContext;
 
-/** Applies a one-time Java package-root override before the first bundle build. */
+/** Applies a Java package-root change before rebuilding a workspace. */
 public class WorkspacePackageService {
 
     private static final Set<String> REWRITABLE_EXTENSIONS = Set.of(
@@ -32,13 +31,6 @@ public class WorkspacePackageService {
         String selectedPackageRoot = paths.validatePackageRoot(requestedPackageRoot);
         if (selectedPackageRoot.equals(currentPackageRoot)) {
             return new PackageSelection(paths.workspaceContext(selectedPackageRoot), false);
-        }
-
-        Path marker = paths.root().resolve("bundle").resolve(BuildMarkerService.MARKER_FILE);
-        if (Files.isRegularFile(marker, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IllegalArgumentException(
-                    "--package can change the Java package only before the first successful bundle build. "
-                            + "Current package: " + currentPackageRoot);
         }
 
         rewritePackageReferences(paths, currentPackageRoot, selectedPackageRoot);

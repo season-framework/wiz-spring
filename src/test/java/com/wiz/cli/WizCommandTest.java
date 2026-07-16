@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import com.wiz.runtime.BuildMarkerService;
 import com.wiz.runtime.WizSpringVersion;
 
 import picocli.CommandLine;
@@ -262,12 +263,15 @@ class WizCommandTest {
         assertTrue(Files.notExists(workspace.resolve("build/src/app/page.dashboard/api.java")));
         assertTrue(Files.exists(workspace.resolve("build/.wiz/source/app/page.dashboard/api.java")));
         assertTrue(Files.exists(workspace.resolve("bundle/app-api.jar")));
-        StringWriter packageError = new StringWriter();
         CommandLine latePackageChange = new CommandLine(new WizCommand());
-        latePackageChange.setErr(new PrintWriter(packageError));
-        assertEquals(1, latePackageChange.execute(
+        assertEquals(0, latePackageChange.execute(
                 "build", "--root", workspace.toString(), "--package", "com.example.too.late"));
-        assertTrue(packageError.toString().contains("before the first successful bundle build"));
+        assertTrue(Files.exists(workspace.resolve("build/src/main/java/com/example/too/late/web/api/PageDashboardApi.java")));
+        assertFalse(Files.exists(workspace.resolve("build/src/main/java/com/example/initial/web/api/PageDashboardApi.java")));
+        assertTrue(Files.readString(workspace.resolve("config/application.yml"))
+                .contains("package-root: com.example.too.late"));
+        assertTrue(Files.readString(workspace.resolve("bundle").resolve(BuildMarkerService.MARKER_FILE))
+                .contains("\"javaPackageRoot\" : \"com.example.too.late\""));
         Path runtimeJar = tempDir.resolve("wiz-runtime.jar");
         writeFakeRuntimeJar(runtimeJar);
         Path appJar = tempDir.resolve("main.jar");

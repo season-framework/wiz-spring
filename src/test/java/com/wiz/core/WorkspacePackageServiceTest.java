@@ -2,7 +2,6 @@ package com.wiz.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -20,7 +19,7 @@ class WorkspacePackageServiceTest {
     Path tempDir;
 
     @Test
-    void changesConfigurationAndTemplateReferencesBeforeInitialBuild() throws Exception {
+    void changesConfigurationAndTemplateReferences() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace, "com.wiz.app");
         new ProjectService(new PathService(workspace)).createApp("com.wiz.app", null, null);
@@ -42,18 +41,21 @@ class WorkspacePackageServiceTest {
     }
 
     @Test
-    void rejectsChangingPackageAfterSuccessfulBundleBuild() throws Exception {
+    void changesPackageAfterSuccessfulBundleBuild() throws Exception {
         Path workspace = tempDir.resolve("built-workspace");
         new WorkspaceService().createWorkspace(workspace, "com.wiz.app");
         new ProjectService(new PathService(workspace)).createApp("com.wiz.app", null, null);
         Files.createDirectories(workspace.resolve("bundle"));
         Files.writeString(workspace.resolve("bundle").resolve(BuildMarkerService.MARKER_FILE), "{}\n");
 
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-                () -> new WorkspacePackageService().selectForBuild(new PathService(workspace), "com.example.late"));
+        WorkspacePackageService.PackageSelection selection = new WorkspacePackageService()
+                .selectForBuild(new PathService(workspace), "com.example.late");
 
-        assertTrue(exception.getMessage().contains("before the first successful bundle build"));
-        assertEquals("com.wiz.app", new PathService(workspace).packageRoot());
+        assertTrue(selection.changed());
+        assertEquals("com.example.late", selection.context().packageRoot());
+        assertEquals("com.example.late", new PathService(workspace).packageRoot());
+        assertTrue(Files.readString(workspace.resolve("pom.xml"))
+                .contains("<groupId>com.example.late</groupId>"));
     }
 
     @Test
