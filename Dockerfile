@@ -24,7 +24,7 @@ RUN ./mvnw --batch-mode --no-transfer-progress -DskipTests clean package && \
 FROM --platform=${DOCKER_PLATFORM} ${MAVEN_IMAGE} AS runtime-tools
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG WIZ_VERSION=0.2.5
+ARG WIZ_VERSION=0.2.6
 ARG WIZ_PACKAGE_ROOT=com.wiz.app
 ARG INSTALL_CODEX=true
 ARG CODEX_VERSION=latest
@@ -110,13 +110,6 @@ RUN wiz-spring create "$APP_ROOT" --package "$WIZ_PACKAGE_ROOT" && \
     wiz-spring codex \
         --root "$APP_ROOT" \
         --runtime-jar "$WIZ_RUNTIME_JAR"
-
-RUN --mount=type=bind,from=wiz-spring-instruction,source=/,target=/tmp/wiz-spring-instruction,readonly \
-    test -f /tmp/wiz-spring-instruction/copilot-instructions.md && \
-    rm -rf "$APP_ROOT/.github" && \
-    mkdir -p "$APP_ROOT/.github" && \
-    cp -a /tmp/wiz-spring-instruction/. "$APP_ROOT/.github/" && \
-    rm -rf "$APP_ROOT/.github/.git"
 
 FROM runtime-tools AS runtime-bind
 

@@ -1,7 +1,10 @@
 package com.wiz.cli;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
@@ -16,8 +19,11 @@ import picocli.CommandLine.Option;
 @Command(
         name = "codex",
         mixinStandardHelpOptions = true,
-        description = "Generate or check .codex settings for WIZ Spring MCP. Writes server name 'wiz-spring'.")
+        description = "Generate or check .codex settings and bundled WIZ Spring instructions. Writes server name 'wiz-spring' for MCP.")
 public class CodexCommand implements Callable<Integer> {
+
+    private static final String INSTRUCTION_MANIFEST = "/wiz/codex-instructions.files";
+    private static final String INSTRUCTION_RESOURCE_ROOT = "/wiz/codex-instructions/";
 
     @Option(names = "--root", description = "Target WIZ Spring workspace root. Defaults to auto-detecting from the current directory.")
     private Path root;
@@ -25,7 +31,7 @@ public class CodexCommand implements Callable<Integer> {
     @Option(names = "--runtime-jar", description = "wiz-spring executable jar path for generated MCP args. Defaults to the currently running jar.")
     private Path runtimeJar;
 
-    @Option(names = "--force", description = "Overwrite existing .codex files when generated content differs.")
+    @Option(names = "--force", description = "Overwrite existing generated settings and bundled instruction files when content differs.")
     private boolean force;
 
     @Option(names = "--check", description = "Only check generated content. Missing or outdated files return exit code 2.")
@@ -82,16 +88,48 @@ public class CodexCommand implements Callable<Integer> {
             System.out.println("Use --force to overwrite existing files.");
             return 2;
         }
-        System.out.println("Codex settings ready: " + workspaceRoot.resolve(".codex"));
+        System.out.println("Codex settings and WIZ Spring instructions ready: " + workspaceRoot);
         return 0;
     }
 
-    private Map<Path, String> desiredFiles(Path workspaceRoot, Path jar) {
+    private Map<Path, String> desiredFiles(Path workspaceRoot, Path jar) throws IOException {
         Path codexRoot = workspaceRoot.resolve(".codex");
         LinkedHashMap<Path, String> files = new LinkedHashMap<>();
         files.put(codexRoot.resolve("config.toml"), configToml(workspaceRoot, jar));
         files.put(codexRoot.resolve("AGENTS.md"), agentsMarkdown());
+        addBundledInstructions(files, workspaceRoot);
         return files;
+    }
+
+    private void addBundledInstructions(Map<Path, String> files, Path workspaceRoot) throws IOException {
+        Path instructionRoot = workspaceRoot.resolve(".github").toAbsolutePath().normalize();
+        String manifest = readResource(INSTRUCTION_MANIFEST);
+        for (String rawEntry : manifest.lines().toList()) {
+            String entry = rawEntry.strip();
+            if (entry.isEmpty() || entry.startsWith("#")) {
+                continue;
+            }
+            if (entry.startsWith("/") || entry.contains("\\")) {
+                throw new IllegalStateException("Invalid bundled instruction path: " + entry);
+            }
+
+            Path target = instructionRoot.resolve(entry).normalize();
+            if (target.equals(instructionRoot) || !target.startsWith(instructionRoot)) {
+                throw new IllegalStateException("Bundled instruction path escapes .github: " + entry);
+            }
+            if (files.put(target, readResource(INSTRUCTION_RESOURCE_ROOT + entry)) != null) {
+                throw new IllegalStateException("Duplicate bundled instruction path: " + entry);
+            }
+        }
+    }
+
+    private String readResource(String resourcePath) throws IOException {
+        try (InputStream input = CodexCommand.class.getResourceAsStream(resourcePath)) {
+            if (input == null) {
+                throw new IllegalStateException("Bundled WIZ Spring instruction not found: " + resourcePath);
+            }
+            return new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
     }
 
     private String configToml(Path workspaceRoot, Path jar) {
@@ -164,6 +202,8 @@ public class CodexCommand implements Callable<Integer> {
                 # Codex Instructions
 
                 Follow `.github/copilot-instructions.md`.
+
+                Use the relevant references under `.github/devdocs/` and reusable prompts under `.github/prompts/`.
 
                 Before code changes, if `.github/custom/custom-instructions.md` exists, read it first.
                 If that file lists reference files, read the relevant referenced files too.

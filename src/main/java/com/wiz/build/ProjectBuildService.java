@@ -396,7 +396,7 @@ public class ProjectBuildService {
                 + "    <modelVersion>4.0.0</modelVersion>\n"
                 + "    <groupId>" + project.packageRoot() + "</groupId>\n"
                 + "    <artifactId>wiz-generated-app</artifactId>\n"
-                + "    <version>0.2.5</version>\n"
+                + "    <version>0.2.6</version>\n"
                 + "    <properties>\n"
                 + "        <java.version>21</java.version>\n"
                 + "    </properties>\n"

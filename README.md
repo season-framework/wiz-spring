@@ -11,7 +11,7 @@ WIZ Spring은 WIZ 앱을 Java 21/Spring Boot로 실행하는 runtime/CLI입니�
 
 ## Docker 개발환경
 
-`wiz-base`와 같은 방식으로 일반 실행 이미지와 workspace 영속화용 bind 이미지를 만들 수 있습니다. 이미지에는 Java 21 JDK, Maven 3.9, Node.js 22, SSH/기본 개발 도구, WIZ Spring runtime과 미리 build된 sample workspace가 포함됩니다. 이 저장소와 같은 상위 디렉터리의 `wiz-spring-instruction` 내용은 `/opt/app/.github`에 복사됩니다. Spring runtime 자체의 MCP를 사용하므로 구형 `wiz-vscode` extension MCP와 `wiz-track-apt`는 포함하지 않습니다.
+`wiz-base`와 같은 방식으로 일반 실행 이미지와 workspace 영속화용 bind 이미지를 만들 수 있습니다. 이미지에는 Java 21 JDK, Maven 3.9, Node.js 22, SSH/기본 개발 도구, WIZ Spring runtime과 미리 build된 sample workspace가 포함됩니다. WIZ Spring 인스트럭션은 runtime JAR에 내장되어 `codex` 명령이 `/opt/app/.github`에 함께 설치합니다. Spring runtime 자체의 MCP를 사용하므로 구형 `wiz-vscode` extension MCP와 `wiz-track-apt`는 포함하지 않습니다.
 
 일반 이미지를 build하고 실행하려면:
 
@@ -32,22 +32,16 @@ workspace를 host에 영속화하려면 bind target을 사용합니다. 최초 �
 # 기본 저장 위치: ./.wiz-data-bind/app
 ```
 
-두 이미지를 한 번에 build하려면 `./build.sh all`을 사용합니다. 기본 image tag는 runtime이 `registry.nanoha.kr/kwon3286/wiz-spring:0.2.5`, bind가 `registry.nanoha.kr/kwon3286/wiz-spring:0.2.5-bind`입니다. 아래 환경 변수로 값을 바꿀 수 있습니다.
+두 이미지를 한 번에 build하려면 `./build.sh all`을 사용합니다. 기본 image tag는 runtime이 `registry.nanoha.kr/kwon3286/wiz-spring:0.2.6`, bind가 `registry.nanoha.kr/kwon3286/wiz-spring:0.2.6-bind`입니다. 아래 환경 변수로 값을 바꿀 수 있습니다.
 
-- Build: `IMAGE`, `VERSION`, `PLATFORM`, `WIZ_PACKAGE_ROOT`, `WIZ_SPRING_INSTRUCTION_DIR`, `INSTALL_CODEX`, `CODEX_VERSION`
+- Build: `IMAGE`, `VERSION`, `PLATFORM`, `WIZ_PACKAGE_ROOT`, `INSTALL_CODEX`, `CODEX_VERSION`
 - Run: `CONTAINER_NAME`, `HOST_HTTP_PORT`, `HOST_SSH_PORT`, `CONTAINER_HTTP_PORT`, `WIZ_ENABLE_SSH`
 - Bind run: 위 run 변수와 `DATA_ROOT`
 
-Codex CLI는 기본으로 설치되고 `/opt/app/.codex`에는 standalone WIZ Spring MCP 설정이 생성됩니다. Codex CLI가 필요 없는 image는 다음처럼 만들 수 있습니다.
+Codex CLI는 기본으로 설치되고 `/opt/app/.codex`에는 standalone WIZ Spring MCP 설정이, `/opt/app/.github`에는 내장 인스트럭션과 개발 문서가 생성됩니다. Codex CLI가 필요 없는 image는 다음처럼 만들 수 있습니다.
 
 ```bash
 INSTALL_CODEX=false ./build.sh runtime
-```
-
-`wiz-spring-instruction`이 다른 위치에 있으면 named build context 경로를 지정합니다.
-
-```bash
-WIZ_SPRING_INSTRUCTION_DIR=/path/to/wiz-spring-instruction ./build.sh runtime
 ```
 
 SSH는 password 인증을 허용하지 않습니다. 공개키 로그인이 필요하면 실행 시 키를 전달합니다.
@@ -69,7 +63,7 @@ cd /root/workspace/wiz-java/wiz-spring
 ## 앱 생성
 
 ```bash
-jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.2.5.jar
+jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.2.6.jar
 workspace=/tmp/demo2
 
 rm -rf "$workspace"
@@ -127,7 +121,7 @@ java -jar "$jar" bundle --root "$workspace" --output /tmp/demo2-bundle
 | `kill [--dry-run]` | 실행 중인 `wiz-spring run` 프로세스를 찾거나 종료합니다. |
 | `service ...` | Linux/systemd 서비스 등록, 삭제, 조회, 시작, 중지를 처리합니다. |
 | `mcp --root <path> [--state <file>]` | WIZ Spring MCP stdio 서버를 실행합니다. |
-| `codex --root <path> --runtime-jar <jar> [--check\|--force]` | workspace `.codex` MCP 설정을 생성하거나 검사합니다. |
+| `codex --root <path> --runtime-jar <jar> [--check\|--force]` | workspace `.codex` MCP 설정과 내장 `.github` 인스트럭션을 생성하거나 검사합니다. |
 
 `project create`, `project build`, `project jar`, `project list` 같은 multi-project 명령은 더 이상 사용하지 않습니다.
 
@@ -137,6 +131,9 @@ java -jar "$jar" bundle --root "$workspace" --output /tmp/demo2-bundle
 demo2/
   .github/
     copilot-instructions.md
+    short-instructions.md
+    devdocs/
+    prompts/
   config/
     application.yml
     application-dev.yml
@@ -264,12 +261,12 @@ workspace: "java"
 format-version: 1
 runtime:
   name: "wiz-spring"
-  version: "0.2.5"
+  version: "0.2.6"
 ```
 
 `runtime.version`은 workspace를 생성한 `wiz-spring` 실행 파일의 버전입니다. 개발 classpath에서 직접 실행해 manifest version이 없으면 `dev`로 기록됩니다.
 
-`0.2.2`로 생성한 기존 workspace를 업그레이드할 때는 [`release-log/0.2.4.md`](release-log/0.2.4.md)의 config migration 절차를 따르세요. 기존 source를 다시 생성하지 않고 session 설정, `wiz.yml`, Git ignore/example 파일만 custom 값과 병합합니다. 첫 build 이후 package 변경이 필요하면 [`release-log/0.2.5.md`](release-log/0.2.5.md)의 절차를 추가로 확인하세요.
+`0.2.2`로 생성한 기존 workspace를 업그레이드할 때는 [`release-log/0.2.4.md`](release-log/0.2.4.md)의 config migration 절차를 따르세요. 기존 source를 다시 생성하지 않고 session 설정, `wiz.yml`, Git ignore/example 파일만 custom 값과 병합합니다. 첫 build 이후 package 변경이 필요하면 [`release-log/0.2.5.md`](release-log/0.2.5.md)를, 내장 Codex 인스트럭션으로 전환하려면 [`release-log/0.2.6.md`](release-log/0.2.6.md)를 추가로 확인하세요.
 
 ## Source 규칙
 
@@ -296,7 +293,7 @@ build 산출물의 Java package는 Spring 계층형 명칭을 사용합니다.
 
 ## MCP와 Codex
 
-WIZ Spring MCP 서버는 runtime jar 안에 포함되어 있습니다.
+WIZ Spring MCP 서버와 Codex용 인스트럭션은 runtime jar 안에 포함되어 있습니다. `codex` 명령은 MCP 설정을 `.codex`에, 인스트럭션과 참조 문서를 `.github`에 함께 설치합니다. 인스트럭션 원본은 이 저장소의 `src/main/resources/wiz/codex-instructions/`에서 관리합니다.
 
 ```bash
 java -jar "$jar" mcp --root "$workspace"

@@ -1,0 +1,79 @@
+# Project Structure
+
+## Workspace
+
+```text
+workspace/
+  config/
+    application.yml
+    application-dev.yml
+    application-prod.yml
+    application.example.yml
+    application-dev.example.yml
+    application-prod.example.yml
+    wiz.yml
+  pom.xml
+  src/
+    angular/
+    app/
+    controller/
+    model/
+    route/
+    portal/
+  build/
+  bundle/
+  target/
+```
+
+`src/`, `config/`, `pom.xml`, `src/angular/package.json`이 source of truth다. `build/`, `bundle/`, `target/`은 생성 산출물이다.
+
+실제 `application.yml`, `application-<profile>.yml`은 로컬 runtime source이지만 비밀 값 보호를 위해 Git에서 제외한다. Git에는 `application*.example.yml`을 공유하고 clone 후 필요한 example을 실제 파일명으로 복사한다. 상세 규칙은 `configuration-profiles.md`를 따른다.
+
+`wiz.yml`은 runtime 설정이 아니라 Java workspace type, metadata format version, 기준 `wiz-spring` version을 기록하는 marker다. 이 파일은 Git에 포함하며 임의의 app 설정을 넣지 않는다.
+
+`build/`는 외부에서 보아도 Spring Boot/Maven project처럼 읽히도록 아래 구조를 사용한다.
+
+```text
+build/
+  pom.xml
+  src/main/java/
+  src/main/resources/
+  target/classes/
+  target/dependency/
+  target/app-api.jar
+  target/frontend/
+  .wiz/source/
+```
+
+`build/src/main/java`, `build/src/main/resources`, `build/target/**`가 공개 build 산출물이다. `build/.wiz/source`는 WIZ app/portal/Angular source를 평탄화한 내부 staging 경로이며 직접 수정하지 않는다.
+
+## App
+
+```text
+src/app/page.dashboard/
+  app.json
+  view.pug
+  view.ts
+  view.scss
+  api.java
+  socket.java
+```
+
+`app.json.controller`는 `base`, `user`, `admin`, 또는 custom controller 이름을 지정한다.
+
+## Java package rewrite
+
+package 선언이 없는 source는 build 중 `wiz.java.package-root` 기준 package로 재작성된다.
+
+`wiz-spring build --package <package>`는 build 이력과 관계없이 package root 설정과 source/pom 참조를 변경한 뒤 clean build한다. WIZ source가 source of truth이고 generated Spring tree는 다시 생성되므로 첫 build 이후에도 사용할 수 있다.
+
+| Source | Generated package |
+| --- | --- |
+| `src/app/{id}/api.java` | `{packageRoot}.web.api.{AppId}Api` |
+| `src/app/{id}/socket.java` | `{packageRoot}.realtime.socket.{AppId}SocketController` |
+| `src/controller/*.java` | `{packageRoot}.security.guard` |
+| `src/model/Struct.java` | `{packageRoot}.application.model.Struct` |
+| `src/model/struct/**/*.java` | `{packageRoot}.application.service...` |
+| `src/model/db/**/*.java` | `{packageRoot}.domain.entity...` |
+| `src/route/{id}/route.java` | `{packageRoot}.web.route.{RouteId}RouteHandler` |
+| `src/portal/{pkg}/model/**/*.java` | `{packageRoot}.module.{pkg}.application|domain|infrastructure...` |

@@ -2,7 +2,6 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-WIZ_SPRING_INSTRUCTION_DIR="${WIZ_SPRING_INSTRUCTION_DIR:-$SCRIPT_DIR/../wiz-spring-instruction}"
 
 default_version() {
     sed -n '/<artifactId>wiz-spring<\/artifactId>/,/<version>/{s:.*<version>\([^<]*\)</version>.*:\1:p;}' \
@@ -19,15 +18,8 @@ if [[ -z "$VERSION" ]]; then
     exit 1
 fi
 
-if [[ ! -f "$WIZ_SPRING_INSTRUCTION_DIR/copilot-instructions.md" ]]; then
-    printf 'WIZ Spring instruction context not found: %s\n' "$WIZ_SPRING_INSTRUCTION_DIR" >&2
-    exit 1
-fi
-WIZ_SPRING_INSTRUCTION_DIR="$(cd -- "$WIZ_SPRING_INSTRUCTION_DIR" && pwd)"
-
 build_args=(
     --platform "$PLATFORM"
-    --build-context "wiz-spring-instruction=$WIZ_SPRING_INSTRUCTION_DIR"
     --build-arg "DOCKER_PLATFORM=$PLATFORM"
     --build-arg "WIZ_VERSION=$VERSION"
 )
