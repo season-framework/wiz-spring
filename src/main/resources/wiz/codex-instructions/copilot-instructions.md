@@ -93,6 +93,8 @@ workspace/
 
 ## CLI
 
+`wiz-spring create`는 기본 template, `--path`, `--uri` 모두 `.codex` MCP 설정과 내장 `.github` 인스트럭션을 자동으로 설치한다. 별도 `codex` 하위 명령은 사용하지 않는다.
+
 ```bash
 java -jar target/wiz-spring-0.2.6.jar --help
 java -jar target/wiz-spring-0.2.6.jar create <workspace> --package com.example.demo
@@ -100,6 +102,7 @@ java -jar target/wiz-spring-0.2.6.jar build --root <workspace> --clean
 java -jar target/wiz-spring-0.2.6.jar build --root <workspace> --package com.example.renamed
 java -jar target/wiz-spring-0.2.6.jar jar --root <workspace> --output /tmp/demo.jar
 java -jar target/wiz-spring-0.2.6.jar run --root <workspace> --port 3000
+source <(java -jar target/wiz-spring-0.2.6.jar completion bash)
 ```
 
 ## 검증

@@ -21,6 +21,17 @@ java -jar "$jar" create "$workspace" --package com.example.demo
 java -jar "$jar" run --root "$workspace" --port 3000
 ```
 
+`create`는 기본 template뿐 아니라 `--path`, `--uri` import에서도 `.codex`와 내장 `.github` 인스트럭션을 자동으로 설정한다. 별도 `wiz-spring codex` 명령은 사용하지 않는다.
+
+CLI completion은 Bash와 Zsh를 지원한다.
+
+```bash
+source <(java -jar "$jar" completion bash)
+source <(java -jar "$jar" completion zsh)
+```
+
+completion은 입력 커서를 유지한 채 root command 설명 또는 현재 command의 usage, argument, option 설명을 입력 줄 아래에 표시한다. Bash는 같은 위치에서 `Tab`을 반복해도 도움말을 유지하고, Zsh는 네이티브 목록에 도움말과 후보를 함께 표시한다. 실제 `--help`와 같은 bold와 color를 적용하며, `WIZ_SPRING_COMPLETION_HELP=false`로 설명 패널을, `WIZ_SPRING_COMPLETION_COLOR=false` 또는 `NO_COLOR=1`로 색상을 끌 수 있다.
+
 검증 명령:
 
 ```bash

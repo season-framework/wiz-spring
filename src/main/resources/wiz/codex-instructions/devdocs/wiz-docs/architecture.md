@@ -6,7 +6,7 @@
 
 구성:
 
-- CLI: Picocli command (`create`, `build`, `jar`, `run`, `bundle`, `service`, `kill`, `mcp`, `codex`)
+- CLI: Picocli command (`create`, `build`, `jar`, `run`, `bundle`, `service`, `kill`, `mcp`, `completion`)
 - Build: source reconstruct, Java compile, workspace dependency copy, Angular build, bundle manifest
 - HTTP: static/SPA, App API dispatcher, Route dispatcher
 - Runtime facade: `WizContext`, `WizRequest`, `WizResponse`, `SessionService`, `AuthService`, `ModelRegistry`

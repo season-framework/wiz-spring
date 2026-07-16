@@ -1,102 +1,59 @@
-package com.wiz.cli;
+package com.wiz.core;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.Callable;
 
 import com.wiz.runtime.PathService;
 
-import picocli.CommandLine.Command;
-import picocli.CommandLine.Option;
-
-@Command(
-        name = "codex",
-        mixinStandardHelpOptions = true,
-        description = "Generate or check .codex settings and bundled WIZ Spring instructions. Writes server name 'wiz-spring' for MCP.")
-public class CodexCommand implements Callable<Integer> {
+public final class CodexWorkspaceService {
 
     private static final String INSTRUCTION_MANIFEST = "/wiz/codex-instructions.files";
     private static final String INSTRUCTION_RESOURCE_ROOT = "/wiz/codex-instructions/";
 
-    @Option(names = "--root", description = "Target WIZ Spring workspace root. Defaults to auto-detecting from the current directory.")
-    private Path root;
-
-    @Option(names = "--runtime-jar", description = "wiz-spring executable jar path for generated MCP args. Defaults to the currently running jar.")
-    private Path runtimeJar;
-
-    @Option(names = "--force", description = "Overwrite existing generated settings and bundled instruction files when content differs.")
-    private boolean force;
-
-    @Option(names = "--check", description = "Only check generated content. Missing or outdated files return exit code 2.")
-    private boolean check;
-
-    @Override
-    public Integer call() throws Exception {
-        Path workspaceRoot = workspaceRoot(root);
-        PathService pathService = new PathService(workspaceRoot);
-        if (!pathService.isWorkspaceRoot(workspaceRoot)) {
-            throw new IllegalArgumentException("WIZ workspace root not found: " + workspaceRoot);
+    public SetupResult setup(Path workspaceRoot, Path runtimeJar) throws IOException {
+        if (workspaceRoot == null) {
+            throw new IllegalArgumentException("WIZ workspace root is required");
         }
-
-        Path jar = runtimeJar == null ? currentRuntimePath() : runtimeJar.toAbsolutePath().normalize();
+        Path root = workspaceRoot.toAbsolutePath().normalize();
+        if (!new PathService(root).isWorkspaceRoot(root)) {
+            throw new IllegalArgumentException("WIZ workspace root not found: " + root);
+        }
+        if (runtimeJar == null) {
+            throw new IllegalArgumentException("wiz-spring runtime jar is required");
+        }
+        Path jar = runtimeJar.toAbsolutePath().normalize();
         if (!Files.isRegularFile(jar)) {
-            throw new IllegalArgumentException("wiz-spring runtime jar not found: " + jar + " (use --runtime-jar)");
+            throw new IllegalArgumentException("wiz-spring runtime jar not found: " + jar);
         }
 
-        Map<Path, String> files = desiredFiles(workspaceRoot, jar);
-        boolean blocked = false;
-        for (Map.Entry<Path, String> entry : files.entrySet()) {
+        int created = 0;
+        int updated = 0;
+        int unchanged = 0;
+        for (Map.Entry<Path, String> entry : desiredFiles(root, jar).entrySet()) {
             Path path = entry.getKey();
             String desired = entry.getValue();
             if (!Files.exists(path)) {
-                if (check) {
-                    System.out.println("Missing: " + path);
-                    blocked = true;
-                } else {
-                    write(path, desired);
-                    System.out.println("Created: " + path);
-                }
-                continue;
-            }
-
-            String current = Files.readString(path);
-            if (current.equals(desired)) {
-                System.out.println("Up to date: " + path);
-                continue;
-            }
-
-            if (check) {
-                System.out.println("Outdated: " + path);
-                blocked = true;
-            } else if (force) {
                 write(path, desired);
-                System.out.println("Updated: " + path);
+                created++;
+            } else if (Files.readString(path).equals(desired)) {
+                unchanged++;
             } else {
-                System.out.println("Warning: " + path + " differs from generated WIZ Spring Codex settings.");
-                blocked = true;
+                write(path, desired);
+                updated++;
             }
         }
-
-        if (blocked) {
-            System.out.println("Use --force to overwrite existing files.");
-            return 2;
-        }
-        System.out.println("Codex settings and WIZ Spring instructions ready: " + workspaceRoot);
-        return 0;
+        return new SetupResult(root, jar, created, updated, unchanged);
     }
 
     private Map<Path, String> desiredFiles(Path workspaceRoot, Path jar) throws IOException {
-        Path codexRoot = workspaceRoot.resolve(".codex");
         LinkedHashMap<Path, String> files = new LinkedHashMap<>();
-        files.put(codexRoot.resolve("config.toml"), configToml(workspaceRoot, jar));
-        files.put(codexRoot.resolve("AGENTS.md"), agentsMarkdown());
+        files.put(workspaceRoot.resolve(".codex/config.toml"), configToml(workspaceRoot, jar));
+        files.put(workspaceRoot.resolve(".codex/AGENTS.md"), agentsMarkdown());
         addBundledInstructions(files, workspaceRoot);
         return files;
     }
@@ -124,7 +81,7 @@ public class CodexCommand implements Callable<Integer> {
     }
 
     private String readResource(String resourcePath) throws IOException {
-        try (InputStream input = CodexCommand.class.getResourceAsStream(resourcePath)) {
+        try (InputStream input = CodexWorkspaceService.class.getResourceAsStream(resourcePath)) {
             if (input == null) {
                 throw new IllegalStateException("Bundled WIZ Spring instruction not found: " + resourcePath);
             }
@@ -228,28 +185,7 @@ public class CodexCommand implements Callable<Integer> {
                 """;
     }
 
-    private Path workspaceRoot(Path root) {
-        return WorkspaceRootResolver.resolve(root, "codex");
-    }
-
-    private Path currentRuntimePath() {
-        String classPath = System.getProperty("java.class.path", "");
-        if (!classPath.isBlank() && !classPath.contains(File.pathSeparator)) {
-            Path candidate = Path.of(classPath).toAbsolutePath().normalize();
-            if (Files.isRegularFile(candidate)) {
-                return candidate;
-            }
-        }
-        try {
-            return Path.of(CodexCommand.class.getProtectionDomain().getCodeSource().getLocation().toURI())
-                    .toAbsolutePath()
-                    .normalize();
-        } catch (URISyntaxException exception) {
-            throw new IllegalStateException("Failed to resolve current runtime jar path", exception);
-        }
-    }
-
-    private void write(Path path, String content) throws java.io.IOException {
+    private void write(Path path, String content) throws IOException {
         Files.createDirectories(path.getParent());
         Files.writeString(path, content);
     }
@@ -277,5 +213,16 @@ public class CodexCommand implements Callable<Integer> {
         }
         result.append('"');
         return result.toString();
+    }
+
+    public record SetupResult(Path workspaceRoot, Path runtimeJar, int createdFiles, int updatedFiles, int unchangedFiles) {
+
+        public int changedFiles() {
+            return createdFiles + updatedFiles;
+        }
+
+        public int managedFiles() {
+            return changedFiles() + unchangedFiles;
+        }
     }
 }

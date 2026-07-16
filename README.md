@@ -11,7 +11,7 @@ WIZ Spring은 WIZ 앱을 Java 21/Spring Boot로 실행하는 runtime/CLI입니�
 
 ## Docker 개발환경
 
-`wiz-base`와 같은 방식으로 일반 실행 이미지와 workspace 영속화용 bind 이미지를 만들 수 있습니다. 이미지에는 Java 21 JDK, Maven 3.9, Node.js 22, SSH/기본 개발 도구, WIZ Spring runtime과 미리 build된 sample workspace가 포함됩니다. WIZ Spring 인스트럭션은 runtime JAR에 내장되어 `codex` 명령이 `/opt/app/.github`에 함께 설치합니다. Spring runtime 자체의 MCP를 사용하므로 구형 `wiz-vscode` extension MCP와 `wiz-track-apt`는 포함하지 않습니다.
+`wiz-base`와 같은 방식으로 일반 실행 이미지와 workspace 영속화용 bind 이미지를 만들 수 있습니다. 이미지에는 Java 21 JDK, Maven 3.9, Node.js 22, SSH/기본 개발 도구, WIZ Spring runtime과 미리 build된 sample workspace가 포함됩니다. WIZ Spring 인스트럭션은 runtime JAR에 내장되어 `create`가 `/opt/app/.codex`와 `/opt/app/.github`를 함께 설정합니다. Spring runtime 자체의 MCP를 사용하므로 구형 `wiz-vscode` extension MCP와 `wiz-track-apt`는 포함하지 않습니다.
 
 일반 이미지를 build하고 실행하려면:
 
@@ -72,6 +72,8 @@ java -jar "$jar" create "$workspace" --package a.b.c
 
 `--package`는 필수이며, 생성/빌드되는 Java package root가 됩니다. 위 예시는 build 결과를 `build/src/main/java/a/b/c/...`와 `build/target/classes/a/b/c/...` 아래에 만듭니다. 기본 sample로 생성한 workspace의 `devlog.md`는 표 헤더만, `devlog/`는 빈 디렉터리로 초기화됩니다. `--path`나 `--uri`로 가져온 source의 기존 devlog 이력은 그대로 보존됩니다.
 
+모든 `create` 경로는 source 준비 후 `.codex/config.toml`, `.codex/AGENTS.md`와 내장 `.github` 인스트럭션을 자동으로 설정합니다. import source에 같은 관리 대상 파일이 있으면 현재 runtime의 내장본으로 갱신하고, `.github/custom/`처럼 manifest에 없는 사용자 파일은 보존합니다. 다른 runtime JAR을 MCP 설정에 기록해야 할 때만 `--runtime-jar <jar>`를 지정합니다.
+
 기본 생성은 sample source를 만들고 clean bundle build까지 실행합니다. 생성만 하려면:
 
 ```bash
@@ -113,7 +115,7 @@ java -jar "$jar" bundle --root "$workspace" --output /tmp/demo2-bundle
 
 | Command | 용도 |
 | --- | --- |
-| `create <path> --package <package>` | 단일 workspace를 생성하고 기본 sample source를 배치합니다. 기본적으로 clean build까지 실행합니다. |
+| `create <path> --package <package> [--path <source>\|--uri <git>]` | 단일 workspace를 생성하거나 source를 가져오고 `.codex` 및 내장 `.github`를 자동 설정합니다. 기본적으로 clean build까지 실행합니다. |
 | `build --root <path> [--package <package>] [--clean] [--phase reconstruct\|compile\|bundle]` | source 재구성, Java compile, frontend build/fallback, bundle 생성을 수행합니다. `--package`는 package root를 변경하고 자동으로 clean build합니다. |
 | `run --root <path> [--host <host>] [--port <port>] [--profile <profile>]` | WIZ Spring 서버를 실행합니다. 기본 profile은 `dev`입니다. |
 | `jar --root <path> [--clean] [--skip-build] [--output <jar>]` | workspace bundle을 포함한 단일 실행 jar를 만듭니다. |
@@ -121,14 +123,55 @@ java -jar "$jar" bundle --root "$workspace" --output /tmp/demo2-bundle
 | `kill [--dry-run]` | 실행 중인 `wiz-spring run` 프로세스를 찾거나 종료합니다. |
 | `service ...` | Linux/systemd 서비스 등록, 삭제, 조회, 시작, 중지를 처리합니다. |
 | `mcp --root <path> [--state <file>]` | WIZ Spring MCP stdio 서버를 실행합니다. |
-| `codex --root <path> --runtime-jar <jar> [--check\|--force]` | workspace `.codex` MCP 설정과 내장 `.github` 인스트럭션을 생성하거나 검사합니다. |
+| `completion <bash\|zsh>` | 현재 CLI 명령과 option을 반영한 shell completion script를 출력합니다. |
 
 `project create`, `project build`, `project jar`, `project list` 같은 multi-project 명령은 더 이상 사용하지 않습니다.
+
+### Shell completion
+
+현재 shell에서 바로 적용할 수 있습니다.
+
+```bash
+# Bash
+source <(wiz-spring completion bash)
+
+# Zsh
+source <(wiz-spring completion zsh)
+```
+
+`Tab`을 누르면 입력 커서는 현재 위치에 둔 채, 입력 줄 아래에 root command 설명 또는 현재 command의 usage, argument와 option 설명을 표시합니다. Bash에서는 같은 입력 위치에서 `Tab`을 다시 눌러도 도움말을 유지하며, Zsh에서는 네이티브 completion 목록에 도움말과 후보를 함께 표시합니다. 도움말에는 실제 `--help`와 같은 command bold, option yellow, parameter italic 스타일을 적용합니다.
+
+설명 패널이나 색상이 필요 없으면 다음 환경 변수를 설정합니다.
+
+```bash
+export WIZ_SPRING_COMPLETION_HELP=false
+export WIZ_SPRING_COMPLETION_COLOR=false
+# 표준 NO_COLOR도 지원합니다.
+export NO_COLOR=1
+```
+
+Bash에서 계속 사용하려면 표준 user completion 경로에 저장합니다.
+
+```bash
+mkdir -p ~/.local/share/bash-completion/completions
+wiz-spring completion bash > ~/.local/share/bash-completion/completions/wiz-spring
+```
+
+Zsh에서는 script를 저장한 뒤 `.zshrc`에서 source합니다. 생성된 script가 `compinit`과 `bashcompinit`을 필요한 경우 초기화합니다.
+
+```zsh
+mkdir -p ~/.local/share/wiz-spring
+wiz-spring completion zsh > ~/.local/share/wiz-spring/completion.zsh
+source ~/.local/share/wiz-spring/completion.zsh
+```
 
 ## Workspace 구조
 
 ```text
 demo2/
+  .codex/
+    config.toml
+    AGENTS.md
   .github/
     copilot-instructions.md
     short-instructions.md
@@ -266,7 +309,7 @@ runtime:
 
 `runtime.version`은 workspace를 생성한 `wiz-spring` 실행 파일의 버전입니다. 개발 classpath에서 직접 실행해 manifest version이 없으면 `dev`로 기록됩니다.
 
-`0.2.2`로 생성한 기존 workspace를 업그레이드할 때는 [`release-log/0.2.4.md`](release-log/0.2.4.md)의 config migration 절차를 따르세요. 기존 source를 다시 생성하지 않고 session 설정, `wiz.yml`, Git ignore/example 파일만 custom 값과 병합합니다. 첫 build 이후 package 변경이 필요하면 [`release-log/0.2.5.md`](release-log/0.2.5.md)를, 내장 Codex 인스트럭션으로 전환하려면 [`release-log/0.2.6.md`](release-log/0.2.6.md)를 추가로 확인하세요.
+`0.2.2`로 생성한 기존 workspace를 업그레이드할 때는 [`release-log/0.2.4.md`](release-log/0.2.4.md)의 config migration 절차를 따르세요. 기존 source를 다시 생성하지 않고 session 설정, `wiz.yml`, Git ignore/example 파일만 custom 값과 병합합니다. 첫 build 이후 package 변경이 필요하면 [`release-log/0.2.5.md`](release-log/0.2.5.md)를, 새 workspace의 자동 Codex 설정과 completion 변경은 [`release-log/0.2.6.md`](release-log/0.2.6.md)를 추가로 확인하세요.
 
 ## Source 규칙
 
@@ -293,11 +336,10 @@ build 산출물의 Java package는 Spring 계층형 명칭을 사용합니다.
 
 ## MCP와 Codex
 
-WIZ Spring MCP 서버와 Codex용 인스트럭션은 runtime jar 안에 포함되어 있습니다. `codex` 명령은 MCP 설정을 `.codex`에, 인스트럭션과 참조 문서를 `.github`에 함께 설치합니다. 인스트럭션 원본은 이 저장소의 `src/main/resources/wiz/codex-instructions/`에서 관리합니다.
+WIZ Spring MCP 서버와 Codex용 인스트럭션은 runtime jar 안에 포함되어 있습니다. `create`는 기본 template, `--path`, `--uri` 구분 없이 MCP 설정을 `.codex`에, 인스트럭션과 참조 문서를 `.github`에 함께 설치합니다. 별도 `codex` 하위 명령은 사용하지 않습니다. 인스트럭션 원본은 이 저장소의 `src/main/resources/wiz/codex-instructions/`에서 관리합니다.
 
 ```bash
 java -jar "$jar" mcp --root "$workspace"
-java -jar "$jar" codex --root "$workspace" --runtime-jar "$jar"
 ```
 
 MCP 도구는 workspace/source/package/app 기준 이름을 사용합니다. 예: `wiz_workspace_status`, `wiz_app_build`, `wiz_app_jar`, `wiz_app_dependency_info`, `wiz_source_create_app`, `wiz_package_create`.

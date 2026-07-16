@@ -10,6 +10,7 @@
 - warmup은 DB pool/JPA metadata, seed, SDK/cache preload처럼 idempotent하고 공통으로 필요한 작업만 수행한다.
 - `build/`, `bundle/`, `target/`은 생성 산출물이며 직접 수정하지 않는다.
 - frontend의 `app.json`, `view.pug`, `view.ts`, `view.scss`, `src/angular/**` 패턴은 유지한다.
+- `wiz-spring create`는 기본 template, `--path`, `--uri` 모두 `.codex`와 내장 `.github` 인스트럭션을 자동으로 설정한다.
 
 ## 요청과 응답
 
@@ -29,6 +30,7 @@ java -jar target/wiz-spring-0.2.6.jar create <workspace> --package com.example.d
 java -jar target/wiz-spring-0.2.6.jar build --root <workspace> --clean
 java -jar target/wiz-spring-0.2.6.jar build --root <workspace> --package com.example.renamed
 java -jar target/wiz-spring-0.2.6.jar run --root <workspace> --port 3000
+source <(java -jar target/wiz-spring-0.2.6.jar completion bash)
 ```
 
 `build --package`는 첫 build 전용이 아니다. 언제든 package 설정과 source/pom 참조를 변경하며 package가 달라지면 clean build가 자동 적용된다.

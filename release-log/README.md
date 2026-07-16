@@ -18,6 +18,6 @@
 | [`0.2.3`](0.2.3.md) | tagged | Docker development environment, initial package selection, clean sample devlog |
 | [`0.2.4`](0.2.4.md) | tagged | profile config Git policy, Servlet session cookie hardening, workspace metadata |
 | [`0.2.5`](0.2.5.md) | tagged | repeatable package-root changes with automatic clean rebuild |
-| [`0.2.6`](0.2.6.md) | tagged | embedded Codex instructions and self-contained Docker development images |
+| [`0.2.6`](0.2.6.md) | tagged | automatic Codex setup on create, embedded instructions, and guided shell completion |
 
 릴리즈를 실제로 배포할 때는 `pom.xml`의 `<version>`과 Git tag, GitHub/GitLab release note가 이 로그와 일치해야 한다.

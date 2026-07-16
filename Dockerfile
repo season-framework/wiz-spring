@@ -106,9 +106,8 @@ CMD ["serve"]
 
 FROM runtime-tools AS workspace-builder
 
-RUN wiz-spring create "$APP_ROOT" --package "$WIZ_PACKAGE_ROOT" && \
-    wiz-spring codex \
-        --root "$APP_ROOT" \
+RUN wiz-spring create "$APP_ROOT" \
+        --package "$WIZ_PACKAGE_ROOT" \
         --runtime-jar "$WIZ_RUNTIME_JAR"
 
 FROM runtime-tools AS runtime-bind

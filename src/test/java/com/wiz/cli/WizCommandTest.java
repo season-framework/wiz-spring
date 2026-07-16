@@ -35,13 +35,14 @@ class WizCommandTest {
         assertEquals(0, command.execute("--help"));
         String help = output.toString();
         assertTrue(help.contains("Usage: wiz-spring"));
-        assertTrue(help.contains("Codex setup CLI"));
-        assertTrue(help.contains("codex"));
+        assertTrue(help.contains("automatic Codex"));
+        assertFalse(help.contains(System.lineSeparator() + "  codex"));
+        assertTrue(help.contains("completion"));
         assertFalse(help.contains("wiz-java"));
     }
 
     @Test
-    void helpMentionsSpringMcpAndCodexServerName() {
+    void helpMentionsSpringMcpAndAutomaticCodexSetup() {
         CommandLine command = new CommandLine(new WizCommand());
         StringWriter output = new StringWriter();
         command.setOut(new PrintWriter(output));
@@ -54,14 +55,20 @@ class WizCommandTest {
         assertTrue(mcpHelp.contains("<workspace>/.wiz/mcp-state.json"));
 
         output.getBuffer().setLength(0);
-        assertEquals(0, command.execute("codex", "--help"));
-        String codexHelp = output.toString();
-        assertTrue(codexHelp.contains("bundled WIZ Spring instructions"));
-        assertTrue(codexHelp.contains("server name"));
-        assertTrue(codexHelp.contains("'wiz-spring'"));
-        assertTrue(codexHelp.contains("exit code 2"));
-        assertTrue(codexHelp.contains("generated MCP"));
-        assertTrue(codexHelp.contains("args"));
+        assertEquals(0, command.execute("create", "--help"));
+        String createHelp = output.toString();
+        assertTrue(createHelp.contains("automatic .codex"));
+        assertTrue(createHelp.contains("bundled .github setup"));
+        assertTrue(createHelp.contains("--runtime-jar"));
+        assertTrue(createHelp.contains("WIZ_RUNTIME_JAR"));
+    }
+
+    @Test
+    void standaloneCodexCommandIsNotAvailable() {
+        CommandLine command = new CommandLine(new WizCommand());
+        command.setErr(new PrintWriter(new StringWriter()));
+
+        assertEquals(2, command.execute("codex"));
     }
 
     @Test
@@ -244,6 +251,8 @@ class WizCommandTest {
     @Test
     void workspaceCommandShellAcceptsExpectedOptions() throws Exception {
         Path workspace = tempDir.resolve("workspace");
+        Path runtimeJar = tempDir.resolve("wiz-runtime.jar");
+        writeFakeRuntimeJar(runtimeJar);
         assertEquals(0, new CommandLine(new WizCommand()).execute("create", "--help"));
         assertEquals(0, new CommandLine(new WizCommand()).execute("build", "--help"));
         assertEquals(0, new CommandLine(new WizCommand()).execute("jar", "--help"));
@@ -251,9 +260,15 @@ class WizCommandTest {
         assertEquals(0, new CommandLine(new WizCommand()).execute("kill", "--help"));
         assertEquals(0, new CommandLine(new WizCommand()).execute("service", "--help"));
         assertEquals(0, new CommandLine(new WizCommand()).execute("mcp", "--help"));
-        assertEquals(0, new CommandLine(new WizCommand()).execute("codex", "--help"));
-        assertEquals(0, new CommandLine(new WizCommand()).execute("create", workspace.toString(), "--package", "com.wiz.bootstrap", "--skip-build"));
+        assertEquals(0, new CommandLine(new WizCommand()).execute("completion", "--help"));
+        assertEquals(0, new CommandLine(new WizCommand()).execute(
+                "create", workspace.toString(),
+                "--package", "com.wiz.bootstrap",
+                "--runtime-jar", runtimeJar.toString(),
+                "--skip-build"));
         assertTrue(Files.exists(workspace.resolve("src/app/page.dashboard/api.java")));
+        assertTrue(Files.exists(workspace.resolve(".codex/config.toml")));
+        assertTrue(Files.exists(workspace.resolve(".github/copilot-instructions.md")));
         deleteIfExists(workspace.resolve("src/angular"));
         assertEquals(0, new CommandLine(new WizCommand()).execute(
                 "build", "--root", workspace.toString(), "--package", "com.example.initial"));
@@ -273,8 +288,6 @@ class WizCommandTest {
                 .contains("package-root: com.example.too.late"));
         assertTrue(Files.readString(workspace.resolve("bundle").resolve(BuildMarkerService.MARKER_FILE))
                 .contains("\"javaPackageRoot\" : \"com.example.too.late\""));
-        Path runtimeJar = tempDir.resolve("wiz-runtime.jar");
-        writeFakeRuntimeJar(runtimeJar);
         Path appJar = tempDir.resolve("main.jar");
         assertEquals(0, new CommandLine(new WizCommand()).execute("jar", "--root", workspace.toString(), "--skip-build", "--runtime-jar", runtimeJar.toString(), "--output", appJar.toString()));
         assertTrue(Files.exists(appJar));
@@ -286,66 +299,56 @@ class WizCommandTest {
     }
 
     @Test
-    void codexCommandCreatesWarnsAndOverwritesSettings() throws Exception {
-        Path workspace = tempDir.resolve("codex-workspace");
-        Files.createDirectories(workspace.resolve("config"));
-        Files.writeString(workspace.resolve("config/application.yml"), "wiz:\n  java:\n    package-root: com.wiz.app\n");
-        Files.writeString(workspace.resolve("config/wiz.yml"), "workspace: java\n");
+    void createAlwaysSetsUpCodexForDefaultAndImportedWorkspaces() throws Exception {
         Path runtimeJar = tempDir.resolve("wiz-spring.jar");
         writeFakeRuntimeJar(runtimeJar);
 
+        Path workspace = tempDir.resolve("default-codex-workspace");
         assertEquals(0, new CommandLine(new WizCommand()).execute(
-                "codex",
-                "--root", workspace.toString(),
-                "--runtime-jar", runtimeJar.toString()));
+                "create", workspace.toString(),
+                "--package", "com.wiz.app",
+                "--runtime-jar", runtimeJar.toString(),
+                "--skip-build"));
+        assertCodexSetup(workspace, runtimeJar);
 
-        Path config = workspace.resolve(".codex/config.toml");
-        Path agents = workspace.resolve(".codex/AGENTS.md");
-        Path copilotInstructions = workspace.resolve(".github/copilot-instructions.md");
-        Path apiReference = workspace.resolve(".github/devdocs/instructions/api-quick-reference.md");
-        Path developmentPrompt = workspace.resolve(".github/prompts/development-rules.prompt.md");
-        String configText = Files.readString(config);
+        Path source = tempDir.resolve("import-source");
+        Files.createDirectories(source.resolve("src/app/page.imported"));
+        Files.writeString(source.resolve("src/app/page.imported/app.json"), "{}\n");
+        Files.createDirectories(source.resolve(".codex"));
+        Files.writeString(source.resolve(".codex/config.toml"), "legacy = true\n");
+        Files.createDirectories(source.resolve(".github/custom"));
+        Files.writeString(source.resolve(".github/copilot-instructions.md"), "legacy instructions\n");
+        Files.writeString(source.resolve(".github/custom/custom-instructions.md"), "keep this custom file\n");
+
+        Path importedWorkspace = tempDir.resolve("imported-codex-workspace");
+        assertEquals(0, new CommandLine(new WizCommand()).execute(
+                "create", importedWorkspace.toString(),
+                "--package", "com.wiz.imported",
+                "--path", source.toString(),
+                "--runtime-jar", runtimeJar.toString(),
+                "--skip-build"));
+        assertCodexSetup(importedWorkspace, runtimeJar);
+        assertTrue(Files.exists(importedWorkspace.resolve("src/app/page.imported/app.json")));
+        assertTrue(Files.readString(importedWorkspace.resolve(".github/copilot-instructions.md"))
+                .contains("# WIZ Spring Copilot Instructions"));
+        assertEquals("keep this custom file\n",
+                Files.readString(importedWorkspace.resolve(".github/custom/custom-instructions.md")));
+    }
+
+    private void assertCodexSetup(Path workspace, Path runtimeJar) throws Exception {
+        String configText = Files.readString(workspace.resolve(".codex/config.toml"));
         assertTrue(configText.contains("[mcp_servers.\"wiz-spring\"]"));
         assertTrue(configText.contains("[mcp_servers.\"wiz-spring\".env]"));
         assertTrue(configText.contains(runtimeJar.toAbsolutePath().normalize().toString()));
-        assertTrue(Files.readString(agents).contains("WIZ Spring work"));
-        assertTrue(Files.readString(copilotInstructions).contains("# WIZ Spring Copilot Instructions"));
-        assertTrue(Files.readString(apiReference).contains("# API Quick Reference"));
-        assertTrue(Files.readString(developmentPrompt).contains("WIZ Spring"));
+        assertTrue(configText.contains(workspace.toAbsolutePath().normalize().toString()));
+        assertTrue(Files.readString(workspace.resolve(".codex/AGENTS.md")).contains("WIZ Spring work"));
+        assertTrue(Files.readString(workspace.resolve(".github/copilot-instructions.md"))
+                .contains("# WIZ Spring Copilot Instructions"));
+        assertTrue(Files.readString(workspace.resolve(".github/devdocs/instructions/api-quick-reference.md"))
+                .contains("# API Quick Reference"));
+        assertTrue(Files.readString(workspace.resolve(".github/prompts/development-rules.prompt.md"))
+                .contains("WIZ Spring"));
         assertTrue(Files.isRegularFile(workspace.resolve(".github/short-instructions.md")));
-
-        Files.writeString(config, "legacy = true\n");
-        assertEquals(2, new CommandLine(new WizCommand()).execute(
-                "codex",
-                "--root", workspace.toString(),
-                "--runtime-jar", runtimeJar.toString()));
-        assertEquals("legacy = true\n", Files.readString(config));
-
-        assertEquals(0, new CommandLine(new WizCommand()).execute(
-                "codex",
-                "--root", workspace.toString(),
-                "--runtime-jar", runtimeJar.toString(),
-                "--force"));
-        assertTrue(Files.readString(config).contains("[mcp_servers.\"wiz-spring\"]"));
-        assertEquals(0, new CommandLine(new WizCommand()).execute(
-                "codex",
-                "--root", workspace.toString(),
-                "--runtime-jar", runtimeJar.toString(),
-                "--check"));
-
-        Files.writeString(copilotInstructions, "custom instructions\n");
-        assertEquals(2, new CommandLine(new WizCommand()).execute(
-                "codex",
-                "--root", workspace.toString(),
-                "--runtime-jar", runtimeJar.toString(),
-                "--check"));
-        assertEquals("custom instructions\n", Files.readString(copilotInstructions));
-        assertEquals(0, new CommandLine(new WizCommand()).execute(
-                "codex",
-                "--root", workspace.toString(),
-                "--runtime-jar", runtimeJar.toString(),
-                "--force"));
-        assertTrue(Files.readString(copilotInstructions).contains("# WIZ Spring Copilot Instructions"));
     }
 
     private void deleteIfExists(Path path) throws Exception {
