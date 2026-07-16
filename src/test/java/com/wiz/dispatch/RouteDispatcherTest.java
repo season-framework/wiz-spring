@@ -19,10 +19,13 @@ import com.wiz.runtime.WizRequest;
 import com.wiz.runtime.WizResult;
 import com.wiz.runtime.WizRuntime;
 
+import jakarta.servlet.SessionCookieConfig;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.http.HttpHeaders;
 import org.springframework.mock.web.MockHttpSession;
+import org.springframework.mock.web.MockServletContext;
 
 class RouteDispatcherTest {
 
@@ -59,6 +62,37 @@ class RouteDispatcherTest {
         assertEquals(List.of("/dashboard"), result.headers().get(HttpHeaders.LOCATION));
         assertTrue(result.headers().get(HttpHeaders.SET_COOKIE).getFirst().startsWith("JSESSIONID=;"));
         assertTrue(session.isInvalid());
+    }
+
+    @Test
+    void logoutExpiresTheEffectiveServletSessionCookie() throws Exception {
+        Path workspace = tempDir.resolve("workspace-custom-cookie");
+        new WorkspaceService().createWorkspace(workspace);
+        ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
+        new ProjectBuildService().build(project, true, "bundle");
+        MockServletContext servletContext = new MockServletContext();
+        SessionCookieConfig config = servletContext.getSessionCookieConfig();
+        config.setName("WIZSESSION");
+        config.setDomain("example.test");
+        config.setPath("/app");
+        config.setHttpOnly(true);
+        config.setSecure(true);
+        config.setAttribute("SameSite", "Strict");
+        MockHttpSession session = new MockHttpSession(servletContext);
+        session.setAttribute("id", "u1");
+
+        WizResult result = dispatcher(workspace).dispatch(WizRequest.builder()
+                .path("/auth/logout")
+                .session(session)
+                .build()).orElseThrow();
+
+        String cookie = result.headers().get(HttpHeaders.SET_COOKIE).getFirst();
+        assertTrue(cookie.startsWith("WIZSESSION=;"));
+        assertTrue(cookie.contains("Path=/app"));
+        assertTrue(cookie.contains("Domain=example.test"));
+        assertTrue(cookie.contains("Secure"));
+        assertTrue(cookie.contains("HttpOnly"));
+        assertTrue(cookie.contains("SameSite=Strict"));
     }
 
     @Test

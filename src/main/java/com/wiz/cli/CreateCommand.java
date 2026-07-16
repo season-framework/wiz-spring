@@ -42,6 +42,10 @@ public class CreateCommand implements Callable<Integer> {
         System.out.println("Workspace created: " + workspace.root());
         System.out.println("Java package: " + context.packageRoot());
         System.out.println("Port: " + workspace.port());
+        System.out.println("Config: application.yml is common, application-dev.yml is the run default, and application-prod.yml is the standalone jar default.");
+        System.out.println("Session: cookie-only, HttpOnly, SameSite=Lax; dev allows HTTP and prod requires HTTPS.");
+        System.out.println("Metadata: config/wiz.yml records the Java workspace format and wiz-spring version.");
+        System.out.println("Git: application.yml and application-<profile>.yml are ignored; commit config/application*.example.yml instead.");
         if (!skipBuild) {
             System.out.println("Running initial clean build...");
             BuildResult result = new ProjectBuildService().build(context, true, "bundle", BuildLogger.console());

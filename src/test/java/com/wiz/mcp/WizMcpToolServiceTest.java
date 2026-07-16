@@ -48,6 +48,10 @@ class WizMcpToolServiceTest {
 
         Map<String, Object> status = toolData(service.callTool("wiz_workspace_status", Map.of()));
         assertEquals("com.wiz.app", status.get("javaPackageRoot"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> metadata = (Map<String, Object>) status.get("workspaceMetadata");
+        assertEquals("java", metadata.get("workspace"));
+        assertEquals("wiz-spring", metadata.get("runtimeName"));
 
         Map<String, Object> app = toolData(service.callTool("wiz_source_create_app", Map.of(
                 "appType", "page",

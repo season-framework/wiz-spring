@@ -12,6 +12,8 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import com.wiz.runtime.WizSpringVersion;
+
 import picocli.CommandLine;
 
 class WizCommandTest {
@@ -26,7 +28,7 @@ class WizCommandTest {
         command.setOut(new PrintWriter(output));
 
         assertEquals(0, command.execute("--version"));
-        assertTrue(output.toString().contains("wiz-spring 0.2.3"));
+        assertTrue(output.toString().contains("wiz-spring " + WizSpringVersion.current()));
 
         output.getBuffer().setLength(0);
         assertEquals(0, command.execute("--help"));

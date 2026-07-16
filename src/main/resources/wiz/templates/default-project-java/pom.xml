@@ -12,7 +12,7 @@
 
     <groupId>__WIZ_PACKAGE_ROOT__</groupId>
     <artifactId>wiz-sample-app-java</artifactId>
-    <version>0.2.3</version>
+    <version>0.2.4</version>
     <name>WIZ Java Sample App</name>
 
     <properties>

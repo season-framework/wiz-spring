@@ -32,6 +32,8 @@ class WorkspacePackageServiceTest {
         assertEquals("com.example.initial", selection.context().packageRoot());
         assertTrue(Files.readString(workspace.resolve("config/application.yml"))
                 .contains("package-root: com.example.initial"));
+        assertTrue(Files.readString(workspace.resolve("config/application.example.yml"))
+                .contains("package-root: com.example.initial"));
         assertTrue(Files.readString(workspace.resolve("pom.xml"))
                 .contains("<groupId>com.example.initial</groupId>"));
         String dashboardApi = Files.readString(workspace.resolve("src/app/page.dashboard/api.java"));

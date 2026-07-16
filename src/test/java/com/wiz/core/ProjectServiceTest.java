@@ -34,17 +34,35 @@ class ProjectServiceTest {
         assertTrue(Files.exists(project.modelRoot().resolve("Struct.java")));
         assertTrue(Files.exists(project.sourceRoot().resolve("portal/post/app/list/api.java")));
         assertTrue(Files.isDirectory(project.sourceRoot().resolve("controller")));
-        assertTrue(Files.exists(project.configRoot().resolve("database.yml")));
+        assertFalse(Files.exists(project.configRoot().resolve("database.yml")));
+        assertFalse(Files.exists(project.configRoot().resolve("season.yml")));
         assertTrue(Files.exists(project.configRoot().resolve("application.yml")));
         assertTrue(Files.exists(project.configRoot().resolve("application-dev.yml")));
         assertTrue(Files.exists(project.configRoot().resolve("application-prod.yml")));
+        assertTrue(Files.exists(project.configRoot().resolve("application.example.yml")));
+        assertTrue(Files.exists(project.configRoot().resolve("application-dev.example.yml")));
+        assertTrue(Files.exists(project.configRoot().resolve("application-prod.example.yml")));
         String application = Files.readString(project.configRoot().resolve("application.yml"));
         assertTrue(application.contains("WIZ Spring runtime settings."));
         assertTrue(application.contains("package-root: com.wiz.app"));
-        assertTrue(application.contains("prefix: /wiz/api"));
-        assertTrue(application.contains("max-request-body-bytes: 0"));
-        assertTrue(Files.readString(project.configRoot().resolve("application-dev.yml")).contains("warmup-enabled: true"));
-        assertTrue(Files.readString(project.configRoot().resolve("application-prod.yml")).contains("warmup-enabled: true"));
+        assertTrue(application.contains("tracking-modes:"));
+        assertTrue(application.contains("http-only: true"));
+        assertTrue(application.contains("same-site: lax"));
+        assertFalse(application.contains("secret:"));
+        assertFalse(application.contains("prefix: /wiz/api"));
+        assertFalse(application.contains("max-request-body-bytes: 0"));
+        assertTrue(Files.readString(project.configRoot().resolve("application-dev.yml"))
+                .contains("secure: false"));
+        assertTrue(Files.readString(project.configRoot().resolve("application-prod.yml"))
+                .contains("secure: true"));
+        String applicationExample = Files.readString(project.configRoot().resolve("application.example.yml"));
+        assertTrue(applicationExample.contains("package-root: com.wiz.app"));
+        assertFalse(applicationExample.contains("secret:"));
+        assertFalse(applicationExample.contains("Git에서 제외"));
+        String gitignore = Files.readString(project.root().resolve(".gitignore"));
+        assertTrue(gitignore.contains("/config/application.yml"));
+        assertTrue(gitignore.contains("/config/application-*.yml"));
+        assertTrue(gitignore.contains("!/config/application-*.example.yml"));
         assertEquals("| 날짜 | ID | 작업 내용 | 상세 |\n|------|-----|----------|------|\n",
                 Files.readString(project.root().resolve("devlog.md")));
         try (var devlogs = Files.list(project.root().resolve("devlog"))) {
@@ -65,7 +83,7 @@ class ProjectServiceTest {
     @Test
     void rewritesDefaultJavaTemplateForPackageRoot() throws Exception {
         Path workspace = tempDir.resolve("workspace");
-        new WorkspaceService().createWorkspace(workspace);
+        new WorkspaceService().createWorkspace(workspace, "com.example.demo");
         ProjectService service = new ProjectService(new PathService(workspace));
 
         ProjectContext project = service.createApp("com.example.demo", null, null);
@@ -73,6 +91,8 @@ class ProjectServiceTest {
         String dashboardApi = Files.readString(project.appRoot().resolve("page.dashboard/api.java"));
         assertTrue(dashboardApi.contains("com.example.demo.application.model.Struct"));
         assertFalse(dashboardApi.contains("com.wiz.app.application.model.Struct"));
+        assertTrue(Files.readString(project.configRoot().resolve("application.example.yml"))
+                .contains("package-root: com.example.demo"));
     }
 
     @Test
@@ -95,6 +115,8 @@ class ProjectServiceTest {
         assertTrue(Files.exists(project.sourceRoot().resolve("controller")));
         assertTrue(Files.exists(project.modelRoot()));
         assertTrue(Files.exists(project.routeRoot()));
+        assertTrue(Files.readString(project.root().resolve(".gitignore"))
+                .contains("/config/application-*.yml"));
         assertEquals("historical devlog\n", Files.readString(project.root().resolve("devlog.md")));
         assertEquals("historical detail\n",
                 Files.readString(project.root().resolve("devlog/2026-07-15/001-history.md")));

@@ -7,6 +7,17 @@ target/
 cache/
 test/
 
+# Local Spring/WIZ settings can contain environment-specific values and credentials.
+# Commit the generated application*.example.yml files instead.
+/config/application.yml
+/config/application.yaml
+/config/application-*.yml
+/config/application-*.yaml
+!/config/application.example.yml
+!/config/application.example.yaml
+!/config/application-*.example.yml
+!/config/application-*.example.yaml
+
 *.class
 *.jar
 *.war

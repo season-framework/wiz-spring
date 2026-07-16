@@ -66,6 +66,17 @@ java -jar wiz-spring/target/wiz-spring-*.jar build --root "$tmp" --clean
 java -jar wiz-spring/target/wiz-spring-*.jar run --root "$tmp" --port 3000
 ```
 
+## Configuration Profiles
+
+- `config/application.yml`은 모든 실행의 공통 설정입니다.
+- `config/application-dev.yml`은 기본 `wiz-spring run`에서 공통 설정 다음에 읽습니다.
+- `config/application-prod.yml`은 인자 없이 실행하는 standalone app jar에서 공통 설정 다음에 읽습니다.
+- 다른 profile은 `wiz-spring run --profile <name>`과 `config/application-<name>.yml`로 선택합니다.
+
+Session cookie는 공통으로 cookie-only, HttpOnly, SameSite=Lax를 사용합니다. dev는 로컬 HTTP를 위해 `Secure=false`, prod는 HTTPS 전용으로 `Secure=true`입니다. cookie timeout/name/path/domain을 바꿀 때는 `server.servlet.session.*`을 사용하세요. WIZ Spring은 server-side Servlet session을 사용하므로 cookie에는 session data가 아닌 `JSESSIONID`만 들어가며 별도 cookie 서명 secret은 필요하지 않습니다.
+
+실제 `application*.yml`은 환경별 값과 비밀 값 보호를 위해 Git에서 제외됩니다. 생성된 `application*.example.yml`만 커밋하고, clone 후 필요한 example을 실제 파일명으로 복사하세요. `build`, `bundle`, `jar`는 실제 설정을 산출물에 포함하므로 standalone jar를 배포하기 전에도 비밀 값 포함 여부를 확인해야 합니다.
+
 Main API smoke:
 
 ```bash

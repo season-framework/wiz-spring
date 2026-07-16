@@ -1,6 +1,10 @@
 # WIZ Spring 개발 profile 설정입니다.
 # `wiz-spring run`은 profile을 지정하지 않으면 dev profile을 기본으로 사용합니다.
-
-wiz:
-  runtime:
-    warmup-enabled: true
+# 공통 application.yml 다음에 읽으며 같은 key는 이 파일의 값이 우선합니다.
+# 이 파일은 Git에서 제외됩니다. 공유할 값은 application-dev.example.yml에 반영하세요.
+# 개발 환경은 로컬 HTTP 실행을 지원하므로 Secure를 끕니다.
+server:
+  servlet:
+    session:
+      cookie:
+        secure: false

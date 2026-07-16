@@ -32,7 +32,7 @@ workspace를 host에 영속화하려면 bind target을 사용합니다. 최초 �
 # 기본 저장 위치: ./.wiz-data-bind/app
 ```
 
-두 이미지를 한 번에 build하려면 `./build.sh all`을 사용합니다. 기본 image tag는 runtime이 `registry.nanoha.kr/kwon3286/wiz-spring:0.2.3`, bind가 `registry.nanoha.kr/kwon3286/wiz-spring:0.2.3-bind`입니다. 아래 환경 변수로 값을 바꿀 수 있습니다.
+두 이미지를 한 번에 build하려면 `./build.sh all`을 사용합니다. 기본 image tag는 runtime이 `registry.nanoha.kr/kwon3286/wiz-spring:0.2.4`, bind가 `registry.nanoha.kr/kwon3286/wiz-spring:0.2.4-bind`입니다. 아래 환경 변수로 값을 바꿀 수 있습니다.
 
 - Build: `IMAGE`, `VERSION`, `PLATFORM`, `WIZ_PACKAGE_ROOT`, `WIZ_SPRING_INSTRUCTION_DIR`, `INSTALL_CODEX`, `CODEX_VERSION`
 - Run: `CONTAINER_NAME`, `HOST_HTTP_PORT`, `HOST_SSH_PORT`, `CONTAINER_HTTP_PORT`, `WIZ_ENABLE_SSH`
@@ -69,7 +69,7 @@ cd /root/workspace/wiz-java/wiz-spring
 ## 앱 생성
 
 ```bash
-jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.2.3.jar
+jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.2.4.jar
 workspace=/tmp/demo2
 
 rm -rf "$workspace"
@@ -140,6 +140,12 @@ demo2/
     copilot-instructions.md
   config/
     application.yml
+    application-dev.yml
+    application-prod.yml
+    application.example.yml
+    application-dev.example.yml
+    application-prod.example.yml
+    wiz.yml
   devlog/
   devlog.md
   src/
@@ -158,7 +164,9 @@ demo2/
 - `build/**`: 외부 공유 시 열어볼 수 있는 Spring Boot/Maven 표준형 build 산출물
 - `bundle/**`: runtime이 읽는 실행 산출물
 - `pom.xml`: 앱 Java dependency
-- `config/application.yml`: 서버와 앱 runtime 설정
+- `config/application.yml`, `config/application-<profile>.yml`: 로컬 서버와 앱 runtime 설정. 생성된 `.gitignore`의 보호 대상입니다.
+- `config/application*.example.yml`: 비밀 값 없이 공유하는 설정 예시. Git에는 이 파일들을 커밋합니다.
+- `config/wiz.yml`: Java workspace 형식과 metadata schema, 기준 `wiz-spring` 버전을 기록하는 판별용 marker입니다.
 
 `build/`는 아래처럼 정리됩니다.
 
@@ -176,11 +184,62 @@ build/
 
 `build/src/main/java`, `build/src/main/resources`, `build/target/**`는 외부에서 보아도 일반 Spring Boot/Maven project에 가까운 공개 산출물입니다. `build/.wiz/source`는 WIZ app, portal, Angular 입력을 평탄화한 내부 staging 경로이며 직접 수정하지 않습니다.
 
+## 설정 파일과 profile
+
+`config/`의 설정은 다음 순서로 합쳐집니다. 뒤에서 읽은 값이 같은 key를 덮어씁니다.
+
+1. `wiz-spring` core 기본값
+2. workspace `config/application.yml`
+3. 선택된 profile의 `config/application-<profile>.yml`
+4. `wiz-spring run`의 `--host`, `--port`, `--profile` 같은 명시적 CLI 옵션
+
+| 파일 | 읽는 경우 |
+| --- | --- |
+| `application.yml` | 모든 실행에서 공통으로 먼저 읽습니다. |
+| `application-dev.yml` | `dev` profile일 때 읽습니다. `wiz-spring run`과 `service regist`로 만든 서비스의 기본 profile이 `dev`입니다. |
+| `application-prod.yml` | `prod` profile일 때 읽습니다. 인자 없이 실행하는 standalone app jar의 기본 profile이 `prod`입니다. `wiz-spring run --profile prod`로도 선택할 수 있습니다. |
+| `application-<name>.yml` | `wiz-spring run --profile <name>`으로 해당 profile을 선택했을 때 읽습니다. 파일이 없어도 공통 설정만으로 실행됩니다. |
+| `application*.example.yml` | runtime은 읽지 않습니다. Git에 공유하기 위한 예시 파일입니다. |
+
+Spring의 typed runtime 설정과 workspace Java 코드의 `wiz.config().namespace("application")`은 모두 위 profile 병합 결과를 사용합니다. 여러 profile이 활성화되면 나중 profile이 앞 profile의 같은 key를 덮어씁니다.
+
+새 workspace의 `application.yml`에는 workspace마다 결정되는 `server.port`, `wiz.java.package-root`와 공통 session cookie 보안 정책만 활성 값으로 생성됩니다. 사용처 없는 값이나 core 기본값과 같은 API/HTTP/socket/redirect/runtime 설정은 중복해서 쓰지 않습니다. 환경별 `Secure` 정책은 `application-dev.yml`과 `application-prod.yml`에 분리합니다.
+
+Flask의 기본 client-side session과 달리 WIZ Spring은 Servlet container의 server-side `HttpSession`을 사용합니다. browser cookie에는 session data나 암호화한 사용자 정보가 아니라 임의의 session ID(`JSESSIONID`)만 들어가므로 별도 `wiz.secret`은 생성하거나 읽지 않습니다. 기본 저장소는 process memory이므로 재시작 후 session 유지나 여러 instance 간 공유가 필요하면 Spring Session의 Redis/JDBC 같은 공용 저장소를 구성해야 합니다.
+
+| session 설정 | 적용 값 |
+| --- | --- |
+| 공통 `application.yml` | cookie tracking only, `HttpOnly=true`, `SameSite=Lax` |
+| `application-dev.yml` | 로컬 HTTP 개발을 위해 `Secure=false` |
+| `application-prod.yml` | HTTPS 전용으로 `Secure=true` |
+
+prod profile의 로그인/session 기능은 HTTPS를 전제로 합니다. cross-site cookie가 꼭 필요한 경우에만 `SameSite=None`과 `Secure=true`를 함께 사용하고, timeout/name/path/domain 변경은 `server.servlet.session.*`에서 관리합니다. logout도 이 실제 Servlet 설정을 읽어 동일한 이름·domain·path의 cookie를 만료시킵니다.
+
+실제 파일에는 이후 DB/API credential 같은 환경별 값이 추가될 수 있으므로 `wiz-spring create`는 `application.yml`, `application-*.yml`을 `.gitignore`에 넣고, 처음부터 비밀 값이 없는 `application*.example.yml`을 함께 생성합니다. 팀에 공유할 변경은 example 파일에도 직접 반영하세요.
+
+clone한 workspace에서는 필요한 example을 실제 설정으로 복사한 뒤 로컬 값을 채웁니다.
+
+```bash
+cp config/application.example.yml config/application.yml
+cp config/application-dev.example.yml config/application-dev.yml
+# 운영 배포 환경에서만 필요할 때:
+cp config/application-prod.example.yml config/application-prod.yml
+```
+
+`build`, `bundle`, `jar`는 Git 추적 여부와 무관하게 실제 `config/` 내용을 산출물에 복사합니다. 특히 standalone jar에는 설정이 포함되므로 배포 전에 민감 값 포함 여부와 artifact 접근 권한을 확인하세요.
+
 ## 주요 설정
 
 ```yaml
 server:
   port: 3000
+  servlet:
+    session:
+      tracking-modes:
+        - cookie
+      cookie:
+        http-only: true
+        same-site: lax
 
 wiz:
   java:
@@ -198,6 +257,20 @@ wiz:
 
 `wiz.api.prefix`, `wiz.socket.path`는 배포 환경에 맞게 `/wiz`를 숨기거나 다른 prefix로 바꿀 수 있습니다.
 Angular frontend는 build 단계에서 이 값을 `wiz-runtime-config.ts`로 편입합니다. 이 값을 바꾼 뒤에는 frontend bundle을 다시 빌드하세요.
+
+`config/wiz.yml`은 runtime 설정 파일이 아니며 다음과 같은 판별 metadata만 가집니다.
+
+```yaml
+workspace: "java"
+format-version: 1
+runtime:
+  name: "wiz-spring"
+  version: "0.2.4"
+```
+
+`runtime.version`은 workspace를 생성한 `wiz-spring` 실행 파일의 버전입니다. 개발 classpath에서 직접 실행해 manifest version이 없으면 `dev`로 기록됩니다.
+
+`0.2.2`로 생성한 기존 workspace를 업그레이드할 때는 [`release-log/0.2.4.md`](release-log/0.2.4.md)의 config migration 절차를 따르세요. 기존 source를 다시 생성하지 않고 session 설정, `wiz.yml`, Git ignore/example 파일만 custom 값과 병합합니다.
 
 ## Source 규칙
 

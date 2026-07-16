@@ -46,12 +46,13 @@ public class ProjectRuntimeCache implements AutoCloseable {
 
     private final ConcurrentHashMap<RuntimeKey, CachedProjectRuntime> runtimes = new ConcurrentHashMap<>();
     private final ObjectMapper objectMapper;
+    private final List<String> profiles;
     private final String profile;
     private final ClassLoaderFactory classLoaderFactory;
 
     @Autowired
     public ProjectRuntimeCache(Environment environment) {
-        this(new ObjectMapper(), activeProfile(environment), URLClassLoader::new);
+        this(new ObjectMapper(), activeProfiles(environment), URLClassLoader::new);
     }
 
     public ProjectRuntimeCache() {
@@ -63,8 +64,13 @@ public class ProjectRuntimeCache implements AutoCloseable {
     }
 
     ProjectRuntimeCache(ObjectMapper objectMapper, String profile, ClassLoaderFactory classLoaderFactory) {
+        this(objectMapper, profiles(profile), classLoaderFactory);
+    }
+
+    private ProjectRuntimeCache(ObjectMapper objectMapper, List<String> profiles, ClassLoaderFactory classLoaderFactory) {
         this.objectMapper = objectMapper == null ? new ObjectMapper() : objectMapper;
-        this.profile = profile == null || profile.isBlank() ? "default" : profile;
+        this.profiles = profiles == null || profiles.isEmpty() ? List.of("default") : List.copyOf(profiles);
+        this.profile = String.join(",", this.profiles);
         this.classLoaderFactory = classLoaderFactory == null ? URLClassLoader::new : classLoaderFactory;
     }
 
@@ -108,7 +114,7 @@ public class ProjectRuntimeCache implements AutoCloseable {
             }
             URL[] urls = ProjectClassPath.apiUrls(project);
             URLClassLoader classLoader = classLoaderFactory.create(urls, parent);
-            return new CachedProjectRuntime(project, objectMapper, classLoader, key);
+            return new CachedProjectRuntime(project, objectMapper, classLoader, key, profiles);
         } catch (IOException exception) {
             throw new IllegalStateException("Failed to create project runtime cache: " + key.projectName(), exception);
         }
@@ -258,18 +264,32 @@ public class ProjectRuntimeCache implements AutoCloseable {
         }
     }
 
-    private static String activeProfile(Environment environment) {
+    private static List<String> activeProfiles(Environment environment) {
         if (environment == null) {
-            return "default";
+            return List.of("default");
         }
         String[] active = environment.getActiveProfiles();
         if (active.length == 0) {
             active = environment.getDefaultProfiles();
         }
         if (active.length == 0) {
-            return "default";
+            return List.of("default");
         }
-        return Arrays.stream(active).sorted().collect(Collectors.joining(","));
+        return Arrays.stream(active)
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .toList();
+    }
+
+    private static List<String> profiles(String profile) {
+        if (profile == null || profile.isBlank()) {
+            return List.of("default");
+        }
+        List<String> selected = Arrays.stream(profile.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .toList();
+        return selected.isEmpty() ? List.of("default") : selected;
     }
 
 
@@ -293,6 +313,7 @@ public class ProjectRuntimeCache implements AutoCloseable {
         private final ObjectMapper objectMapper;
         private final URLClassLoader classLoader;
         private final RuntimeKey key;
+        private final List<String> profiles;
         private final ConcurrentHashMap<String, Optional<Map<String, Object>>> appMetadata = new ConcurrentHashMap<>();
         private final ConcurrentHashMap<String, Map<String, Object>> configValues = new ConcurrentHashMap<>();
         private final ConcurrentHashMap<ApiHandlerKey, Optional<ProjectApiHandler>> apiHandlers = new ConcurrentHashMap<>();
@@ -304,11 +325,12 @@ public class ProjectRuntimeCache implements AutoCloseable {
         private final CopyOnWriteArrayList<AutoCloseable> closeHooks = new CopyOnWriteArrayList<>();
         private volatile List<RouteDefinition> routeDefinitions;
 
-        private CachedProjectRuntime(ProjectContext project, ObjectMapper objectMapper, URLClassLoader classLoader, RuntimeKey key) {
+        private CachedProjectRuntime(ProjectContext project, ObjectMapper objectMapper, URLClassLoader classLoader, RuntimeKey key, List<String> profiles) {
             this.project = project;
             this.objectMapper = objectMapper;
             this.classLoader = classLoader;
             this.key = key;
+            this.profiles = profiles;
         }
 
         public ClassLoader classLoader() {
@@ -418,7 +440,7 @@ public class ProjectRuntimeCache implements AutoCloseable {
         }
 
         private Map<String, Object> readConfigValues(String name) {
-            return Collections.unmodifiableMap(new LinkedHashMap<>(ProjectConfigLoader.read(project, objectMapper, name)));
+            return Collections.unmodifiableMap(new LinkedHashMap<>(ProjectConfigLoader.read(project, objectMapper, name, profiles)));
         }
 
         private List<RouteDefinition> readRouteDefinitions() {

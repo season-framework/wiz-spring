@@ -3,6 +3,7 @@ package com.wiz.runtime;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,6 +15,7 @@ import com.wiz.core.WorkspaceService;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.mock.env.MockEnvironment;
 
 class ConfigServiceTest {
 
@@ -82,10 +84,11 @@ class ConfigServiceTest {
     @Test
     void exposesConfigServiceFromWizContext() throws Exception {
         ProjectContext project = createApp();
+        Files.writeString(project.configRoot().resolve("feature.yml"), "endpoint: /custom-feature\n");
         new ProjectBuildService().build(project, true, "bundle");
 
         try (WizContext context = new WizContext(WizRequest.builder().build(), new WizResponse(), project)) {
-            assertEquals("/auth", context.config().namespace("season").get("auth_baseuri"));
+            assertEquals("/custom-feature", context.config().namespace("feature").get("endpoint"));
         }
     }
 
@@ -127,6 +130,35 @@ class ConfigServiceTest {
 
             assertNotSame(first, second);
             assertEquals("/two", new ConfigService(project, second).namespace("season").get("auth_baseuri"));
+        } finally {
+            cache.close();
+        }
+    }
+
+    @Test
+    void mergesActiveApplicationProfilesForWorkspaceCode() throws Exception {
+        ProjectContext project = createApp();
+        Path base = project.configRoot().resolve("application.yml");
+        Path dev = project.configRoot().resolve("application-dev.yml");
+        Files.writeString(base, Files.readString(base) + "\nprofile-test:\n  shared: base\n  base-only: common\n");
+        Files.writeString(dev, Files.readString(dev) + "\nprofile-test:\n  shared: dev\n  dev-only: development\n");
+        Files.writeString(project.configRoot().resolve("application-local.yml"),
+                "profile-test:\n  shared: local\n  local-only: workstation\n");
+        Files.writeString(project.configRoot().resolve("application-prod.yml"),
+                "profile-test:\n  shared: prod\n  prod-only: production\n");
+        new ProjectBuildService().build(project, true, "bundle");
+        MockEnvironment environment = new MockEnvironment();
+        environment.setActiveProfiles("dev", "local");
+        ProjectRuntimeCache cache = new ProjectRuntimeCache(environment);
+
+        try {
+            ConfigNamespace config = new ConfigService(project, cache.get(project)).namespace("application");
+
+            assertEquals("local", config.get("profile-test.shared"));
+            assertEquals("common", config.get("profile-test.base-only"));
+            assertEquals("development", config.get("profile-test.dev-only"));
+            assertEquals("workstation", config.get("profile-test.local-only"));
+            assertTrue(config.find("profile-test.prod-only").isEmpty());
         } finally {
             cache.close();
         }

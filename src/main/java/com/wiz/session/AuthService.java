@@ -22,7 +22,7 @@ public class AuthService {
     public WizResult logout(WizContext context) {
         String returnTo = context.request().query("returnTo", context.request().query("redirect", "/"));
         String redirectTo = context.redirectProperties().resolve(returnTo);
-        SessionCookieOptions cookie = SessionCookieOptions.from(context.config().namespace("season"));
+        SessionCookieOptions cookie = SessionCookieOptions.from(context.request().httpSession());
         context.session().invalidate();
         return context.response()
                 .header(HttpHeaders.SET_COOKIE, expiredCookie(cookie).toString())
@@ -61,7 +61,11 @@ public class AuthService {
                 .path(cookie.path())
                 .httpOnly(cookie.httpOnly())
                 .secure(cookie.secure())
+                .partitioned(cookie.partitioned())
                 .maxAge(0);
+        if (cookie.domain() != null && !cookie.domain().isBlank()) {
+            builder.domain(cookie.domain());
+        }
         if (cookie.sameSite() != null && !cookie.sameSite().isBlank()) {
             builder.sameSite(cookie.sameSite());
         }

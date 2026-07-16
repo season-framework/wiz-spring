@@ -20,8 +20,12 @@ final class ProjectConfigLoader {
     }
 
     static Map<String, Object> read(ProjectContext project, ObjectMapper objectMapper, String name) {
+        return read(project, objectMapper, name, List.of());
+    }
+
+    static Map<String, Object> read(ProjectContext project, ObjectMapper objectMapper, String name, List<String> profiles) {
         Map<String, Object> values = new LinkedHashMap<>();
-        for (Path path : configFiles(project, name)) {
+        for (Path path : configFiles(project, name, profiles)) {
             values.putAll(readConfigFile(objectMapper, name, path));
         }
         return normalizeKeys(values);
@@ -47,19 +51,42 @@ final class ProjectConfigLoader {
         return List.copyOf(roots);
     }
 
-    private static List<Path> configFiles(ProjectContext project, String name) {
+    private static List<Path> configFiles(ProjectContext project, String name, List<String> profiles) {
         java.util.ArrayList<Path> files = new java.util.ArrayList<>();
         for (Path configRoot : configRoots(project)) {
             SafePath safePath = new SafePath(configRoot);
-            for (String extension : List.of(".yml", ".yaml", ".json")) {
-                Path candidate = safePath.resolve(name + extension);
-                if (Files.isRegularFile(candidate)) {
-                    files.add(candidate);
-                    break;
+            addFirstExisting(files, safePath, name, List.of(".yml", ".yaml", ".json"));
+            if ("application".equals(name)) {
+                for (String profile : profiles == null ? List.<String>of() : profiles) {
+                    String normalizedProfile = normalizeProfile(profile);
+                    if (normalizedProfile != null) {
+                        addFirstExisting(files, safePath, name + "-" + normalizedProfile, List.of(".yml", ".yaml"));
+                    }
                 }
             }
         }
         return List.copyOf(files);
+    }
+
+    private static void addFirstExisting(List<Path> files, SafePath safePath, String name, List<String> extensions) {
+        for (String extension : extensions) {
+            Path candidate = safePath.resolve(name + extension);
+            if (Files.isRegularFile(candidate)) {
+                files.add(candidate);
+                return;
+            }
+        }
+    }
+
+    private static String normalizeProfile(String profile) {
+        if (profile == null || profile.isBlank()) {
+            return null;
+        }
+        String normalized = profile.trim();
+        if (!normalized.matches("[A-Za-z0-9][A-Za-z0-9_.-]*")) {
+            throw new IllegalArgumentException("Invalid Spring profile for project config: " + profile);
+        }
+        return normalized;
     }
 
     private static Map<String, Object> readConfigFile(ObjectMapper objectMapper, String name, Path path) {

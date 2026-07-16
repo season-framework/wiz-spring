@@ -7,7 +7,7 @@ import picocli.CommandLine.Command;
 @Command(
         name = "wiz-spring",
         mixinStandardHelpOptions = true,
-        version = "wiz-spring 0.2.3",
+        versionProvider = WizVersionProvider.class,
         description = "Java Spring runtime, MCP server, and Codex setup CLI for WIZ workspaces.",
         subcommands = {
                 CreateCommand.class,

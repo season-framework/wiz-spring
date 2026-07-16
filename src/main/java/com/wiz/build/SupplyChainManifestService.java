@@ -19,6 +19,7 @@ import java.util.jar.JarFile;
 import java.util.stream.Stream;
 
 import com.wiz.runtime.ProjectContext;
+import com.wiz.runtime.WizSpringVersion;
 
 import tools.jackson.databind.ObjectMapper;
 
@@ -63,7 +64,7 @@ public class SupplyChainManifestService {
         manifest.put("schemaVersion", 1);
         manifest.put("workspaceRoot", project.root().toAbsolutePath().normalize().toString());
         manifest.put("javaPackageRoot", project.packageRoot());
-        manifest.put("runtimeVersion", runtimeVersion());
+        manifest.put("runtimeVersion", WizSpringVersion.current());
         manifest.put("javaVersion", System.getProperty("java.version"));
         manifest.put("generatedAt", generatedAt.toString());
         manifest.put("dependencyDigest", digestMap(dependencyDigest));
@@ -91,13 +92,13 @@ public class SupplyChainManifestService {
         LinkedHashMap<String, Object> component = new LinkedHashMap<>();
         component.put("type", "application");
         component.put("name", "wiz-app");
-        component.put("version", runtimeVersion());
+        component.put("version", WizSpringVersion.current());
         metadata.put("component", component);
 
         LinkedHashMap<String, Object> toolComponent = new LinkedHashMap<>();
         toolComponent.put("type", "application");
         toolComponent.put("name", "wiz-spring");
-        toolComponent.put("version", runtimeVersion());
+        toolComponent.put("version", WizSpringVersion.current());
         metadata.put("tools", java.util.Map.of("components", List.of(toolComponent)));
         return metadata;
     }
@@ -268,11 +269,6 @@ public class SupplyChainManifestService {
             return normalizedRoot.relativize(normalizedPath).toString().replace('\\', '/');
         }
         return normalizedPath.toString().replace('\\', '/');
-    }
-
-    private String runtimeVersion() {
-        String version = SupplyChainManifestService.class.getPackage().getImplementationVersion();
-        return version == null || version.isBlank() ? "dev" : version;
     }
 
     public record Result(Path manifest, Path cycloneDxBom, String digestAlgorithm, String dependencyDigest, int dependencyCount) {

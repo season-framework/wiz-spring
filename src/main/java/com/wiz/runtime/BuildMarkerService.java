@@ -29,7 +29,7 @@ public class BuildMarkerService {
         marker.put("workspaceRoot", project.root().toAbsolutePath().normalize().toString());
         marker.put("javaPackageRoot", project.packageRoot());
         marker.put("buildPhases", List.copyOf(phases));
-        marker.put("runtimeVersion", runtimeVersion());
+        marker.put("runtimeVersion", WizSpringVersion.current());
         marker.put("javaVersion", System.getProperty("java.version"));
         marker.put("buildStartedAt", startedAt.toString());
         marker.put("buildFinishedAt", finishedAt.toString());
@@ -64,11 +64,6 @@ public class BuildMarkerService {
         return read(project).map(marker -> "package=" + string(marker, "javaPackageRoot")
                 + ";frontend=" + string(marker, "frontendMode")
                 + ";finished=" + string(marker, "buildFinishedAt"));
-    }
-
-    private String runtimeVersion() {
-        String version = BuildMarkerService.class.getPackage().getImplementationVersion();
-        return version == null || version.isBlank() ? "dev" : version;
     }
 
     private long bundleArtifactMtime(Path bundleRoot) throws IOException {

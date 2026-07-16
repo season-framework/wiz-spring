@@ -1,6 +1,7 @@
 package com.wiz.runtime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -41,6 +42,28 @@ class PathServiceTest {
         PathService service = new PathService(tempDir);
         assertEquals(javaRoot, service.findWorkspaceRoot(javaRoot.resolve("src/app")).orElseThrow());
         assertTrue(service.findWorkspaceRoot(tempDir.resolve("missing")).isEmpty());
+    }
+
+    @Test
+    void usesWizMetadataToDistinguishWorkspaceRuntime() throws Exception {
+        Path javaRoot = tempDir.resolve("java-marker");
+        Files.createDirectories(javaRoot.resolve("config"));
+        Files.writeString(javaRoot.resolve("config/wiz.yml"), new WorkspaceMetadata(
+                "java", 1, "wiz-spring", "0.2.3").yaml());
+        Path otherRoot = tempDir.resolve("other-marker");
+        Files.createDirectories(otherRoot.resolve("config"));
+        Files.createDirectories(otherRoot.resolve("src"));
+        Files.writeString(otherRoot.resolve("config/wiz.yml"), "workspace: python\nformat-version: 1\n");
+
+        PathService service = new PathService(javaRoot);
+        WorkspaceMetadata metadata = service.workspaceMetadata().orElseThrow();
+
+        assertEquals("java", metadata.workspace());
+        assertEquals(1, metadata.formatVersion());
+        assertEquals("wiz-spring", metadata.runtimeName());
+        assertEquals("0.2.3", metadata.runtimeVersion());
+        assertTrue(service.isJavaWorkspace(javaRoot));
+        assertFalse(service.isJavaWorkspace(otherRoot));
     }
 
     @Test

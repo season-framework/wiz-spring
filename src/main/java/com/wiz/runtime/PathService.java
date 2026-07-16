@@ -81,15 +81,36 @@ public class PathService {
     }
 
     public boolean isJavaWorkspace(Path candidate) {
+        Optional<WorkspaceMetadata> metadata = workspaceMetadata(candidate);
+        if (metadata.isPresent() && !metadata.get().isJava()) {
+            return false;
+        }
+        boolean javaMarker = metadata.map(WorkspaceMetadata::isJava).orElse(false);
         return (Files.isRegularFile(candidate.resolve("config/application.yml"))
                 || Files.isRegularFile(candidate.resolve("config/application.yaml"))
-                || Files.isRegularFile(candidate.resolve("config/wiz.yml"))
-                || Files.isRegularFile(candidate.resolve("config/wiz.yaml")))
+                || javaMarker)
                 && (Files.isDirectory(candidate.resolve("src"))
                         || Files.isDirectory(candidate.resolve("bundle"))
                         || Files.isRegularFile(candidate.resolve("pom.xml"))
-                        || Files.isRegularFile(candidate.resolve("config/wiz.yml"))
-                        || Files.isRegularFile(candidate.resolve("config/wiz.yaml")));
+                        || javaMarker);
+    }
+
+    public Optional<WorkspaceMetadata> workspaceMetadata() {
+        return workspaceMetadata(root);
+    }
+
+    public Optional<WorkspaceMetadata> workspaceMetadata(Path candidate) {
+        if (candidate == null) {
+            return Optional.empty();
+        }
+        for (Path marker : List.of(
+                candidate.resolve("config/wiz.yml"),
+                candidate.resolve("config/wiz.yaml"))) {
+            if (Files.isRegularFile(marker)) {
+                return WorkspaceMetadata.from(yaml(marker));
+            }
+        }
+        return Optional.empty();
     }
 
     public String packageRoot() {

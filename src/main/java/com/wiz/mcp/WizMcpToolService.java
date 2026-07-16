@@ -209,7 +209,13 @@ public class WizMcpToolService {
         paths.put("bundle", workspaceRoot == null ? null : workspaceRoot.resolve("bundle").toString());
         data.put("paths", paths);
         if (workspaceRoot != null) {
-            data.put("javaPackageRoot", new PathService(workspaceRoot).packageRoot());
+            PathService pathService = new PathService(workspaceRoot);
+            data.put("javaPackageRoot", pathService.packageRoot());
+            pathService.workspaceMetadata().ifPresent(metadata -> data.put("workspaceMetadata", Map.of(
+                    "workspace", metadata.workspace(),
+                    "formatVersion", metadata.formatVersion(),
+                    "runtimeName", metadata.runtimeName(),
+                    "runtimeVersion", metadata.runtimeVersion())));
         }
         return data;
     }

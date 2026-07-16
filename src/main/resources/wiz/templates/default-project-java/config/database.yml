@@ -1,4 +1,0 @@
-# Optional database aliases for app code that wants a small key/value DB map.
-# The Java sample ORM setup reads config/application.yml under sample.datasource.
-base: data/app.db
-post: data/app.db

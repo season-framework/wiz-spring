@@ -3,15 +3,13 @@ package com.wiz.core;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.SecureRandom;
-import java.util.HexFormat;
 
 import com.wiz.runtime.PathService;
+import com.wiz.runtime.WorkspaceMetadata;
 
 public class WorkspaceService {
 
     private static final int DEFAULT_PORT = 3000;
-    private final SecureRandom secureRandom = new SecureRandom();
     private final int startPort;
 
     public WorkspaceService() {
@@ -43,40 +41,27 @@ public class WorkspaceService {
         int port = PortFinder.nextAvailablePort(startPort);
         Files.createDirectories(root.resolve("config"));
         Files.writeString(root.resolve("config/application.yml"), workspaceConfig(port, javaPackageRoot));
-        Files.writeString(root.resolve("config/wiz.yml"), "# WIZ workspace marker. Runtime settings live in application.yml.\nworkspace: java\n");
+        Files.writeString(root.resolve("config/wiz.yml"), WorkspaceMetadata.current().yaml());
         return new CreatedWorkspace(root, port);
     }
 
     private String workspaceConfig(int port, String packageRoot) {
-        return "# WIZ Spring runtime settings.\n"
+        return "# WIZ Spring runtime settings. 모든 profile에서 먼저 읽는 공통 설정입니다.\n"
+                + "# 이 파일과 application-<profile>.yml은 로컬 값이나 비밀 값을 포함할 수 있어 기본 .gitignore 대상입니다.\n"
+                + "# 공유할 설정은 application*.example.yml에 반영하고 실제 비밀 값은 커밋하지 마세요.\n"
+                + "# 공통 session cookie 보안 정책은 이 파일에 있고 Secure 여부는 dev/prod profile에서 결정합니다.\n"
                 + "server:\n"
                 + "  port: " + port + "\n"
+                + "  servlet:\n"
+                + "    session:\n"
+                + "      tracking-modes:\n"
+                + "        - cookie\n"
+                + "      cookie:\n"
+                + "        http-only: true\n"
+                + "        same-site: lax\n"
                 + "wiz:\n"
                 + "  java:\n"
-                + "    package-root: " + packageRoot + "\n"
-                + "  api:\n"
-                + "    prefix: /wiz/api\n"
-                + "  http:\n"
-                + "    max-request-body-bytes: 0\n"
-                + "  socket:\n"
-                + "    allowed-origins:\n"
-                + "      - \"*\"\n"
-                + "    polling-session-ttl-millis: 120000\n"
-                + "    max-polling-sessions: 1024\n"
-                + "    polling-queue-capacity: 256\n"
-                + "  redirect:\n"
-                + "    policy: any\n"
-                + "    allowed-hosts: []\n"
-                + "  runtime:\n"
-                + "    devmode-cookie-name: season-wiz-devmode\n"
-                + "    warmup-enabled: true\n"
-                + "  secret: \"" + secret() + "\"\n";
-    }
-
-    private String secret() {
-        byte[] bytes = new byte[32];
-        secureRandom.nextBytes(bytes);
-        return HexFormat.of().formatHex(bytes);
+                + "    package-root: " + packageRoot + "\n";
     }
 
     public record CreatedWorkspace(Path root, int port) {

@@ -8,14 +8,22 @@ import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 
 import com.wiz.config.WizRuntimeProperties;
+import com.wiz.core.ProjectService;
+import com.wiz.core.WorkspaceService;
+import com.wiz.runtime.PathService;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
+import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.web.server.Cookie;
+import org.springframework.boot.web.server.autoconfigure.ServerProperties;
+import org.springframework.boot.web.server.servlet.Session.SessionTrackingMode;
 import org.springframework.context.ConfigurableApplicationContext;
 
 @SpringBootTest
@@ -74,6 +82,23 @@ class WizSpringApplicationTests {
 	}
 
 	@Test
+	void runSettingsReadTheSelectedWorkspaceProfileAfterCommonConfig() throws Exception {
+		Path workspace = tempDir.resolve("selected-profile-workspace");
+		Files.createDirectories(workspace.resolve("config"));
+		Files.writeString(workspace.resolve("config/application.yml"), "server:\n  port: 19081\n");
+		Files.writeString(workspace.resolve("config/application-dev.yml"), "server:\n  port: 19082\n");
+		Files.writeString(workspace.resolve("config/application-prod.yml"), "server:\n  port: 19083\n");
+
+		WizSpringApplication.RunSettings dev = WizSpringApplication.resolveRunSettings(
+				workspace.toString(), null, null, false, null, "dev", true);
+		WizSpringApplication.RunSettings prod = WizSpringApplication.resolveRunSettings(
+				workspace.toString(), null, null, false, null, "prod", true);
+
+		assertEquals(19082, dev.requestedPort());
+		assertEquals(19083, prod.requestedPort());
+	}
+
+	@Test
 	void embeddedServerArgsUseProdDefaultProfile() throws Exception {
 		Path workspace = tempDir.resolve("embedded-workspace");
 		Files.createDirectories(workspace.resolve("config"));
@@ -86,21 +111,38 @@ class WizSpringApplicationTests {
 	}
 
 	@Test
-	void profileSpecificApplicationFilesBindRuntimeProperties() {
+	void runtimeDefaultsAndWorkspaceSessionCookieProfilesApply() throws Exception {
 		try (ConfigurableApplicationContext dev = applicationContext("dev")) {
 			assertTrue(dev.getBean(WizRuntimeProperties.class).isWarmupEnabled());
+			assertSessionCookiePolicy(dev, false);
 		}
 		try (ConfigurableApplicationContext prod = applicationContext("prod")) {
 			assertTrue(prod.getBean(WizRuntimeProperties.class).isWarmupEnabled());
+			assertSessionCookiePolicy(prod, true);
 		}
 	}
 
-	private ConfigurableApplicationContext applicationContext(String profile) {
+	private ConfigurableApplicationContext applicationContext(String profile) throws Exception {
+		Path workspace = tempDir.resolve("profile-" + profile);
+		new WorkspaceService().createWorkspace(workspace);
+		new ProjectService(new PathService(workspace)).createApp(null, null);
 		SpringApplication application = new SpringApplication(WizSpringApplication.class);
 		application.setWebApplicationType(WebApplicationType.NONE);
 		return application.run(
 				"--spring.profiles.active=" + profile,
-				"--wiz.root=" + tempDir.resolve("profile-" + profile));
+				"--spring.config.additional-location=optional:" + workspace.resolve("config").toUri(),
+				"--wiz.root=" + workspace);
+	}
+
+	private void assertSessionCookiePolicy(ConfigurableApplicationContext context, boolean secure) {
+		ServerProperties properties = Binder.get(context.getEnvironment())
+				.bind("server", ServerProperties.class)
+				.orElseThrow(() -> new AssertionError("server properties were not bound"));
+		Cookie cookie = properties.getServlet().getSession().getCookie();
+		assertEquals(Set.of(SessionTrackingMode.COOKIE), properties.getServlet().getSession().getTrackingModes());
+		assertEquals(Boolean.TRUE, cookie.getHttpOnly());
+		assertEquals(Cookie.SameSite.LAX, cookie.getSameSite());
+		assertEquals(secure, Boolean.TRUE.equals(cookie.getSecure()));
 	}
 
 }

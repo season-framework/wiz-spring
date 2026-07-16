@@ -1,7 +1,0 @@
-auth_baseuri: /auth
-session_cookie_name: JSESSIONID
-session_cookie_path: /
-session_cookie_http_only: true
-session_cookie_secure: false
-session_cookie_same_site: Lax
-pwa_title: WIZ Java Sample App
