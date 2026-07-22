@@ -30,7 +30,9 @@ public class RouteRegistry {
     }
 
     public List<RouteDefinition> definitions(ProjectContext project) {
-        return runtimeCache.get(project).routeDefinitions();
+        try (ProjectRuntimeCache.RuntimeLease lease = runtimeCache.acquire(project)) {
+            return lease.runtime().routeDefinitions();
+        }
     }
 
     public List<RouteDefinition> definitions(WizContext context) {

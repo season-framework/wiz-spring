@@ -32,7 +32,7 @@ workspace를 host에 영속화하려면 bind target을 사용합니다. 최초 �
 # 기본 저장 위치: ./.wiz-data-bind/app
 ```
 
-두 이미지를 한 번에 build하려면 `./build.sh all`을 사용합니다. 기본 image tag는 runtime이 `registry.nanoha.kr/kwon3286/wiz-spring:0.2.6`, bind가 `registry.nanoha.kr/kwon3286/wiz-spring:0.2.6-bind`입니다. 아래 환경 변수로 값을 바꿀 수 있습니다.
+두 이미지를 한 번에 build하려면 `./build.sh all`을 사용합니다. 기본 image tag는 runtime이 `registry.nanoha.kr/kwon3286/wiz-spring:0.2.7`, bind가 `registry.nanoha.kr/kwon3286/wiz-spring:0.2.7-bind`입니다. 아래 환경 변수로 값을 바꿀 수 있습니다.
 
 - Build: `IMAGE`, `VERSION`, `PLATFORM`, `WIZ_PACKAGE_ROOT`, `INSTALL_CODEX`, `CODEX_VERSION`
 - Run: `CONTAINER_NAME`, `HOST_HTTP_PORT`, `HOST_SSH_PORT`, `CONTAINER_HTTP_PORT`, `WIZ_ENABLE_SSH`
@@ -63,7 +63,7 @@ cd /root/workspace/wiz-java/wiz-spring
 ## 앱 생성
 
 ```bash
-jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.2.6.jar
+jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.2.7.jar
 workspace=/tmp/demo2
 
 rm -rf "$workspace"
@@ -83,8 +83,10 @@ java -jar "$jar" create "$workspace" --package a.b.c --skip-build
 ## 실행과 배포
 
 ```bash
-java -jar "$jar" run --root "$workspace" --port 3000
+java -jar "$jar" run --root "$workspace" --port 3000 --log /var/log/wiz/demo.log
 ```
+
+`run`, `build`, `mcp`, `service install`은 `config/wiz.yml`의 `workspace: java` marker, `config/application.yml` 또는 `.yaml`, 그리고 `src/app` 또는 `bundle/src/app` 구조를 확인합니다. 일반 Spring 디렉터리나 불완전한 checkout은 서버로 실행하지 않습니다. 실제 `run`은 현재 runtime version으로 완료된 `bundle/.wiz-build.json`까지 요구하며, build가 없거나 다른 runtime의 산출물이면 실행 전에 명확히 중단합니다(`--dry-run`은 사전 진단만 하므로 build 없이도 사용할 수 있습니다). `--log`는 Spring 로그와 project 코드의 `System.out/err`를 console에 유지하면서 파일에도 기록하며, 10 MiB마다 회전해 현재 파일과 archive 14개만 보관합니다. 시작 전 해석된 root, config, profile, Java, port, PID도 출력합니다.
 
 다시 빌드:
 
@@ -111,17 +113,32 @@ runtime bundle 디렉터리 생성:
 java -jar "$jar" bundle --root "$workspace" --output /tmp/demo2-bundle
 ```
 
+### Git 기반 서버 마이그레이션
+
+Git에는 `src/`, `pom.xml`, `config/application*.example.yml`, `config/wiz.yml`, `src/angular/package-lock.json`을 포함하고 실제 `config/application*.yml`, `data/`, `build/`, `bundle/`, `.wiz/`는 포함하지 않습니다. 대상 서버에서는 runtime과 source revision을 고정하고, 비밀 설정/data는 별도 backup 또는 secret store에서 복원한 뒤 새 checkout에서 먼저 build합니다.
+
+```bash
+git fetch --prune origin
+git switch --detach <검증할-commit>
+wiz-spring build --root "$workspace" --clean
+test -f "$workspace/bundle/.wiz-build.json"
+```
+
+build와 smoke test가 성공한 checkout만 서비스에 연결한 뒤 `wiz-spring service restart <name>`으로 전환하세요. 실행 중인 checkout에 `git pull`과 build를 직접 겹치기보다 release 디렉터리를 분리하면 실패한 build가 현재 서비스와 설정을 훼손하지 않고 즉시 이전 revision으로 돌아갈 수 있습니다. 서비스는 가능하면 alias 대신 `service install --command /absolute/path/to/wiz-spring`으로 고정하고, 등록 후에는 `service logs <name> --lines 200 --follow`로 journal과 application log 위치를 함께 확인합니다.
+
+정상 build는 `.wiz/build.lock` filesystem lock으로 같은 workspace의 동시 CLI build를 직렬화하고, Maven dependency를 임시 디렉터리에 받은 뒤 직전 정상본을 backup한 상태에서 교체합니다. 새 workspace는 package lock을 포함해 `npm ci`를 사용합니다. `.wiz/npm-cache`는 재다운로드를 줄이기 위한 build cache이므로 Git으로 복사하지 말고 용량을 감시하며, 정비 시간에 삭제한 경우 다음 clean build에서 다시 생성됩니다. runtime 교체용 `.wiz/runtime-snapshots`는 요청이 끝나면 삭제되고 비정상 종료로 남은 다른 PID의 snapshot은 다음 기동 시 정리됩니다.
+
 ## Command Reference
 
 | Command | 용도 |
 | --- | --- |
 | `create <path> --package <package> [--path <source>\|--uri <git>]` | 단일 workspace를 생성하거나 source를 가져오고 `.codex` 및 내장 `.github`를 자동 설정합니다. 기본적으로 clean build까지 실행합니다. |
 | `build --root <path> [--package <package>] [--clean] [--phase reconstruct\|compile\|bundle]` | source 재구성, Java compile, frontend build/fallback, bundle 생성을 수행합니다. `--package`는 package root를 변경하고 자동으로 clean build합니다. |
-| `run --root <path> [--host <host>] [--port <port>] [--profile <profile>]` | WIZ Spring 서버를 실행합니다. 기본 profile은 `dev`입니다. |
+| `run --root <path> [--host <host>] [--port <port>] [--profile <profile>] [--log <file>]` | WIZ Spring 서버를 실행합니다. 기본 profile은 `dev`이고 `--log`는 크기가 제한된 회전 로그를 만듭니다. |
 | `jar --root <path> [--clean] [--skip-build] [--output <jar>]` | workspace bundle을 포함한 단일 실행 jar를 만듭니다. |
 | `bundle --root <path> [--output <dir>]` | 이미 build된 bundle과 config를 배포용 디렉터리로 복사합니다. |
 | `kill [--dry-run]` | 실행 중인 `wiz-spring run` 프로세스를 찾거나 종료합니다. |
-| `service ...` | Linux/systemd 서비스 등록, 삭제, 조회, 시작, 중지를 처리합니다. |
+| `service ...` | Linux/systemd 서비스 등록, 삭제, 조회, 시작, 중지와 `logs <name>` 조회를 처리합니다. |
 | `mcp --root <path> [--state <file>]` | WIZ Spring MCP stdio 서버를 실행합니다. |
 | `completion <bash\|zsh>` | 현재 CLI 명령과 option을 반영한 shell completion script를 출력합니다. |
 
@@ -297,6 +314,32 @@ wiz:
 `wiz.api.prefix`, `wiz.socket.path`는 배포 환경에 맞게 `/wiz`를 숨기거나 다른 prefix로 바꿀 수 있습니다.
 Angular frontend는 build 단계에서 이 값을 `wiz-runtime-config.ts`로 편입합니다. 이 값을 바꾼 뒤에는 frontend bundle을 다시 빌드하세요.
 
+### OpenAPI와 Swagger UI
+
+서버 실행 후 OpenAPI JSON은 `/v3/api-docs`, YAML은 `/v3/api-docs.yaml`, Swagger UI는 `/swagger-ui.html`에서 확인합니다. 문서에는 `/smoke`, 현재 `wiz.api.prefix`를 사용하는 App API dispatcher 경로, 그리고 `bundle/src/route/*/app.json`에서 읽은 WIZ Route가 포함됩니다. `<id>`와 `<path:path>` 같은 WIZ path segment는 OpenAPI의 `{id}`, `{path}` parameter로 변환되며 실제 request/response schema는 각 동적 handler 구현에 따라 달라집니다.
+
+Swagger UI는 기본으로 문서 조회만 허용합니다. 외부 예제 URL과 URL query 기반 설정 override를 차단하고, 브라우저에 authorization을 보존하지 않으며, `Try it out`은 비활성화합니다. 개발 환경에서 호출 기능이 필요하면 신뢰할 수 있는 환경에서만 workspace 설정에 허용할 method를 명시하세요.
+
+```yaml
+springdoc:
+  swagger-ui:
+    supported-submit-methods:
+      - get
+      - post
+```
+
+동적 Route metadata가 hot build 직후에도 문서에 반영되도록 OpenAPI cache는 기본 비활성화되어 있습니다. 문서 요청량이 많은 고정 배포에서는 `springdoc.cache.disabled: false`로 바꿀 수 있습니다. 운영에서 API 목록을 공개하지 않거나 별도 reverse proxy 인증을 적용하지 않는다면 두 endpoint를 함께 끕니다.
+
+```yaml
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+```
+
+WIZ controller 이름은 문서의 `x-wiz-controller` metadata로만 표시됩니다. 프로젝트별 인증 방식은 runtime이 일반화할 수 없으므로 OpenAPI security scheme으로 자동 추정하지 않습니다.
+
 `config/wiz.yml`은 runtime 설정 파일이 아니며 다음과 같은 판별 metadata만 가집니다.
 
 ```yaml
@@ -304,12 +347,12 @@ workspace: "java"
 format-version: 1
 runtime:
   name: "wiz-spring"
-  version: "0.2.6"
+  version: "0.2.7"
 ```
 
 `runtime.version`은 workspace를 생성한 `wiz-spring` 실행 파일의 버전입니다. 개발 classpath에서 직접 실행해 manifest version이 없으면 `dev`로 기록됩니다.
 
-`0.2.2`로 생성한 기존 workspace를 업그레이드할 때는 [`release-log/0.2.4.md`](release-log/0.2.4.md)의 config migration 절차를 따르세요. 기존 source를 다시 생성하지 않고 session 설정, `wiz.yml`, Git ignore/example 파일만 custom 값과 병합합니다. 첫 build 이후 package 변경이 필요하면 [`release-log/0.2.5.md`](release-log/0.2.5.md)를, 새 workspace의 자동 Codex 설정과 completion 변경은 [`release-log/0.2.6.md`](release-log/0.2.6.md)를 추가로 확인하세요.
+`0.2.2`로 생성한 기존 workspace를 업그레이드할 때는 [`release-log/0.2.4.md`](release-log/0.2.4.md)의 config migration 절차를 따르세요. 기존 source를 다시 생성하지 않고 session 설정, `wiz.yml`, Git ignore/example 파일만 custom 값과 병합합니다. 첫 build 이후 package 변경이 필요하면 [`release-log/0.2.5.md`](release-log/0.2.5.md)를, 새 workspace의 자동 Codex 설정과 completion 변경은 [`release-log/0.2.6.md`](release-log/0.2.6.md)를, 운영 로그·runtime 교체·OpenAPI 변경은 [`release-log/0.2.7.md`](release-log/0.2.7.md)를 추가로 확인하세요.
 
 ## Source 규칙
 

@@ -1,18 +1,14 @@
 package com.wiz;
 
-import java.io.IOException;
-import java.io.OutputStream;
-import java.io.PrintStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
 import com.wiz.cli.WizCommand;
 import com.wiz.core.PortFinder;
+import com.wiz.logging.ProcessLogManager;
 import com.wiz.runtime.EmbeddedWorkspace;
 import com.wiz.runtime.PathService;
 
@@ -66,9 +62,16 @@ public class WizSpringApplication {
 	}
 
 	public static void runServer(String root, String host, Integer port, boolean bundle, String log, String profile, boolean profileOverride) {
+		runServer(resolveRunSettings(root, host, port, bundle, log, profile, profileOverride));
+	}
+
+	public static void runServer(RunSettings settings) {
+		if (settings == null) {
+			throw new IllegalArgumentException("WIZ run settings are required");
+		}
 		SpringApplication application = new SpringApplication(WizSpringApplication.class);
-		RunSettings settings = resolveRunSettings(root, host, port, bundle, log, profile, profileOverride);
-		configureProcessLog(settings.log());
+		ProcessLogManager.install(settings.log());
+		ProcessLogManager.claimSpringFileTarget(application, settings.log());
 		application.run(settings.args().toArray(String[]::new));
 	}
 
@@ -93,7 +96,7 @@ public class WizSpringApplication {
 		PortFinder.validatePort(requestedPort);
 		int resolvedPort = PortFinder.nextAvailablePort(requestedPort, resolvedHost);
 		String locations = additionalConfigLocations(workspace);
-		return new RunSettings(workspace, resolvedHost, requestedPort, resolvedPort, bundle, log, normalizedProfile, profileOverride, locations);
+		return new RunSettings(workspace, resolvedHost, requestedPort, resolvedPort, bundle, normalizeLog(log), normalizedProfile, profileOverride, locations);
 	}
 
 	public record RunSettings(
@@ -118,8 +121,22 @@ public class WizSpringApplication {
 			args.add("--server.address=" + host);
 			args.add("--server.port=" + port);
 			args.add("--wiz.bundle=" + bundle);
+			if (log != null && !log.isBlank()) {
+				args.add("--spring.output.ansi.enabled=never");
+			}
 			return List.copyOf(args);
 		}
+	}
+
+	private static String normalizeLog(String log) {
+		if (log == null || log.isBlank()) {
+			return null;
+		}
+		Path path = Path.of(log.trim()).toAbsolutePath().normalize();
+		if (Files.isDirectory(path)) {
+			throw new IllegalArgumentException("WIZ log path must be a file: " + path);
+		}
+		return path.toString();
 	}
 
 	private static String normalizeProfile(String profile) {
@@ -200,56 +217,6 @@ public class WizSpringApplication {
 	private static String directoryUri(Path directory) {
 		String uri = directory.toUri().toString();
 		return uri.endsWith("/") ? uri : uri + "/";
-	}
-
-	private static void configureProcessLog(String log) {
-		if (log == null || log.isBlank()) {
-			return;
-		}
-		Path logPath = Path.of(log).toAbsolutePath().normalize();
-		try {
-			Path parent = logPath.getParent();
-			if (parent != null) {
-				Files.createDirectories(parent);
-			}
-			PrintStream originalOut = System.out;
-			PrintStream originalErr = System.err;
-			OutputStream file = Files.newOutputStream(logPath, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-			PrintStream logStream = new PrintStream(file, true, StandardCharsets.UTF_8);
-			System.setOut(new PrintStream(new TeeOutputStream(originalOut, logStream), true, StandardCharsets.UTF_8));
-			System.setErr(new PrintStream(new TeeOutputStream(originalErr, logStream), true, StandardCharsets.UTF_8));
-			Runtime.getRuntime().addShutdownHook(new Thread(logStream::close, "wiz-process-log-close"));
-		} catch (IOException exception) {
-			throw new IllegalStateException("Failed to open WIZ log file: " + logPath, exception);
-		}
-	}
-
-	private static final class TeeOutputStream extends OutputStream {
-		private final PrintStream first;
-		private final PrintStream second;
-
-		private TeeOutputStream(PrintStream first, PrintStream second) {
-			this.first = first;
-			this.second = second;
-		}
-
-		@Override
-		public synchronized void write(int value) {
-			first.write(value);
-			second.write(value);
-		}
-
-		@Override
-		public synchronized void write(byte[] bytes, int offset, int length) {
-			first.write(bytes, offset, length);
-			second.write(bytes, offset, length);
-		}
-
-		@Override
-		public synchronized void flush() {
-			first.flush();
-			second.flush();
-		}
 	}
 
 }

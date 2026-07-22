@@ -6,11 +6,36 @@ server:
   address: 0.0.0.0
   port: 3000
 
+logging:
+  pattern:
+    correlation: "[requestId=%X{requestId:-system}] "
+  logback:
+    rollingpolicy:
+      max-file-size: 10MB
+      max-history: 14
+      total-size-cap: 150MB
+      clean-history-on-start: false
+
 management:
   endpoints:
     web:
       exposure:
         include: health,info
+
+springdoc:
+  cache:
+    disabled: true
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    disable-swagger-default-url: true
+    doc-expansion: none
+    operations-sorter: alpha
+    tags-sorter: alpha
+    persist-authorization: false
+    query-config-enabled: false
+    supported-submit-methods: []
 
 wiz:
   root: .

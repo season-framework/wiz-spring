@@ -17,11 +17,15 @@ import com.wiz.runtime.WizRuntime;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import tools.jackson.databind.ObjectMapper;
 
 @Service
 public class AppApiDispatcher {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(AppApiDispatcher.class);
 
     private final WizRuntime runtime;
     private final ControllerChain controllerChain;
@@ -70,7 +74,7 @@ public class AppApiDispatcher {
             }
             Optional<String> handlerClass = metadata.flatMap(value -> javaHandlerClass(context, value))
                     .or(() -> Optional.of(ProjectJavaNaming.appApiHandlerClass(context.project(), appId)));
-            return dispatchProjectJavaApi(context, handlerClass.get(), function);
+            return dispatchProjectJavaApi(context, appId, handlerClass.get(), function);
         }
     }
 
@@ -78,7 +82,7 @@ public class AppApiDispatcher {
         return context.projectRuntime().appMetadata(appId);
     }
 
-    private WizResult dispatchProjectJavaApi(WizContext context, String handlerClass, String function) {
+    private WizResult dispatchProjectJavaApi(WizContext context, String appId, String handlerClass, String function) {
         ProjectRuntimeCache.CachedProjectRuntime projectRuntime = context.projectRuntime();
         ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(projectRuntime.classLoader());
@@ -96,13 +100,19 @@ public class AppApiDispatcher {
             }
             return context.response().ok(value);
         } catch (ProjectClassNotFoundException exception) {
+            LOGGER.error("WIZ app API handler class was not found: appId={} function={} handler={}",
+                    appId, function, handlerClass, exception);
             return context.response().status(500, Map.of("error", "java api handler not found"));
         } catch (InvocationTargetException exception) {
             if (exception.getCause() instanceof WizBadRequestException badRequest) {
                 return context.response().status(400, badRequest.data());
             }
+            LOGGER.error("WIZ app API invocation failed: appId={} function={} handler={}",
+                    appId, function, handlerClass, exception.getCause() == null ? exception : exception.getCause());
             return context.response().status(500, Map.of("error", "java api invocation failed"));
         } catch (ReflectiveOperationException | ProjectReflectionException exception) {
+            LOGGER.error("WIZ app API reflection failed: appId={} function={} handler={}",
+                    appId, function, handlerClass, exception);
             return context.response().status(500, Map.of("error", "java api invocation failed"));
         } finally {
             Thread.currentThread().setContextClassLoader(previousLoader);

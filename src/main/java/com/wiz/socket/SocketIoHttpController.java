@@ -16,6 +16,8 @@ import java.util.function.LongSupplier;
 
 import com.wiz.config.WizSocketProperties;
 
+import io.swagger.v3.oas.annotations.Hidden;
+
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
@@ -36,6 +38,7 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 @RestController
+@Hidden
 public class SocketIoHttpController {
 
     private static final String SEPARATOR = "\u001e";

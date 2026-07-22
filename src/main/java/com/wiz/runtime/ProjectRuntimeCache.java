@@ -5,9 +5,17 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -19,9 +27,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -34,6 +45,8 @@ import com.wiz.socket.SocketController;
 
 import jakarta.annotation.PreDestroy;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
@@ -44,11 +57,15 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 public class ProjectRuntimeCache implements AutoCloseable {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(ProjectRuntimeCache.class);
+    private static final int MAX_RUNTIME_LOAD_ATTEMPTS = 3;
+
     private final ConcurrentHashMap<RuntimeKey, CachedProjectRuntime> runtimes = new ConcurrentHashMap<>();
     private final ObjectMapper objectMapper;
     private final List<String> profiles;
     private final String profile;
     private final ClassLoaderFactory classLoaderFactory;
+    private final ClassLoader runtimeParentClassLoader;
 
     @Autowired
     public ProjectRuntimeCache(Environment environment) {
@@ -72,21 +89,138 @@ public class ProjectRuntimeCache implements AutoCloseable {
         this.profiles = profiles == null || profiles.isEmpty() ? List.of("default") : List.copyOf(profiles);
         this.profile = String.join(",", this.profiles);
         this.classLoaderFactory = classLoaderFactory == null ? URLClassLoader::new : classLoaderFactory;
+        this.runtimeParentClassLoader = stableRuntimeParentClassLoader();
     }
 
     public CachedProjectRuntime get(ProjectContext project) {
-        RuntimeIdentity identity = identity(project);
-        RuntimeKey key = runtimeKey(project, identity);
+        return currentRuntime(project);
+    }
+
+    public RuntimeLease acquire(ProjectContext project) {
         synchronized (runtimes) {
-            evictStaleProjectEntries(key);
-            CachedProjectRuntime runtime = runtimes.get(key);
-            if (runtime != null) {
-                return runtime;
-            }
-            CachedProjectRuntime created = createRuntime(project, key);
-            runtimes.put(key, created);
-            return created;
+            return currentRuntimeLocked(project).acquire();
         }
+    }
+
+    private CachedProjectRuntime currentRuntime(ProjectContext project) {
+        synchronized (runtimes) {
+            return currentRuntimeLocked(project);
+        }
+    }
+
+    private CachedProjectRuntime currentRuntimeLocked(ProjectContext project) {
+        RuntimeIdentity identity = identity(project);
+        CachedProjectRuntime fallback = runtimeForIdentity(identity);
+        BuildReadGuard acquiredGuard;
+        try {
+            acquiredGuard = BuildReadGuard.tryAcquire(project);
+        } catch (IOException exception) {
+            LOGGER.warn("Could not acquire WIZ build lock while loading project runtime; marker validation will still be used: project={}",
+                    project.name(), exception);
+            acquiredGuard = BuildReadGuard.unlocked();
+        }
+        BuildReadGuard guard = acquiredGuard;
+        if (guard == null) {
+            if (fallback != null) {
+                return fallback;
+            }
+            throw new IllegalStateException("Project build is in progress and no completed runtime is available: " + project.name());
+        }
+        try (guard) {
+            return loadStableRuntime(project, identity, fallback);
+        }
+    }
+
+    private CachedProjectRuntime loadStableRuntime(ProjectContext project, RuntimeIdentity identity, CachedProjectRuntime fallback) {
+        CachedProjectRuntime markerFallback = markerRuntimeForIdentity(identity);
+        for (int attempt = 1; attempt <= MAX_RUNTIME_LOAD_ATTEMPTS; attempt++) {
+            RuntimeObservation before = observeRuntime(project, identity, markerFallback == null);
+            if (!before.stable()) {
+                if (fallback != null) {
+                    return fallback;
+                }
+                if (attempt < MAX_RUNTIME_LOAD_ATTEMPTS) {
+                    Thread.yield();
+                    continue;
+                }
+                throw new IllegalStateException("Project runtime artifacts are being replaced: " + project.name()
+                        + " (" + before.reason() + ")");
+            }
+
+            RuntimeKey key = before.key();
+            CachedProjectRuntime existing = runtimes.get(key);
+            if (existing != null) {
+                return existing;
+            }
+
+            CachedProjectRuntime created;
+            try {
+                created = createRuntime(project, key);
+            } catch (RuntimeException exception) {
+                RuntimeObservation afterFailure = observeRuntime(project, identity, markerFallback == null);
+                if (!afterFailure.stable() || !key.equals(afterFailure.key())) {
+                    if (attempt < MAX_RUNTIME_LOAD_ATTEMPTS) {
+                        continue;
+                    }
+                } else if (fallback == null) {
+                    throw exception;
+                }
+                if (fallback != null) {
+                    LOGGER.warn("Failed to load replacement WIZ project runtime; continuing with the last completed runtime: project={} version={}",
+                            key.projectName(), shortVersion(key.version()), exception);
+                    return fallback;
+                }
+                throw exception;
+            }
+
+            RuntimeObservation after = observeRuntime(project, identity, markerFallback == null);
+            if (after.stable() && key.equals(after.key())) {
+                runtimes.put(key, created);
+                evictStaleProjectEntries(key);
+                LOGGER.info("Loaded WIZ project runtime: project={} version={} profile={}",
+                        key.projectName(), shortVersion(key.version()), profile);
+                return created;
+            }
+
+            String reason = after.stable() ? "runtime version changed after snapshot creation" : after.reason();
+            discardUnstableRuntime(created, key, reason);
+            fallback = runtimeForIdentity(identity);
+            markerFallback = markerRuntimeForIdentity(identity);
+            if (!after.stable() && fallback != null) {
+                return fallback;
+            }
+        }
+        if (fallback != null) {
+            return fallback;
+        }
+        throw new IllegalStateException("Project runtime artifacts did not remain stable while creating a snapshot: " + project.name());
+    }
+
+    private void discardUnstableRuntime(CachedProjectRuntime runtime, RuntimeKey key, String reason) {
+        LOGGER.info("Discarding WIZ project runtime snapshot because build artifacts changed: project={} version={} reason={}",
+                key.projectName(), shortVersion(key.version()), reason);
+        try {
+            runtime.close();
+        } catch (RuntimeException exception) {
+            LOGGER.warn("Failed to close discarded WIZ project runtime snapshot: project={}", key.projectName(), exception);
+        }
+    }
+
+    private CachedProjectRuntime runtimeForIdentity(RuntimeIdentity identity) {
+        return runtimes.entrySet().stream()
+                .filter(entry -> entry.getKey().identity().equals(identity))
+                .map(Map.Entry::getValue)
+                .findFirst()
+                .orElse(null);
+    }
+
+    private CachedProjectRuntime markerRuntimeForIdentity(RuntimeIdentity identity) {
+        return runtimes.entrySet().stream()
+                .filter(entry -> entry.getKey().identity().equals(identity))
+                .filter(entry -> entry.getKey().version().startsWith("marker:"))
+                .map(Map.Entry::getValue)
+                .findFirst()
+                .orElse(null);
     }
 
     public void invalidate(ProjectContext project) {
@@ -102,22 +236,46 @@ public class ProjectRuntimeCache implements AutoCloseable {
         synchronized (runtimes) {
             List<CachedProjectRuntime> values = List.copyOf(runtimes.values());
             runtimes.clear();
-            values.forEach(CachedProjectRuntime::close);
+            for (CachedProjectRuntime runtime : values) {
+                try {
+                    runtime.close();
+                } catch (RuntimeException exception) {
+                    LOGGER.warn("Failed to close project runtime during shutdown", exception);
+                }
+            }
         }
     }
 
     private CachedProjectRuntime createRuntime(ProjectContext project, RuntimeKey key) {
+        RuntimeSnapshot snapshot = null;
         try {
-            ClassLoader parent = Thread.currentThread().getContextClassLoader();
-            if (parent == null) {
-                parent = ProjectRuntimeCache.class.getClassLoader();
-            }
-            URL[] urls = ProjectClassPath.apiUrls(project);
-            URLClassLoader classLoader = classLoaderFactory.create(urls, parent);
-            return new CachedProjectRuntime(project, objectMapper, classLoader, key, profiles);
+            snapshot = RuntimeSnapshot.create(project, key.version());
+            URL[] urls = snapshot.classPathUrls();
+            URLClassLoader classLoader = classLoaderFactory.create(urls, runtimeParentClassLoader);
+            return new CachedProjectRuntime(snapshot.project(), objectMapper, classLoader, snapshot, key, profiles);
         } catch (IOException exception) {
+            closeFailedSnapshot(snapshot, exception);
             throw new IllegalStateException("Failed to create project runtime cache: " + key.projectName(), exception);
+        } catch (RuntimeException | Error exception) {
+            closeFailedSnapshot(snapshot, exception);
+            throw exception;
         }
+    }
+
+    private void closeFailedSnapshot(RuntimeSnapshot snapshot, Throwable failure) {
+        if (snapshot == null) {
+            return;
+        }
+        try {
+            snapshot.close();
+        } catch (IOException closeFailure) {
+            failure.addSuppressed(closeFailure);
+        }
+    }
+
+    private static ClassLoader stableRuntimeParentClassLoader() {
+        ClassLoader loader = ProjectRuntimeCache.class.getClassLoader();
+        return loader == null ? ClassLoader.getSystemClassLoader() : loader;
     }
 
     private void evictStaleProjectEntries(RuntimeKey currentKey) {
@@ -136,17 +294,15 @@ public class ProjectRuntimeCache implements AutoCloseable {
         for (RuntimeKey key : stale) {
             CachedProjectRuntime runtime = runtimes.remove(key);
             if (runtime != null) {
-                runtime.close();
+                LOGGER.info("Retiring WIZ project runtime: project={} version={}",
+                        key.projectName(), shortVersion(key.version()));
+                try {
+                    runtime.close();
+                } catch (RuntimeException exception) {
+                    LOGGER.warn("Failed to close retired project runtime: {}", key.projectName(), exception);
+                }
             }
         }
-    }
-
-    private RuntimeKey runtimeKey(ProjectContext project) {
-        return runtimeKey(project, identity(project));
-    }
-
-    private RuntimeKey runtimeKey(ProjectContext project, RuntimeIdentity identity) {
-        return new RuntimeKey(identity, project.name(), runtimeVersion(project));
     }
 
     private RuntimeIdentity identity(ProjectContext project) {
@@ -165,13 +321,57 @@ public class ProjectRuntimeCache implements AutoCloseable {
         return projectRoot;
     }
 
-    private String runtimeVersion(ProjectContext project) {
-        Path marker = project.bundleRoot().resolve(BuildMarkerService.MARKER_FILE);
-        if (Files.isRegularFile(marker)) {
-            return "marker:" + modifiedTime(marker) + ":" + digest(marker);
+    private RuntimeObservation observeRuntime(ProjectContext project, RuntimeIdentity identity, boolean allowLegacy) {
+        BuildMarkerToken marker = readBuildMarker(project);
+        if (marker.complete()) {
+            return RuntimeObservation.stable(new RuntimeKey(identity, project.name(), marker.version()));
         }
+        if (marker.unstable()) {
+            return RuntimeObservation.unstable(marker.reason());
+        }
+        if (!allowLegacy) {
+            return RuntimeObservation.unstable("completed build marker is temporarily missing");
+        }
+
         String runtimeArtifactFingerprint = runtimeArtifactFingerprint(project);
-        return "mtime:" + runtimeArtifactFingerprint + ":source:" + fingerprint(project.sourceRoot());
+        String version = "mtime:" + runtimeArtifactFingerprint + ":source:" + fingerprint(project.sourceRoot());
+        BuildMarkerToken afterFingerprint = readBuildMarker(project);
+        if (!marker.equals(afterFingerprint)) {
+            return RuntimeObservation.unstable("build marker changed while runtime artifacts were fingerprinted");
+        }
+        return RuntimeObservation.stable(new RuntimeKey(identity, project.name(), version));
+    }
+
+    private BuildMarkerToken readBuildMarker(ProjectContext project) {
+        Path marker = project.bundleRoot().resolve(BuildMarkerService.MARKER_FILE);
+        try {
+            BasicFileAttributes before = Files.readAttributes(marker, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+            if (!before.isRegularFile()) {
+                return BuildMarkerToken.unstable("build marker is not a regular file");
+            }
+            byte[] contents = Files.readAllBytes(marker);
+            BasicFileAttributes after = Files.readAttributes(marker, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+            if (!sameMarkerFile(before, after)) {
+                return BuildMarkerToken.unstable("build marker changed while it was read");
+            }
+            Map<String, Object> value = objectMapper.readValue(contents, new TypeReference<LinkedHashMap<String, Object>>() {
+            });
+            if (!value.containsKey("buildFinishedAt") || !value.containsKey("buildPhases")) {
+                return BuildMarkerToken.unstable("build marker is incomplete");
+            }
+            return BuildMarkerToken.complete("marker:" + after.lastModifiedTime().toMillis() + ":" + digest(contents));
+        } catch (NoSuchFileException exception) {
+            return BuildMarkerToken.missing();
+        } catch (IOException | RuntimeException exception) {
+            return BuildMarkerToken.unstable("build marker cannot be read");
+        }
+    }
+
+    private boolean sameMarkerFile(BasicFileAttributes first, BasicFileAttributes second) {
+        return first.isRegularFile() == second.isRegularFile()
+                && first.size() == second.size()
+                && first.lastModifiedTime().equals(second.lastModifiedTime())
+                && Objects.equals(first.fileKey(), second.fileKey());
     }
 
     private String runtimeArtifactFingerprint(ProjectContext project) {
@@ -255,13 +455,20 @@ public class ProjectRuntimeCache implements AutoCloseable {
         }
     }
 
-    private String digest(Path path) {
+    private String digest(byte[] value) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(Files.readAllBytes(path)));
-        } catch (IOException | NoSuchAlgorithmException exception) {
-            return "unreadable";
+            return HexFormat.of().formatHex(digest.digest(value));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is not available", exception);
         }
+    }
+
+    private static String shortVersion(String version) {
+        if (version == null || version.length() <= 48) {
+            return String.valueOf(version);
+        }
+        return version.substring(0, 48) + "...";
     }
 
     private static List<String> activeProfiles(Environment environment) {
@@ -304,7 +511,309 @@ public class ProjectRuntimeCache implements AutoCloseable {
     private record RuntimeKey(RuntimeIdentity identity, String projectName, String version) {
     }
 
+    private enum BuildMarkerState {
+        COMPLETE,
+        MISSING,
+        UNSTABLE
+    }
+
+    private record BuildMarkerToken(BuildMarkerState state, String version, String reason) {
+
+        private static BuildMarkerToken complete(String version) {
+            return new BuildMarkerToken(BuildMarkerState.COMPLETE, version, "stable build marker");
+        }
+
+        private static BuildMarkerToken missing() {
+            return new BuildMarkerToken(BuildMarkerState.MISSING, null, "build marker is missing");
+        }
+
+        private static BuildMarkerToken unstable(String reason) {
+            return new BuildMarkerToken(BuildMarkerState.UNSTABLE, null, reason);
+        }
+
+        private boolean complete() {
+            return state == BuildMarkerState.COMPLETE;
+        }
+
+        private boolean unstable() {
+            return state == BuildMarkerState.UNSTABLE;
+        }
+    }
+
+    private record RuntimeObservation(RuntimeKey key, String reason) {
+
+        private static RuntimeObservation stable(RuntimeKey key) {
+            return new RuntimeObservation(key, "stable runtime artifacts");
+        }
+
+        private static RuntimeObservation unstable(String reason) {
+            return new RuntimeObservation(null, reason);
+        }
+
+        private boolean stable() {
+            return key != null;
+        }
+    }
+
+    private static final class BuildReadGuard implements AutoCloseable {
+
+        private final FileChannel channel;
+        private final FileLock lock;
+
+        private BuildReadGuard(FileChannel channel, FileLock lock) {
+            this.channel = channel;
+            this.lock = lock;
+        }
+
+        private static BuildReadGuard tryAcquire(ProjectContext project) throws IOException {
+            Path lockFile = project.root().toAbsolutePath().normalize().resolve(".wiz/build.lock");
+            Files.createDirectories(lockFile.getParent());
+            FileChannel channel = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+            try {
+                FileLock lock = channel.tryLock();
+                if (lock == null) {
+                    closeQuietly(channel);
+                    return null;
+                }
+                return new BuildReadGuard(channel, lock);
+            } catch (OverlappingFileLockException exception) {
+                closeQuietly(channel);
+                return null;
+            } catch (IOException | RuntimeException exception) {
+                try {
+                    channel.close();
+                } catch (IOException closeFailure) {
+                    exception.addSuppressed(closeFailure);
+                }
+                throw exception;
+            }
+        }
+
+        private static BuildReadGuard unlocked() {
+            return new BuildReadGuard(null, null);
+        }
+
+        private static void closeQuietly(FileChannel channel) {
+            try {
+                channel.close();
+            } catch (IOException exception) {
+                LOGGER.debug("Failed to close WIZ build lock probe", exception);
+            }
+        }
+
+        @Override
+        public void close() {
+            IOException failure = null;
+            if (lock != null) {
+                try {
+                    lock.release();
+                } catch (IOException exception) {
+                    failure = exception;
+                }
+            }
+            if (channel != null) {
+                try {
+                    channel.close();
+                } catch (IOException exception) {
+                    if (failure == null) {
+                        failure = exception;
+                    } else {
+                        failure.addSuppressed(exception);
+                    }
+                }
+            }
+            if (failure != null) {
+                LOGGER.warn("Failed to release WIZ project runtime build guard", failure);
+            }
+        }
+    }
+
     private record ApiHandlerKey(String handlerClass, String function) {
+    }
+
+    private record RuntimeSnapshot(Path root, ProjectContext project, URL[] classPathUrls) implements AutoCloseable {
+
+        private static RuntimeSnapshot create(ProjectContext project, String version) throws IOException {
+            Path snapshotsRoot = project.root().resolve(".wiz/runtime-snapshots");
+            long processId = ProcessHandle.current().pid();
+            cleanupDeadProcessSnapshots(snapshotsRoot, processId);
+            Path snapshots = snapshotsRoot.resolve(Long.toString(processId));
+            Files.createDirectories(snapshots);
+            String prefix = snapshotPrefix(version);
+            Path root = snapshots.resolve(prefix + "-" + UUID.randomUUID()).toAbsolutePath().normalize();
+            Files.createDirectories(root);
+            try {
+                Path bundle = root.resolve("bundle");
+                linkTreeIfPresent(project.bundleRoot().resolve("src/app"), bundle.resolve("src/app"));
+                linkTreeIfPresent(project.bundleRoot().resolve("src/route"), bundle.resolve("src/route"));
+                linkTreeIfPresent(project.bundleRoot().resolve("config"), bundle.resolve("config"));
+
+                List<Path> entries = ProjectClassPath.apiEntries(project);
+                ArrayList<URL> urls = new ArrayList<>();
+                for (int index = 0; index < entries.size(); index++) {
+                    Path source = entries.get(index);
+                    Path target = root.resolve("classpath")
+                            .resolve(String.format(Locale.ROOT, "%03d-%s", index, source.getFileName()));
+                    if (Files.isDirectory(source, LinkOption.NOFOLLOW_LINKS)) {
+                        linkTree(source, target);
+                    } else {
+                        linkFile(source, target);
+                    }
+                    urls.add(target.toUri().toURL());
+                }
+                ProjectContext snapshotProject = new ProjectContext(
+                        project.name(),
+                        project.packageRoot(),
+                        project.root(),
+                        project.sourceRoot(),
+                        project.appRoot(),
+                        project.modelRoot(),
+                        project.routeRoot(),
+                        project.assetsRoot(),
+                        bundle.resolve("config"),
+                        project.buildRoot(),
+                        bundle);
+                return new RuntimeSnapshot(root, snapshotProject, urls.toArray(URL[]::new));
+            } catch (IOException | RuntimeException | Error exception) {
+                try {
+                    deleteTree(root);
+                } catch (IOException closeFailure) {
+                    exception.addSuppressed(closeFailure);
+                }
+                throw exception;
+            }
+        }
+
+        private static String snapshotPrefix(String version) {
+            try {
+                MessageDigest digest = MessageDigest.getInstance("SHA-256");
+                byte[] value = digest.digest(String.valueOf(version).getBytes(StandardCharsets.UTF_8));
+                return HexFormat.of().formatHex(value, 0, 8);
+            } catch (NoSuchAlgorithmException exception) {
+                return Integer.toUnsignedString(String.valueOf(version).hashCode(), 16);
+            }
+        }
+
+        private static void cleanupDeadProcessSnapshots(Path snapshotsRoot, long currentProcessId) {
+            if (!Files.isDirectory(snapshotsRoot, LinkOption.NOFOLLOW_LINKS)) {
+                return;
+            }
+            try (Stream<Path> children = Files.list(snapshotsRoot)) {
+                for (Path child : children.filter(path -> Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)).toList()) {
+                    long processId;
+                    try {
+                        processId = Long.parseLong(child.getFileName().toString());
+                    } catch (NumberFormatException exception) {
+                        continue;
+                    }
+                    if (processId == currentProcessId || processAlive(processId)) {
+                        continue;
+                    }
+                    try {
+                        deleteTree(child);
+                    } catch (IOException exception) {
+                        LOGGER.warn("Failed to delete abandoned project runtime snapshot: {}", child, exception);
+                    }
+                }
+            } catch (IOException exception) {
+                LOGGER.warn("Failed to scan abandoned project runtime snapshots: {}", snapshotsRoot, exception);
+            }
+        }
+
+        private static boolean processAlive(long processId) {
+            try {
+                return ProcessHandle.of(processId).map(ProcessHandle::isAlive).orElse(false);
+            } catch (SecurityException exception) {
+                return true;
+            }
+        }
+
+        private static void linkTreeIfPresent(Path source, Path target) throws IOException {
+            if (Files.exists(source, LinkOption.NOFOLLOW_LINKS)) {
+                linkTree(source, target);
+            }
+        }
+
+        private static void linkTree(Path source, Path target) throws IOException {
+            try (Stream<Path> paths = Files.walk(source)) {
+                for (Path item : paths.toList()) {
+                    Path relative = source.relativize(item);
+                    Path destination = target.resolve(relative.toString()).normalize();
+                    if (!destination.startsWith(target.normalize())) {
+                        throw new IllegalArgumentException("Runtime snapshot escapes target directory");
+                    }
+                    if (Files.isSymbolicLink(item)) {
+                        throw new IllegalArgumentException("Symbolic links are not allowed in runtime snapshots: " + relative);
+                    }
+                    if (Files.isDirectory(item, LinkOption.NOFOLLOW_LINKS)) {
+                        Files.createDirectories(destination);
+                    } else {
+                        linkFile(item, destination);
+                    }
+                }
+            }
+        }
+
+        private static void linkFile(Path source, Path target) throws IOException {
+            if (Files.isSymbolicLink(source)) {
+                throw new IllegalArgumentException("Symbolic links are not allowed in runtime snapshots: " + source.getFileName());
+            }
+            Files.createDirectories(target.getParent());
+            try {
+                Files.createLink(target, source);
+            } catch (UnsupportedOperationException | IOException exception) {
+                Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+        }
+
+        @Override
+        public void close() throws IOException {
+            deleteTree(root);
+            Path processRoot = root.getParent();
+            if (processRoot != null) {
+                try {
+                    Files.deleteIfExists(processRoot);
+                } catch (java.nio.file.DirectoryNotEmptyException ignored) {
+                    // Other project runtime snapshots are still active.
+                }
+            }
+        }
+
+        private static void deleteTree(Path path) throws IOException {
+            if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
+                return;
+            }
+            try (Stream<Path> paths = Files.walk(path)) {
+                for (Path item : paths.sorted(Comparator.reverseOrder()).toList()) {
+                    Files.deleteIfExists(item);
+                }
+            }
+        }
+    }
+
+    public static final class RuntimeLease implements AutoCloseable {
+
+        private final CachedProjectRuntime runtime;
+        private final AtomicBoolean closed = new AtomicBoolean();
+
+        private RuntimeLease(CachedProjectRuntime runtime) {
+            this.runtime = runtime;
+        }
+
+        public CachedProjectRuntime runtime() {
+            return runtime;
+        }
+
+        @Override
+        public void close() {
+            if (closed.compareAndSet(false, true)) {
+                try {
+                    runtime.release();
+                } catch (RuntimeException exception) {
+                    LOGGER.warn("Failed to close retired project runtime after its last request", exception);
+                }
+            }
+        }
     }
 
     public static final class CachedProjectRuntime implements AutoCloseable {
@@ -312,6 +821,7 @@ public class ProjectRuntimeCache implements AutoCloseable {
         private final ProjectContext project;
         private final ObjectMapper objectMapper;
         private final URLClassLoader classLoader;
+        private final RuntimeSnapshot snapshot;
         private final RuntimeKey key;
         private final List<String> profiles;
         private final ConcurrentHashMap<String, Optional<Map<String, Object>>> appMetadata = new ConcurrentHashMap<>();
@@ -324,11 +834,15 @@ public class ProjectRuntimeCache implements AutoCloseable {
         private final ConcurrentHashMap<String, Optional<ProjectConstructor>> constructors = new ConcurrentHashMap<>();
         private final CopyOnWriteArrayList<AutoCloseable> closeHooks = new CopyOnWriteArrayList<>();
         private volatile List<RouteDefinition> routeDefinitions;
+        private int activeLeases;
+        private boolean retired;
+        private boolean closed;
 
-        private CachedProjectRuntime(ProjectContext project, ObjectMapper objectMapper, URLClassLoader classLoader, RuntimeKey key, List<String> profiles) {
+        private CachedProjectRuntime(ProjectContext project, ObjectMapper objectMapper, URLClassLoader classLoader, RuntimeSnapshot snapshot, RuntimeKey key, List<String> profiles) {
             this.project = project;
             this.objectMapper = objectMapper;
             this.classLoader = classLoader;
+            this.snapshot = snapshot;
             this.key = key;
             this.profiles = profiles;
         }
@@ -344,6 +858,31 @@ public class ProjectRuntimeCache implements AutoCloseable {
         public void onClose(AutoCloseable closeHook) {
             if (closeHook != null) {
                 closeHooks.add(closeHook);
+            }
+        }
+
+        private synchronized RuntimeLease acquire() {
+            if (retired || closed) {
+                throw new IllegalStateException("Project runtime is no longer available: " + key.projectName());
+            }
+            activeLeases++;
+            return new RuntimeLease(this);
+        }
+
+        private void release() {
+            boolean closeNow;
+            synchronized (this) {
+                if (activeLeases == 0) {
+                    return;
+                }
+                activeLeases--;
+                closeNow = retired && activeLeases == 0 && !closed;
+                if (closeNow) {
+                    closed = true;
+                }
+            }
+            if (closeNow) {
+                closeResources();
             }
         }
 
@@ -396,6 +935,20 @@ public class ProjectRuntimeCache implements AutoCloseable {
 
         @Override
         public void close() {
+            boolean closeNow;
+            synchronized (this) {
+                retired = true;
+                closeNow = activeLeases == 0 && !closed;
+                if (closeNow) {
+                    closed = true;
+                }
+            }
+            if (closeNow) {
+                closeResources();
+            }
+        }
+
+        private void closeResources() {
             RuntimeException failure = null;
             for (AutoCloseable closeHook : closeHooks.reversed()) {
                 try {
@@ -416,6 +969,16 @@ public class ProjectRuntimeCache implements AutoCloseable {
                 classLoader.close();
             } catch (IOException exception) {
                 IllegalStateException wrapped = new IllegalStateException("Failed to close project runtime classloader", exception);
+                if (failure == null) {
+                    failure = wrapped;
+                } else {
+                    failure.addSuppressed(wrapped);
+                }
+            }
+            try {
+                snapshot.close();
+            } catch (IOException exception) {
+                IllegalStateException wrapped = new IllegalStateException("Failed to delete project runtime snapshot", exception);
                 if (failure == null) {
                     failure = wrapped;
                 } else {

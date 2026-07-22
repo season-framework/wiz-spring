@@ -16,11 +16,15 @@ import com.wiz.runtime.WizContext;
 import com.wiz.runtime.WizResult;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class ControllerChain {
 
     public static final String DEFAULT_CONTROLLER_NAME = "base";
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(ControllerChain.class);
 
     private final ProjectRuntimeCache runtimeCache;
 
@@ -55,6 +59,7 @@ public class ControllerChain {
             }
             return Optional.empty();
         } catch (ProjectReflectionException exception) {
+            LOGGER.error("WIZ controller chain metadata lookup failed: controllers={}", controllerNames, exception);
             return Optional.of(context.response().status(500, Map.of("error", "controller chain failed")));
         } finally {
             Thread.currentThread().setContextClassLoader(previousLoader);
@@ -100,8 +105,11 @@ public class ControllerChain {
             if (exception.getCause() instanceof WizBadRequestException badRequest) {
                 return Optional.of(context.response().status(400, badRequest.data()));
             }
+            LOGGER.error("WIZ controller hook invocation failed: controller={}", controllerClass,
+                    exception.getCause() == null ? exception : exception.getCause());
             return Optional.of(context.response().status(500, Map.of("error", "controller chain failed")));
         } catch (ReflectiveOperationException exception) {
+            LOGGER.error("WIZ controller hook reflection failed: controller={}", controllerClass, exception);
             return Optional.of(context.response().status(500, Map.of("error", "controller chain failed")));
         }
     }

@@ -47,6 +47,7 @@ class CompletionCommandTest {
         assertTrue(bash.contains("--runtime-jar=<runtimeJar>"));
         assertFalse(bash.contains("Usage: wiz-spring codex"));
         assertTrue(bash.contains("Usage: wiz-spring create"));
+        assertTrue(bash.contains("Usage: wiz-spring service logs"));
         assertTrue(bash.contains("Base Java package for generated source"));
         assertTrue(bash.contains("Generate a shell completion script for Bash or Zsh."));
 

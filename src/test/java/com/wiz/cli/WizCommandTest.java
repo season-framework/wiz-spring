@@ -106,14 +106,69 @@ class WizCommandTest {
     void runDryRunDoesNotStartServer() throws Exception {
         Path workspace = minimalWorkspace("run-workspace");
         Path child = workspace.resolve("src/app/page.dashboard");
+        Path log = tempDir.resolve("server.log");
         StringWriter output = new StringWriter();
         CommandLine command = new CommandLine(new WizCommand());
         command.setOut(new PrintWriter(output));
 
-        int exitCode = command.execute("run", "--dry-run", "--root", child.toString(), "--port", "18080", "--bundle", "--profile", "prod", "--log", tempDir.resolve("server.log").toString());
+        int exitCode = command.execute("run", "--dry-run", "--root", child.toString(), "--port", "18080", "--bundle", "--profile", "prod", "--log", log.toString());
 
         assertEquals(0, exitCode);
-        assertTrue(output.toString().contains("root=" + workspace));
+        String diagnostics = output.toString();
+        assertTrue(diagnostics.contains("root=" + workspace));
+        assertTrue(diagnostics.contains("host="));
+        assertTrue(diagnostics.contains("port=18080"));
+        assertTrue(diagnostics.contains("bundle=true"));
+        assertTrue(diagnostics.contains("profile=prod"));
+        assertTrue(diagnostics.contains("config=optional:"));
+        assertTrue(diagnostics.contains("java=" + System.getProperty("java.version")));
+        assertTrue(diagnostics.contains("log=" + log.toAbsolutePath().normalize()));
+        assertFalse(Files.exists(log), "dry-run must not create the log file");
+    }
+
+    @Test
+    void runRejectsDirectoryAsLogFile() throws Exception {
+        Path workspace = minimalWorkspace("run-log-directory");
+        Path logDirectory = tempDir.resolve("logs");
+        Files.createDirectories(logDirectory);
+        StringWriter error = new StringWriter();
+        CommandLine command = new CommandLine(new WizCommand());
+        command.setErr(new PrintWriter(error));
+
+        assertEquals(1, command.execute(
+                "run", "--dry-run", "--root", workspace.toString(), "--log", logDirectory.toString()));
+        assertTrue(error.toString().contains("WIZ log path must be a file"));
+    }
+
+    @Test
+    void runRejectsWorkspaceWithoutACompletedBundleBeforeOpeningLog() throws Exception {
+        Path workspace = minimalWorkspace("unbuilt-run-workspace");
+        Path log = tempDir.resolve("unbuilt-server.log");
+        StringWriter error = new StringWriter();
+        CommandLine command = new CommandLine(new WizCommand());
+        command.setErr(new PrintWriter(error));
+
+        assertEquals(1, command.execute("run", "--root", workspace.toString(), "--log", log.toString()));
+        assertTrue(error.toString().contains("bundle/.wiz-build.json is missing or invalid"));
+        assertTrue(error.toString().contains("wiz-spring build"));
+        assertTrue(error.toString().contains("Maven on PATH"));
+        assertFalse(Files.exists(log));
+    }
+
+    @Test
+    void bundleRejectsWorkspaceAsOutputWithoutDeletingSources() throws Exception {
+        Path workspace = minimalWorkspace("unsafe-bundle-output");
+        Files.createDirectories(workspace.resolve("bundle/src/app"));
+        Path source = workspace.resolve("src/app/page.dashboard/app.json");
+        Files.writeString(source, "{}\n");
+        StringWriter error = new StringWriter();
+        CommandLine command = new CommandLine(new WizCommand());
+        command.setErr(new PrintWriter(error));
+
+        assertEquals(1, command.execute(
+                "bundle", "--root", workspace.toString(), "--output", workspace.toString()));
+        assertTrue(error.toString().contains("must not be the workspace"));
+        assertTrue(Files.isRegularFile(source));
     }
 
     @Test
@@ -175,10 +230,10 @@ class WizCommandTest {
         assertTrue(dryRun.contains("#!/bin/bash"));
         assertTrue(dryRun.contains("export PS1=${PS1:-wiz-service}"));
         assertTrue(dryRun.contains("shopt -s expand_aliases"));
-        assertTrue(dryRun.contains("source /root/.bashrc"));
+        assertTrue(dryRun.contains("[ -r /root/.bashrc ]"));
         assertTrue(dryRun.contains("cd '" + tempDir.resolve("workspace") + "'"));
         assertTrue(dryRun.contains("type 'wiz-spring' >/dev/null 2>&1"));
-        assertTrue(dryRun.contains("wiz-spring run"));
+        assertTrue(dryRun.contains("exec wiz-spring run"));
         assertTrue(dryRun.contains("# wiz.service.port=config"));
         assertTrue(dryRun.contains("# wiz.service.command=wiz-spring"));
         assertTrue(dryRun.contains("--bundle"));
@@ -188,10 +243,71 @@ class WizCommandTest {
         assertFalse(dryRun.contains(" run --root "));
         assertFalse(dryRun.contains("--host 0.0.0.0"));
         assertFalse(dryRun.contains("--port 3000"));
+        assertTrue(dryRun.contains("RestartSec=5s"));
+        assertTrue(dryRun.contains("TimeoutStopSec=30s"));
+        assertTrue(dryRun.contains("SuccessExitStatus=143"));
 
         output.getBuffer().setLength(0);
         assertEquals(0, command.execute("service", "rm", "demo", "--dry-run", "--systemd-dir", systemd.toString(), "--bin-dir", bin.toString()));
         assertTrue(output.toString().contains(bin.resolve("wiz.demo").toString()));
+    }
+
+    @Test
+    void serviceRegistrationRejectsLineBreakingMetadataAndPathInputs() throws Exception {
+        Path systemd = tempDir.resolve("safe-systemd");
+        Path bin = tempDir.resolve("safe-bin");
+        Path logDir = tempDir.resolve("safe-log");
+        Files.createDirectories(systemd);
+        Files.createDirectories(bin);
+        Files.createDirectories(logDir);
+        Path workspace = minimalWorkspace("safe-service-workspace");
+        Path lineBreakingWorkspace = minimalWorkspace("service-workspace\nprintf-injected");
+
+        assertServiceRegistrationRejected(
+                "Workspace root must be a single line",
+                "demo",
+                "--root", lineBreakingWorkspace.toString(),
+                "--dry-run",
+                "--systemd-dir", systemd.toString(),
+                "--bin-dir", bin.toString(),
+                "--log-dir", logDir.toString());
+        assertServiceRegistrationRejected(
+                "Log path must be a single line",
+                "demo",
+                "--root", workspace.toString(),
+                "--log", tempDir.resolve("server.log\nprintf-injected").toString(),
+                "--dry-run",
+                "--systemd-dir", systemd.toString(),
+                "--bin-dir", bin.toString());
+        assertServiceRegistrationRejected(
+                "Service name must be a single line",
+                "demo\nprintf-injected",
+                "--root", workspace.toString(),
+                "--dry-run",
+                "--systemd-dir", systemd.toString(),
+                "--bin-dir", bin.toString());
+        assertServiceRegistrationRejected(
+                "Service command must be a single line",
+                "demo",
+                "--root", workspace.toString(),
+                "--command", "wiz-spring\nprintf-injected",
+                "--dry-run",
+                "--systemd-dir", systemd.toString(),
+                "--bin-dir", bin.toString());
+        assertServiceRegistrationRejected(
+                "Service definition path must be a single line",
+                "demo",
+                "--root", workspace.toString(),
+                "--dry-run",
+                "--systemd-dir", tempDir.resolve("systemd\nprintf-injected").toString(),
+                "--bin-dir", bin.toString());
+        assertServiceRegistrationRejected(
+                "Service executable path must be an absolute path without whitespace",
+                "demo",
+                "--root", workspace.toString(),
+                "--dry-run",
+                "--systemd-dir", systemd.toString(),
+                "--bin-dir", tempDir.resolve("bin path;systemd-injected").toString());
     }
 
     @Test
@@ -226,6 +342,34 @@ class WizCommandTest {
     }
 
     @Test
+    void serviceLogsShowsApplicationLogAndInvokesJournalctl() throws Exception {
+        Path bin = tempDir.resolve("logs-bin");
+        Path logDir = tempDir.resolve("logs-dir");
+        Files.createDirectories(bin);
+        Files.createDirectories(logDir);
+        Path applicationLog = logDir.resolve("custom-demo.log");
+        Files.writeString(bin.resolve("wiz.demo"), "#!/bin/sh\n# wiz.service.log=" + applicationLog + "\n");
+
+        Path calls = tempDir.resolve("journalctl.calls");
+        Path journalctl = tempDir.resolve("journalctl");
+        Files.writeString(journalctl, "#!/bin/sh\nprintf '%s\\n' \"$*\" > '" + calls + "'\n");
+        journalctl.toFile().setExecutable(true, false);
+        StringWriter output = new StringWriter();
+        CommandLine command = new CommandLine(new WizCommand());
+        command.setOut(new PrintWriter(output));
+
+        assertEquals(0, command.execute(
+                "service", "logs", "demo", "--lines", "25", "--follow",
+                "--journalctl", journalctl.toString(),
+                "--bin-dir", bin.toString(),
+                "--log-dir", logDir.toString()));
+
+        assertTrue(output.toString().contains("Service: wiz.demo"));
+        assertTrue(output.toString().contains("Application log: " + applicationLog));
+        assertEquals("--unit wiz.demo --lines 25 --no-pager --follow" + System.lineSeparator(), Files.readString(calls));
+    }
+
+    @Test
     void workspaceCommandsRejectNonWorkspaceRoots() {
         Path outside = tempDir.resolve("outside");
         StringWriter error = new StringWriter();
@@ -246,6 +390,103 @@ class WizCommandTest {
         service.setErr(new PrintWriter(error));
         assertEquals(1, service.execute("service", "install", "demo", "--root", outside.toString(), "--dry-run"));
         assertTrue(error.toString().contains("WIZ Spring workspace root not found"));
+        assertTrue(error.toString().contains("config/wiz.yml"));
+        assertTrue(error.toString().contains("wiz-spring create"));
+    }
+
+    @Test
+    void workspaceCommandsRejectGenericSpringAndMalformedWizLayouts() throws Exception {
+        Path generic = tempDir.resolve("generic-spring");
+        Files.createDirectories(generic.resolve("config"));
+        Files.createDirectories(generic.resolve("src/main/java"));
+        Files.writeString(generic.resolve("config/application.yml"), "server:\n  port: 18080\n");
+        StringWriter error = new StringWriter();
+        CommandLine genericRun = new CommandLine(new WizCommand());
+        genericRun.setErr(new PrintWriter(error));
+
+        assertEquals(1, genericRun.execute("run", "--dry-run", "--root", generic.toString()));
+        assertTrue(error.toString().contains("config/wiz.yml"));
+
+        Path wrongRuntime = tempDir.resolve("python-marker");
+        Files.createDirectories(wrongRuntime.resolve("config"));
+        Files.createDirectories(wrongRuntime.resolve("src/app"));
+        Files.writeString(wrongRuntime.resolve("config/application.yml"), "server:\n  port: 18081\n");
+        Files.writeString(wrongRuntime.resolve("config/wiz.yml"), "workspace: python\n");
+        error.getBuffer().setLength(0);
+        CommandLine wrongRuntimeRun = new CommandLine(new WizCommand());
+        wrongRuntimeRun.setErr(new PrintWriter(error));
+
+        assertEquals(1, wrongRuntimeRun.execute("run", "--dry-run", "--root", wrongRuntime.toString()));
+        assertTrue(error.toString().contains("workspace must be 'java'"));
+
+        Path missingSources = tempDir.resolve("missing-wiz-sources");
+        Files.createDirectories(missingSources.resolve("config"));
+        Files.writeString(missingSources.resolve("config/application.yml"), "server:\n  port: 18082\n");
+        Files.writeString(missingSources.resolve("config/wiz.yml"), "workspace: java\n");
+        error.getBuffer().setLength(0);
+        CommandLine missingSourcesBuild = new CommandLine(new WizCommand());
+        missingSourcesBuild.setErr(new PrintWriter(error));
+
+        assertEquals(1, missingSourcesBuild.execute(
+                "build", "--phase", "reconstruct", "--root", missingSources.toString()));
+        assertTrue(error.toString().contains("expected src/app or bundle/src/app"));
+    }
+
+    @Test
+    void buildUsesExecutableWorkspaceMavenWrapper() throws Exception {
+        Path workspace = minimalWorkspace("maven-wrapper-workspace");
+        Files.writeString(workspace.resolve("pom.xml"), """
+                <project xmlns="http://maven.apache.org/POM/4.0.0">
+                  <modelVersion>4.0.0</modelVersion>
+                  <groupId>com.example</groupId>
+                  <artifactId>wrapper-test</artifactId>
+                  <version>1.0.0</version>
+                </project>
+                """);
+        Path calls = tempDir.resolve("mvnw.calls");
+        Path wrapper = workspace.resolve("mvnw");
+        Files.writeString(wrapper, "#!/bin/sh\nprintf '%s\\n' \"$*\" > '" + calls + "'\n");
+        wrapper.toFile().setExecutable(true, false);
+
+        assertEquals(0, new CommandLine(new WizCommand()).execute(
+                "build", "--root", workspace.toString(), "--phase", "compile"));
+        String invoked = Files.readString(calls);
+        assertTrue(invoked.contains("--batch-mode"));
+        assertTrue(invoked.contains("dependency:copy-dependencies"));
+    }
+
+    @Test
+    void buildReportsBrokenMavenWrapperBeforeChangingWorkspace() throws Exception {
+        Path workspace = minimalWorkspace("broken-maven-wrapper-workspace");
+        Files.writeString(workspace.resolve("pom.xml"), "<project/>\n");
+        Path wrapper = workspace.resolve("mvnw");
+        Files.writeString(wrapper, "#!/bin/sh\nexit 0\n");
+        wrapper.toFile().setExecutable(false, false);
+        StringWriter error = new StringWriter();
+        CommandLine command = new CommandLine(new WizCommand());
+        command.setErr(new PrintWriter(error));
+
+        assertEquals(1, command.execute(
+                "build", "--root", workspace.toString(), "--phase", "compile"));
+        assertTrue(error.toString().contains("Maven Wrapper is not executable"));
+        assertTrue(error.toString().contains("chmod +x mvnw"));
+        assertFalse(Files.exists(workspace.resolve("build")), "prerequisite checks must run before build output is changed");
+    }
+
+    @Test
+    void runAcceptsDeployBundleWorkspaceLayout() throws Exception {
+        Path workspace = tempDir.resolve("deploy-bundle-workspace");
+        Files.createDirectories(workspace.resolve("config"));
+        Files.createDirectories(workspace.resolve("bundle/src/app"));
+        Files.writeString(workspace.resolve("config/application.yml"), "server:\n  port: 18083\n");
+        Files.writeString(workspace.resolve("config/wiz.yml"), "workspace: java\n");
+        StringWriter output = new StringWriter();
+        CommandLine command = new CommandLine(new WizCommand());
+        command.setOut(new PrintWriter(output));
+
+        assertEquals(0, command.execute("run", "--dry-run", "--root", workspace.toString(), "--bundle"));
+        assertTrue(output.toString().contains("root=" + workspace.toAbsolutePath().normalize()));
+        assertTrue(output.toString().contains("bundle=true"));
     }
 
     @Test
@@ -259,6 +500,7 @@ class WizCommandTest {
         assertEquals(0, new CommandLine(new WizCommand()).execute("bundle", "--help"));
         assertEquals(0, new CommandLine(new WizCommand()).execute("kill", "--help"));
         assertEquals(0, new CommandLine(new WizCommand()).execute("service", "--help"));
+        assertEquals(0, new CommandLine(new WizCommand()).execute("service", "logs", "--help"));
         assertEquals(0, new CommandLine(new WizCommand()).execute("mcp", "--help"));
         assertEquals(0, new CommandLine(new WizCommand()).execute("completion", "--help"));
         assertEquals(0, new CommandLine(new WizCommand()).execute(
@@ -349,6 +591,23 @@ class WizCommandTest {
         assertTrue(Files.readString(workspace.resolve(".github/prompts/development-rules.prompt.md"))
                 .contains("WIZ Spring"));
         assertTrue(Files.isRegularFile(workspace.resolve(".github/short-instructions.md")));
+    }
+
+    private void assertServiceRegistrationRejected(String expectedError, String name, String... options) {
+        StringWriter output = new StringWriter();
+        StringWriter error = new StringWriter();
+        CommandLine command = new CommandLine(new WizCommand());
+        command.setOut(new PrintWriter(output));
+        command.setErr(new PrintWriter(error));
+        java.util.ArrayList<String> args = new java.util.ArrayList<>();
+        args.add("service");
+        args.add("install");
+        args.add(name);
+        args.addAll(java.util.List.of(options));
+
+        assertEquals(1, command.execute(args.toArray(String[]::new)));
+        assertTrue(error.toString().contains(expectedError), error.toString());
+        assertFalse(output.toString().contains("# wiz.service."));
     }
 
     private void deleteIfExists(Path path) throws Exception {

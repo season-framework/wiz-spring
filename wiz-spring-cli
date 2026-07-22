@@ -3,8 +3,26 @@ set -eu
 
 runtime_jar="${WIZ_RUNTIME_JAR:-/opt/wiz-spring/wiz-spring.jar}"
 
-if [ ! -f "$runtime_jar" ]; then
+if [ ! -e "$runtime_jar" ]; then
     printf 'WIZ Spring runtime jar not found: %s\n' "$runtime_jar" >&2
+    printf 'Build it with ./mvnw clean package or set WIZ_RUNTIME_JAR to the packaged executable jar.\n' >&2
+    exit 1
+fi
+if [ ! -f "$runtime_jar" ]; then
+    printf 'WIZ Spring runtime jar is not a regular file: %s\n' "$runtime_jar" >&2
+    exit 1
+fi
+if [ ! -r "$runtime_jar" ]; then
+    printf 'WIZ Spring runtime jar is not readable: %s\n' "$runtime_jar" >&2
+    exit 1
+fi
+if [ ! -s "$runtime_jar" ]; then
+    printf 'WIZ Spring runtime jar is empty: %s\n' "$runtime_jar" >&2
+    printf 'Rebuild it with ./mvnw clean package and retry.\n' >&2
+    exit 1
+fi
+if ! command -v java >/dev/null 2>&1; then
+    printf 'Java was not found on PATH. WIZ Spring requires Java 21 or newer.\n' >&2
     exit 1
 fi
 

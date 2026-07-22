@@ -63,6 +63,8 @@ class ProjectServiceTest {
         assertTrue(gitignore.contains("/config/application.yml"));
         assertTrue(gitignore.contains("/config/application-*.yml"));
         assertTrue(gitignore.contains("!/config/application-*.example.yml"));
+        assertFalse(gitignore.lines().anyMatch(line -> line.trim().equals("package-lock.json")));
+        assertTrue(Files.isRegularFile(project.sourceRoot().resolve("angular/package-lock.json")));
         assertEquals("| 날짜 | ID | 작업 내용 | 상세 |\n|------|-----|----------|------|\n",
                 Files.readString(project.root().resolve("devlog.md")));
         try (var devlogs = Files.list(project.root().resolve("devlog"))) {

@@ -16,6 +16,7 @@ hs_err_pid*
 replay_pid*
 
 # WIZ runtime workspaces and generated project output
+/.wiz/
 /config/
 /project/
 /public/

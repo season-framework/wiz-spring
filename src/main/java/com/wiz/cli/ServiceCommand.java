@@ -26,6 +26,7 @@ import picocli.CommandLine.Spec;
         ServiceCommand.Regist.class,
         ServiceCommand.Unregist.class,
         ServiceCommand.Status.class,
+        ServiceCommand.Logs.class,
         ServiceCommand.Start.class,
         ServiceCommand.Stop.class,
         ServiceCommand.Restart.class
@@ -112,6 +113,8 @@ public class ServiceCommand implements Callable<Integer> {
             Path logPath = log == null ? logDir.resolve(shortName) : log.toAbsolutePath().normalize();
             Path commandPath = binDir.resolve(serviceName);
             Path servicePath = systemdDir.resolve(serviceName + ".service");
+            requireSystemdExecutablePath(commandPath);
+            requireSingleLine("Service definition path", servicePath.toString());
             ServiceRunArgs parsed = parseRunArgs(runArgs);
             String script = script(serviceName, commandName, rootPath, parsed.port(), parsed.bundle(), logPath);
             String unit = unit(serviceName, commandPath);
@@ -189,6 +192,58 @@ public class ServiceCommand implements Callable<Integer> {
         }
     }
 
+    @Command(name = "logs", aliases = {"log"}, mixinStandardHelpOptions = true,
+            description = "Show recent WIZ service journal logs.")
+    static class Logs implements Callable<Integer> {
+        @Spec
+        private CommandSpec spec;
+
+        @Parameters(index = "0", description = "Service name.")
+        private String name;
+
+        @Option(names = {"-n", "--lines"}, defaultValue = "200", description = "Number of recent journal lines (1-10000).")
+        private int lines;
+
+        @Option(names = {"-f", "--follow"}, description = "Continue following new journal entries.")
+        private boolean follow;
+
+        @Option(names = "--journalctl", hidden = true)
+        private Path journalctl = Path.of("journalctl");
+
+        @Option(names = "--bin-dir", hidden = true)
+        private Path binDir = DEFAULT_BIN_DIR;
+
+        @Option(names = "--log-dir", hidden = true)
+        private Path logDir = DEFAULT_LOG_DIR;
+
+        @Override
+        public Integer call() throws Exception {
+            ensureLinux();
+            if (lines < 1 || lines > 10_000) {
+                throw new IllegalArgumentException("Journal line count must be between 1 and 10000");
+            }
+            String normalized = serviceName(name);
+            String shortName = shortServiceName(normalized);
+            String applicationLog = metadata(binDir.resolve(normalized))
+                    .getOrDefault("log", logDir.resolve(shortName).toString());
+            var out = spec.commandLine().getOut();
+            out.println("Service: " + normalized);
+            out.println("Application log: " + applicationLog);
+            out.flush();
+
+            ArrayList<String> args = new ArrayList<>();
+            args.add("--unit");
+            args.add(normalized);
+            args.add("--lines");
+            args.add(String.valueOf(lines));
+            args.add("--no-pager");
+            if (follow) {
+                args.add("--follow");
+            }
+            return runCommand(journalctl, args);
+        }
+    }
+
     @Command(name = "start", mixinStandardHelpOptions = true, description = "Start WIZ service(s).")
     static class Start extends ServiceAction {
         Start() {
@@ -260,7 +315,7 @@ public class ServiceCommand implements Callable<Integer> {
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("Service name is required");
         }
-        String normalized = name.toLowerCase(Locale.ROOT);
+        String normalized = requireSingleLine("Service name", name).toLowerCase(Locale.ROOT);
         if (!normalized.startsWith("wiz.")) {
             normalized = "wiz." + normalized;
         }
@@ -299,7 +354,7 @@ public class ServiceCommand implements Callable<Integer> {
         if (command == null || command.isBlank()) {
             throw new IllegalArgumentException("Service command is required");
         }
-        String normalized = command.trim();
+        String normalized = requireSingleLine("Service command", command).trim();
         if (!normalized.matches("[A-Za-z0-9_./+~-]+")) {
             throw new IllegalArgumentException("Service command contains unsupported shell characters: " + command);
         }
@@ -307,34 +362,45 @@ public class ServiceCommand implements Callable<Integer> {
     }
 
     private static String script(String serviceName, String command, Path root, Integer port, boolean bundle, Path log) {
+        String safeServiceName = requireSingleLine("Service name", serviceName);
+        String safeCommand = requireSingleLine("Service command", command);
+        String rootValue = requireSingleLine("Workspace root", root.toString());
+        String logValue = requireSingleLine("Log path", log.toString());
         return "#!/bin/bash\n"
-                + "# wiz.service.name=" + shortServiceName(serviceName) + "\n"
-                + "# wiz.service.root=" + root + "\n"
-                + "# wiz.service.port=" + (port == null ? "config" : port) + "\n"
-                + "# wiz.service.bundle=" + bundle + "\n"
-                + "# wiz.service.log=" + log + "\n"
-                + "# wiz.service.command=" + command + "\n"
+                + metadataLine("name", shortServiceName(safeServiceName))
+                + metadataLine("root", rootValue)
+                + metadataLine("port", port == null ? "config" : String.valueOf(port))
+                + metadataLine("bundle", String.valueOf(bundle))
+                + metadataLine("log", logValue)
+                + metadataLine("command", safeCommand)
                 + "export PS1=${PS1:-wiz-service}\n"
                 + "shopt -s expand_aliases\n"
-                + "source /root/.bashrc\n"
-                + "cd " + shell(root.toString()) + "\n"
-                + "type " + shell(command) + " >/dev/null 2>&1 || { echo " + shell(command + " command not found after sourcing /root/.bashrc") + " >&2; exit 127; }\n"
-                + command + " run"
+                + "cd " + shell(rootValue) + "\n"
+                + "if ! type " + shell(safeCommand) + " >/dev/null 2>&1 && [ -r /root/.bashrc ]; then source /root/.bashrc; fi\n"
+                + "type " + shell(safeCommand) + " >/dev/null 2>&1 || { echo " + shell(safeCommand + " command not found; install it on PATH or use service install --command /absolute/path") + " >&2; exit 127; }\n"
+                + "exec " + safeCommand + " run"
                 + (port == null ? "" : " --port " + port)
                 + (bundle ? " --bundle" : "")
-                + " --log " + shell(log.toString())
+                + " --log " + shell(logValue)
                 + "\n";
     }
 
     private static String unit(String serviceName, Path commandPath) {
+        String safeServiceName = requireSingleLine("Service name", serviceName);
+        String execStart = requireSystemdExecutablePath(commandPath);
         return "[Unit]\n"
-                + "Description=" + serviceName + "\n"
-                + "After=syslog.target network.target\n\n"
+                + "Description=" + safeServiceName + "\n"
+                + "Wants=network-online.target\n"
+                + "After=network-online.target\n\n"
                 + "[Service]\n"
                 + "Type=simple\n"
                 + "Environment=\"PATH=/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin\"\n"
-                + "ExecStart=" + commandPath + "\n"
-                + "Restart=on-failure\n\n"
+                + "ExecStart=" + execStart + "\n"
+                + "Restart=on-failure\n"
+                + "RestartSec=5s\n"
+                + "TimeoutStopSec=30s\n"
+                + "SuccessExitStatus=143\n"
+                + "UMask=0027\n\n"
                 + "[Install]\n"
                 + "WantedBy=multi-user.target\n";
     }
@@ -344,15 +410,52 @@ public class ServiceCommand implements Callable<Integer> {
     }
 
     private static int runSystemctl(Path systemctl, String... args) throws IOException, InterruptedException {
-        java.util.ArrayList<String> argv = new java.util.ArrayList<>();
-        argv.add(systemctl.toString());
-        argv.addAll(List.of(args));
+        return runCommand(systemctl, List.of(args));
+    }
+
+    private static int runCommand(Path command, List<String> args) throws IOException, InterruptedException {
+        ArrayList<String> argv = new ArrayList<>();
+        argv.add(requireSingleLine("Command path", command.toString()));
+        argv.addAll(args);
         Process process = new ProcessBuilder(argv).inheritIO().start();
         return process.waitFor();
     }
 
     private static String shell(String value) {
-        return "'" + value.replace("'", "'\"'\"'") + "'";
+        return "'" + requireSingleLine("Shell value", value).replace("'", "'\"'\"'") + "'";
+    }
+
+    private static String metadataLine(String key, String value) {
+        if (key == null || !key.matches("[a-z][a-z0-9.-]*")) {
+            throw new IllegalArgumentException("Invalid service metadata key");
+        }
+        return "# wiz.service." + key + "="
+                + requireSingleLine("Service metadata '" + key + "'", value)
+                + "\n";
+    }
+
+    private static String requireSingleLine(String label, String value) {
+        if (value == null) {
+            throw new IllegalArgumentException(label + " is required");
+        }
+        if (!isSafeSingleLine(value)) {
+            throw new IllegalArgumentException(label + " must be a single line without control characters");
+        }
+        return value;
+    }
+
+    private static boolean isSafeSingleLine(String value) {
+        return value.codePoints().noneMatch(codePoint -> Character.isISOControl(codePoint)
+                || Character.getType(codePoint) == Character.LINE_SEPARATOR
+                || Character.getType(codePoint) == Character.PARAGRAPH_SEPARATOR);
+    }
+
+    private static String requireSystemdExecutablePath(Path path) {
+        String value = requireSingleLine("Service executable path", path == null ? null : path.toString());
+        if (!path.isAbsolute() || !value.matches("/[A-Za-z0-9_./+~-]+")) {
+            throw new IllegalArgumentException("Service executable path must be an absolute path without whitespace or systemd expansion characters");
+        }
+        return value;
     }
 
     static List<ServiceDescriptor> describeServices(Path systemdDir, Path binDir, Path logDir) throws IOException {
@@ -424,7 +527,7 @@ public class ServiceCommand implements Callable<Integer> {
                 }
                 String key = line.substring("# wiz.service.".length(), separator).trim();
                 String value = line.substring(separator + 1).trim();
-                if (!key.isBlank() && !value.isBlank()) {
+                if (!key.isBlank() && !value.isBlank() && isSafeSingleLine(key) && isSafeSingleLine(value)) {
                     values.put(key, value);
                 }
             }

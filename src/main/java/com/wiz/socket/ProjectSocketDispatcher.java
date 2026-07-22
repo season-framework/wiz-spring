@@ -23,11 +23,15 @@ import com.wiz.runtime.WizResult;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import tools.jackson.databind.ObjectMapper;
 
 @Service
 public class ProjectSocketDispatcher {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(ProjectSocketDispatcher.class);
 
     private final PathService paths;
     private final SocketRoomRegistry rooms;
@@ -143,8 +147,12 @@ public class ProjectSocketDispatcher {
             }
             return eventHandler.handle(session, payload == null ? Map.of() : payload, rooms);
         } catch (ProjectTypeMismatchException exception) {
+            LOGGER.warn("WIZ socket handler type mismatch: namespace={} event={} handler={}",
+                    session.namespace().path(), event, handlerClass, exception);
             return new SocketEventResult(false, event, exception.getMessage());
         } catch (ReflectiveOperationException | ProjectReflectionException exception) {
+            LOGGER.error("WIZ socket dispatch failed: namespace={} event={} handler={}",
+                    session.namespace().path(), event, handlerClass, exception);
             return new SocketEventResult(false, event, "socket dispatch failed");
         } finally {
             Thread.currentThread().setContextClassLoader(previousLoader);

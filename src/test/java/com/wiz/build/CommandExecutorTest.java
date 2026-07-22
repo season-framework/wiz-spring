@@ -81,4 +81,24 @@ class CommandExecutorTest {
         assertTrue(result.success());
         assertTrue(result.output().contains("ng ok"));
     }
+
+    @Test
+    void resolvesMavenToWorkspaceWrapper() throws Exception {
+        CommandExecutor executor = new CommandExecutor();
+        Path root = tempDir.resolve("wrapper-root");
+        Files.createDirectories(root);
+        Path wrapper = root.resolve("mvnw");
+        Files.writeString(wrapper, "#!/bin/sh\nprintf 'workspace-wrapper %s\\n' \"$*\"\n");
+        wrapper.toFile().setExecutable(true, false);
+
+        CommandResult result = executor.run(
+                "test",
+                root,
+                root,
+                List.of("mvn", "--version"),
+                Duration.ofSeconds(2));
+
+        assertTrue(result.success());
+        assertTrue(result.output().contains("workspace-wrapper --version"));
+    }
 }

@@ -26,6 +26,7 @@ public class WizContext implements AutoCloseable {
     private final Map<String, Object> modelRegistry;
     private final List<Runnable> cleanupHooks;
     private volatile ProjectRuntimeCache.CachedProjectRuntime projectRuntime;
+    private volatile ProjectRuntimeCache.RuntimeLease runtimeLease;
 
     public WizContext(WizRequest request, WizResponse response, ProjectContext project) {
         this(request, response, project, new ProjectRuntimeCache(), new WizRedirectProperties(), new ProjectObservabilityRegistry());
@@ -57,9 +58,23 @@ public class WizContext implements AutoCloseable {
         this.observability = observability == null ? new ProjectObservabilityRegistry() : observability;
         this.modelRegistry = new LinkedHashMap<>();
         this.cleanupHooks = new ArrayList<>();
-        this.config = new ConfigService(project, projectRuntime());
-        this.session = ProjectExtensionLoader.session(this, request.httpSession());
-        this.auth = ProjectExtensionLoader.auth(this);
+        ProjectRuntimeCache.RuntimeLease acquired = this.runtimeCache.acquire(project);
+        this.runtimeLease = acquired;
+        this.projectRuntime = acquired.runtime();
+        try {
+            this.config = new ConfigService(project, projectRuntime);
+            this.session = ProjectExtensionLoader.session(this, request.httpSession());
+            this.auth = ProjectExtensionLoader.auth(this);
+        } catch (RuntimeException | Error exception) {
+            this.runtimeLease = null;
+            this.projectRuntime = null;
+            try {
+                acquired.close();
+            } catch (RuntimeException closeFailure) {
+                exception.addSuppressed(closeFailure);
+            }
+            throw exception;
+        }
     }
 
     public WizRequest request() {
@@ -101,8 +116,7 @@ public class WizContext implements AutoCloseable {
     public ProjectRuntimeCache.CachedProjectRuntime projectRuntime() {
         ProjectRuntimeCache.CachedProjectRuntime runtime = projectRuntime;
         if (runtime == null) {
-            runtime = runtimeCache.get(project);
-            projectRuntime = runtime;
+            throw new IllegalStateException("WIZ context is already closed");
         }
         return runtime;
     }
@@ -132,6 +146,20 @@ public class WizContext implements AutoCloseable {
         for (Runnable cleanupHook : hooks.reversed()) {
             try {
                 cleanupHook.run();
+            } catch (RuntimeException exception) {
+                if (failure == null) {
+                    failure = exception;
+                } else {
+                    failure.addSuppressed(exception);
+                }
+            }
+        }
+        ProjectRuntimeCache.RuntimeLease lease = runtimeLease;
+        runtimeLease = null;
+        projectRuntime = null;
+        if (lease != null) {
+            try {
+                lease.close();
             } catch (RuntimeException exception) {
                 if (failure == null) {
                     failure = exception;

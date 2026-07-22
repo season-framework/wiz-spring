@@ -24,7 +24,7 @@ RUN ./mvnw --batch-mode --no-transfer-progress -DskipTests clean package && \
 FROM --platform=${DOCKER_PLATFORM} ${MAVEN_IMAGE} AS runtime-tools
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG WIZ_VERSION=0.2.6
+ARG WIZ_VERSION=0.2.7
 ARG WIZ_PACKAGE_ROOT=com.wiz.app
 ARG INSTALL_CODEX=true
 ARG CODEX_VERSION=latest

@@ -18,9 +18,13 @@ import com.wiz.runtime.WizSegment;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class RouteDispatcher {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(RouteDispatcher.class);
 
     private final WizRuntime runtime;
     private final RouteRegistry routeRegistry;
@@ -95,8 +99,13 @@ public class RouteDispatcher {
             Object value = handle.invoke(handler, context, segment);
             return value instanceof WizResult result ? result : context.response().status(204);
         } catch (InvocationTargetException exception) {
+            LOGGER.error("WIZ route handler invocation failed: routeId={} route={} handler={}",
+                    definition.id(), definition.route(), definition.handlerClass(),
+                    exception.getCause() == null ? exception : exception.getCause());
             return context.response().status(500, Map.of("error", "route handler failed"));
         } catch (ReflectiveOperationException | ProjectReflectionException exception) {
+            LOGGER.error("WIZ route handler reflection failed: routeId={} route={} handler={}",
+                    definition.id(), definition.route(), definition.handlerClass(), exception);
             return context.response().status(500, Map.of("error", "route handler failed"));
         } finally {
             Thread.currentThread().setContextClassLoader(previousLoader);

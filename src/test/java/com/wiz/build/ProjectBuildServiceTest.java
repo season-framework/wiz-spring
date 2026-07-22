@@ -22,6 +22,24 @@ class ProjectBuildServiceTest {
     Path tempDir;
 
     @Test
+    void removesStaleResolvedDependenciesWhenWorkspacePomIsRemoved() throws Exception {
+        Path workspace = tempDir.resolve("dependency-cleanup-workspace");
+        Files.createDirectories(workspace.resolve("src"));
+        Files.createDirectories(workspace.resolve("config"));
+        ProjectContext project = new PathService(workspace).workspaceContext();
+        Path stale = ProjectBuildLayout.dependencyRoot(project).resolve("removed-1.0.jar");
+        Files.createDirectories(stale.getParent());
+        Files.writeString(stale, "stale");
+
+        BuildResult result = new ProjectBuildService().build(project, false, "compile");
+
+        assertTrue(result.success(), result.message());
+        assertTrue(Files.isRegularFile(workspace.resolve(".wiz/build.lock")));
+        assertTrue(Files.notExists(ProjectBuildLayout.dependencyRoot(project)));
+        assertTrue(Files.notExists(ProjectBuildLayout.dependencyStagingRoot(project)));
+    }
+
+    @Test
     void reconstructsSourceTreeAndFlattensPortalApps() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);

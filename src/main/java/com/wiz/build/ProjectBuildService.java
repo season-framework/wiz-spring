@@ -3,10 +3,14 @@ package com.wiz.build;
 import java.io.IOException;
 import java.io.File;
 import java.io.StringWriter;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.file.LinkOption;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -42,7 +46,7 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 public class ProjectBuildService {
 
-    private final ConcurrentHashMap<Path, ReentrantLock> locks = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<Path, ReentrantLock> LOCKS = new ConcurrentHashMap<>();
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final AngularBuildService angularBuildService;
     private final BuildMarkerService buildMarkerService = new BuildMarkerService();
@@ -66,7 +70,8 @@ public class ProjectBuildService {
             return new BuildResult(2, List.of(requestedPhase), "Supported build phases: reconstruct, compile, bundle");
         }
 
-        ReentrantLock lock = locks.computeIfAbsent(project.root(), ignored -> new ReentrantLock());
+        Path normalizedRoot = project.root().toAbsolutePath().normalize();
+        ReentrantLock lock = LOCKS.computeIfAbsent(normalizedRoot, ignored -> new ReentrantLock());
         lock.lock();
         Instant startedAt = Instant.now();
         long totalStarted = System.nanoTime();
@@ -77,61 +82,72 @@ public class ProjectBuildService {
         buildLogger.info("Clean: " + clean);
         buildLogger.info("Phase: " + requestedPhase);
         try {
-            if (clean) {
-                timed(buildLogger, "clean", () -> {
-                    delete(project.buildRoot());
-                    delete(project.bundleRoot());
-                    return null;
-                });
+            Path lockFile = normalizedRoot.resolve(".wiz/build.lock");
+            Files.createDirectories(lockFile.getParent());
+            buildLogger.info("Build lock: " + lockFile);
+            try (FileChannel lockChannel = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                    FileLock ignored = lockChannel.lock()) {
+                return buildLocked(project, clean, requestedPhase, buildLogger, startedAt, totalStarted);
             }
-            timed(buildLogger, "reconstruct", () -> {
-                reconstruct(project, !clean);
-                return null;
-            });
-            if (requestedPhase.equals("reconstruct")) {
-                return finish(buildLogger, totalStarted, new BuildResult(0, List.of("reconstruct"), "Reconstructed app source tree"));
-            }
-
-            timed(buildLogger, "java-source", () -> {
-                reconstructProjectJava(project);
-                return null;
-            });
-            timed(buildLogger, "app-dependencies", () -> {
-                resolveProjectDependencies(project, buildLogger);
-                return null;
-            });
-            BuildResult compile = timed(buildLogger, "java-compile", () -> compileProjectJava(project, buildLogger));
-            if (!compile.success() || requestedPhase.equals("compile")) {
-                return finish(buildLogger, totalStarted, compile);
-            }
-
-            FrontendBuildResult frontend = timed(buildLogger, "frontend", () -> angularBuildService.build(project, clean, buildLogger));
-            if (!frontend.success()) {
-                return finish(buildLogger, totalStarted, new BuildResult(1, List.of("reconstruct", "java-source", "app-dependencies", "java-compile", frontend.phase()), frontend.message()));
-            }
-            timed(buildLogger, "bundle", () -> {
-                bundle(project);
-                return null;
-            });
-            if (!frontend.built()) {
-                timed(buildLogger, "frontend-fallback", () -> {
-                    writeMinimalWebBundle(project);
-                    return null;
-                });
-            }
-            List<String> phases = List.of("reconstruct", "java-source", "app-dependencies", "java-compile", frontend.phase(), "bundle");
-            SupplyChainManifestService.Result supplyChain = timed(buildLogger, "supply-chain", () -> new SupplyChainManifestService().write(project, Instant.now()));
-            buildMarkerService.write(project, phases, frontend.built() ? "real" : "fallback", startedAt, Instant.now(),
-                    new BuildMarkerService.DependencySummary(
-                            "bundle/" + SupplyChainManifestService.DEPENDENCY_MANIFEST_FILE,
-                            supplyChain.digestAlgorithm(),
-                            supplyChain.dependencyDigest(),
-                            supplyChain.dependencyCount(),
-                            project.buildRoot().relativize(ProjectBuildLayout.cyclonedxBom(project)).toString().replace('\\', '/')));
-            return finish(buildLogger, totalStarted, new BuildResult(0, phases, "Generated Java WIZ app bundle"));
         } finally {
             lock.unlock();
         }
+    }
+
+    private BuildResult buildLocked(ProjectContext project, boolean clean, String requestedPhase,
+            BuildLogger buildLogger, Instant startedAt, long totalStarted) throws IOException {
+        if (clean) {
+            timed(buildLogger, "clean", () -> {
+                delete(project.buildRoot());
+                delete(project.bundleRoot());
+                return null;
+            });
+        }
+        timed(buildLogger, "reconstruct", () -> {
+            reconstruct(project, !clean);
+            return null;
+        });
+        if (requestedPhase.equals("reconstruct")) {
+            return finish(buildLogger, totalStarted, new BuildResult(0, List.of("reconstruct"), "Reconstructed app source tree"));
+        }
+
+        timed(buildLogger, "java-source", () -> {
+            reconstructProjectJava(project);
+            return null;
+        });
+        timed(buildLogger, "app-dependencies", () -> {
+            resolveProjectDependencies(project, buildLogger);
+            return null;
+        });
+        BuildResult compile = timed(buildLogger, "java-compile", () -> compileProjectJava(project, buildLogger));
+        if (!compile.success() || requestedPhase.equals("compile")) {
+            return finish(buildLogger, totalStarted, compile);
+        }
+
+        FrontendBuildResult frontend = timed(buildLogger, "frontend", () -> angularBuildService.build(project, clean, buildLogger));
+        if (!frontend.success()) {
+            return finish(buildLogger, totalStarted, new BuildResult(1, List.of("reconstruct", "java-source", "app-dependencies", "java-compile", frontend.phase()), frontend.message()));
+        }
+        timed(buildLogger, "bundle", () -> {
+            bundle(project);
+            return null;
+        });
+        if (!frontend.built()) {
+            timed(buildLogger, "frontend-fallback", () -> {
+                writeMinimalWebBundle(project);
+                return null;
+            });
+        }
+        List<String> phases = List.of("reconstruct", "java-source", "app-dependencies", "java-compile", frontend.phase(), "bundle");
+        SupplyChainManifestService.Result supplyChain = timed(buildLogger, "supply-chain", () -> new SupplyChainManifestService().write(project, Instant.now()));
+        buildMarkerService.write(project, phases, frontend.built() ? "real" : "fallback", startedAt, Instant.now(),
+                new BuildMarkerService.DependencySummary(
+                        "bundle/" + SupplyChainManifestService.DEPENDENCY_MANIFEST_FILE,
+                        supplyChain.digestAlgorithm(),
+                        supplyChain.dependencyDigest(),
+                        supplyChain.dependencyCount(),
+                        project.buildRoot().relativize(ProjectBuildLayout.cyclonedxBom(project)).toString().replace('\\', '/')));
+        return finish(buildLogger, totalStarted, new BuildResult(0, phases, "Generated Java WIZ app bundle"));
     }
 
     public void reconstruct(ProjectContext project) throws IOException {
@@ -396,7 +412,7 @@ public class ProjectBuildService {
                 + "    <modelVersion>4.0.0</modelVersion>\n"
                 + "    <groupId>" + project.packageRoot() + "</groupId>\n"
                 + "    <artifactId>wiz-generated-app</artifactId>\n"
-                + "    <version>0.2.6</version>\n"
+                + "    <version>0.2.7</version>\n"
                 + "    <properties>\n"
                 + "        <java.version>21</java.version>\n"
                 + "    </properties>\n"
@@ -503,14 +519,17 @@ public class ProjectBuildService {
 
     private void resolveProjectDependencies(ProjectContext project, BuildLogger logger) throws IOException {
         Path pom = project.root().resolve("pom.xml");
+        Path output = ProjectBuildLayout.dependencyRoot(project);
+        Path staging = ProjectBuildLayout.dependencyStagingRoot(project);
+        delete(staging);
         if (!Files.isRegularFile(pom)) {
+            delete(output);
             logger.info("[app-dependencies] no workspace pom.xml");
             return;
         }
-        Path output = ProjectBuildLayout.dependencyRoot(project);
-        Files.createDirectories(output);
+        Files.createDirectories(staging);
         logger.info("[app-dependencies] pom: " + pom);
-        logger.info("[app-dependencies] output: " + output);
+        logger.info("[app-dependencies] staging: " + staging);
         CommandResult result;
         try {
             result = new CommandExecutor().run(
@@ -523,21 +542,61 @@ public class ProjectBuildService {
                             "-f", pom.toString(),
                             "dependency:copy-dependencies",
                             "-DincludeScope=runtime",
-                            "-DoutputDirectory=" + output),
+                            "-DoutputDirectory=" + staging),
                     Duration.ofMinutes(10),
                     1024 * 1024,
                     logger);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
+            delete(staging);
             throw new IOException("Project Maven dependency resolution was interrupted", exception);
+        } catch (IOException | RuntimeException exception) {
+            delete(staging);
+            throw exception;
         }
         logger.info("[app-dependencies] exitCode=" + result.exitCode()
                 + " duration=" + formatDuration(result.durationMillis())
                 + " timedOut=" + result.timedOut()
                 + " cappedOutput=" + result.cappedOutput());
         if (result.exitCode() != 0) {
+            delete(staging);
             throw new IOException("Project Maven dependency resolution failed with exit code " + result.exitCode()
                     + System.lineSeparator() + result.output());
+        }
+        replaceDirectory(staging, output);
+        logger.info("[app-dependencies] installed: " + output);
+    }
+
+    private void replaceDirectory(Path source, Path target) throws IOException {
+        Path previous = target.resolveSibling("." + target.getFileName() + "-previous");
+        if (Files.notExists(target) && Files.exists(previous)) {
+            moveDirectory(previous, target);
+        }
+        delete(previous);
+        boolean hadPrevious = Files.exists(target);
+        if (hadPrevious) {
+            moveDirectory(target, previous);
+        }
+        try {
+            moveDirectory(source, target);
+        } catch (IOException failure) {
+            if (hadPrevious && Files.notExists(target) && Files.exists(previous)) {
+                try {
+                    moveDirectory(previous, target);
+                } catch (IOException restoreFailure) {
+                    failure.addSuppressed(restoreFailure);
+                }
+            }
+            throw failure;
+        }
+        delete(previous);
+    }
+
+    private void moveDirectory(Path source, Path target) throws IOException {
+        try {
+            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException exception) {
+            Files.move(source, target);
         }
     }
 

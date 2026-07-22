@@ -82,6 +82,20 @@ class WizSpringApplicationTests {
 	}
 
 	@Test
+	void runLogIsNormalizedWithoutAddingASecondSpringFileAppender() throws Exception {
+		Path workspace = tempDir.resolve("log-workspace");
+		Path log = tempDir.resolve("logs/server.log");
+		Files.createDirectories(workspace.resolve("config"));
+
+		WizSpringApplication.RunSettings settings = WizSpringApplication.resolveRunSettings(
+				workspace.toString(), null, 19084, false, log.toString(), "dev", false);
+
+		assertEquals(log.toAbsolutePath().normalize().toString(), settings.log());
+		assertTrue(settings.args().stream().noneMatch(arg -> arg.startsWith("--logging.file.name=")));
+		assertTrue(settings.args().contains("--spring.output.ansi.enabled=never"));
+	}
+
+	@Test
 	void runSettingsReadTheSelectedWorkspaceProfileAfterCommonConfig() throws Exception {
 		Path workspace = tempDir.resolve("selected-profile-workspace");
 		Files.createDirectories(workspace.resolve("config"));

@@ -65,6 +65,10 @@ public final class ProjectBuildLayout {
         return targetRoot(project).resolve("dependency");
     }
 
+    public static Path dependencyStagingRoot(ProjectContext project) {
+        return targetRoot(project).resolve(".dependency-next");
+    }
+
     public static Path compilerClasspathRoot(ProjectContext project) {
         return targetRoot(project).resolve("compiler-classpath");
     }

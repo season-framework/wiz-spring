@@ -80,7 +80,13 @@ public class CommandExecutor {
     private Path resolveExecutable(Path workspaceRoot, Path cwd, String command) {
         Path commandPath = command.contains("/") || command.contains("\\") ? cwd.resolve(command).toAbsolutePath().normalize() : null;
         String fileName = commandPath == null ? command : commandPath.getFileName().toString();
-        if (fileName.equals("node") || fileName.equals("npm") || fileName.equals("mvn")) {
+        if (fileName.equals("mvn")) {
+            if (commandPath != null) {
+                throw new IllegalArgumentException("mvn must be invoked by command name");
+            }
+            return MavenExecutableResolver.require(workspaceRoot);
+        }
+        if (fileName.equals("node") || fileName.equals("npm")) {
             if (commandPath != null) {
                 throw new IllegalArgumentException(fileName + " must be invoked by command name");
             }

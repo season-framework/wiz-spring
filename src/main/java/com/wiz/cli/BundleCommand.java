@@ -30,9 +30,7 @@ public class BundleCommand implements Callable<Integer> {
         }
 
         Path bundleRoot = output == null ? paths.root().resolve("target/runtime-bundle") : output.toAbsolutePath().normalize();
-        if (bundleRoot.equals(projectBundle.toAbsolutePath().normalize())) {
-            throw new IllegalArgumentException("Output bundle must be different from the build bundle directory");
-        }
+        validateOutput(paths.root(), paths.configRoot(), projectBundle, bundleRoot);
         delete(bundleRoot);
         Files.createDirectories(bundleRoot);
         copyIfExists(paths.configRoot(), bundleRoot.resolve("config"));
@@ -41,6 +39,29 @@ public class BundleCommand implements Callable<Integer> {
 
         System.out.println("Bundle created: " + bundleRoot);
         return 0;
+    }
+
+    private void validateOutput(Path workspaceRoot, Path configRoot, Path projectBundle, Path outputRoot) {
+        Path workspace = workspaceRoot.toAbsolutePath().normalize();
+        if (workspace.startsWith(outputRoot)) {
+            throw new IllegalArgumentException("Output bundle must not be the workspace or one of its parent directories: " + outputRoot);
+        }
+        Path[] protectedPaths = {
+                configRoot.toAbsolutePath().normalize(),
+                projectBundle.toAbsolutePath().normalize(),
+                workspace.resolve("src"),
+                workspace.resolve("build"),
+                workspace.resolve(".wiz")
+        };
+        for (Path protectedPath : protectedPaths) {
+            if (outputRoot.startsWith(protectedPath) || protectedPath.startsWith(outputRoot)) {
+                throw new IllegalArgumentException("Output bundle must not overlap workspace source or build input: " + protectedPath);
+            }
+        }
+        Path targetRoot = workspace.resolve("target");
+        if (outputRoot.equals(targetRoot)) {
+            throw new IllegalArgumentException("Output bundle must be a child of the target directory, not the target directory itself");
+        }
     }
 
     private PathService pathService(Path root) {

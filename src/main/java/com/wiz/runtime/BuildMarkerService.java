@@ -2,12 +2,15 @@ package com.wiz.runtime;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Stream;
 
 import tools.jackson.core.type.TypeReference;
@@ -43,7 +46,18 @@ public class BuildMarkerService {
             marker.put("dependencyCount", dependencySummary.dependencyCount());
             marker.put("cycloneDxBom", dependencySummary.cycloneDxBomPath());
         }
-        Files.writeString(project.bundleRoot().resolve(MARKER_FILE), objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(marker) + "\n");
+        Path target = project.bundleRoot().resolve(MARKER_FILE);
+        Path temporary = project.bundleRoot().resolve(MARKER_FILE + ".tmp-" + UUID.randomUUID());
+        try {
+            Files.writeString(temporary, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(marker) + "\n");
+            try {
+                Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException exception) {
+                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
     }
 
     public Optional<Map<String, Object>> read(ProjectContext project) {
