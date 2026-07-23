@@ -1,158 +1,156 @@
-# WIZ Spring Runtime
+<div align="center">
 
-WIZ Spring은 WIZ 앱을 Java 21/Spring Boot로 실행하는 runtime/CLI입니다.
-현재 구조는 하나의 workspace 안에 하나의 앱 source만 두는 방식입니다. 여러 앱을 만들거나 전환하는 명령과 별도 하위 디렉터리 계층은 사용하지 않습니다.
+# WIZ Spring
 
-## 요구 사항
+**Build WIZ apps. Run them on Spring.**
 
-- Java/JDK 21 이상
-- Maven Wrapper 사용 가능 환경
-- Angular frontend를 실제 빌드할 경우 Node.js 20.19 이상 또는 22.12 이상
+WIZ 소스를 Java 21과 Spring Boot 위에서 빌드하고, 실행하고, 배포하는 올인원 runtime & CLI
 
-## Docker 개발환경
+<p>
+  <a href="https://github.com/season-framework/wiz-spring/tags"><img alt="Release" src="https://img.shields.io/github/v/tag/season-framework/wiz-spring?style=flat-square&label=release&color=6DB33F"></a>
+  <img alt="Java 21+" src="https://img.shields.io/badge/Java-21%2B-007396?style=flat-square&logo=openjdk&logoColor=white">
+  <img alt="Spring Boot 4.0.6" src="https://img.shields.io/badge/Spring_Boot-4.0.6-6DB33F?style=flat-square&logo=springboot&logoColor=white">
+  <a href="./LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-3B82F6?style=flat-square"></a>
+  <img alt="MCP ready" src="https://img.shields.io/badge/MCP-ready-8B5CF6?style=flat-square">
+</p>
 
-`wiz-base`와 같은 방식으로 일반 실행 이미지와 workspace 영속화용 bind 이미지를 만들 수 있습니다. 이미지에는 Java 21 JDK, Maven 3.9, Node.js 22, SSH/기본 개발 도구, WIZ Spring runtime과 미리 build된 sample workspace가 포함됩니다. WIZ Spring 인스트럭션은 runtime JAR에 내장되어 `create`가 `/opt/app/.codex`와 `/opt/app/.github`를 함께 설정합니다. Spring runtime 자체의 MCP를 사용하므로 구형 `wiz-vscode` extension MCP와 `wiz-track-apt`는 포함하지 않습니다.
+<p>
+  <a href="#quick-start">Quick Start</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#cli-reference">CLI</a> ·
+  <a href="#deployment">Deployment</a> ·
+  <a href="#documentation">Docs</a>
+</p>
 
-일반 이미지를 build하고 실행하려면:
+</div>
 
-```bash
-./build.sh runtime
-./run.sh
+---
 
-curl http://127.0.0.1:3334/actuator/health
-docker exec -it wiz-spring-test bash
-```
+WIZ Spring은 WIZ 앱 소스를 표준적인 Spring Boot/Maven 산출물로 재구성하고, 개발부터 배포까지 하나의 CLI로 연결합니다. 하나의 workspace가 하나의 앱 소스를 갖는 단순한 구조를 사용합니다.
 
-workspace를 host에 영속화하려면 bind target을 사용합니다. 최초 실행 시 image의 `/opt/app` seed가 `DATA_ROOT/app`으로 복사되고 이후에는 해당 데이터를 그대로 사용합니다.
+## Highlights
 
-```bash
-./build.sh bind
-./run-bind.sh
+- **WIZ-native, Spring-powered** — 익숙한 WIZ의 App, Route, Model, Portal 구조를 Java/Spring runtime으로 실행합니다.
+- **One CLI, end to end** — workspace 생성, 빌드, 실행, JAR 패키징, bundle, systemd 서비스까지 한 흐름으로 처리합니다.
+- **Safe by default** — 실패한 빌드는 마지막 정상 bundle을 보존하고, 실행 전 workspace와 build marker를 검증합니다.
+- **Production essentials included** — Actuator health, OpenAPI, Swagger UI, request ID, rolling log, CycloneDX SBOM을 기본 제공합니다.
+- **AI-ready workspace** — `create`만으로 Codex 설정, 개발 지침, standalone MCP 서버 구성이 함께 준비됩니다.
 
-# 기본 저장 위치: ./.wiz-data-bind/app
-```
+## Quick start
 
-두 이미지를 한 번에 build하려면 `./build.sh all`을 사용합니다. 기본 image tag는 runtime이 `registry.nanoha.kr/kwon3286/wiz-spring:0.2.7`, bind가 `registry.nanoha.kr/kwon3286/wiz-spring:0.2.7-bind`입니다. 아래 환경 변수로 값을 바꿀 수 있습니다.
+> [!NOTE]
+> JDK 21 이상이 필요합니다. Angular frontend를 빌드하려면 Node.js 20.19 이상 또는 22.12 이상도 준비하세요. Maven은 저장소에 포함된 Wrapper를 사용합니다.
 
-- Build: `IMAGE`, `VERSION`, `PLATFORM`, `WIZ_PACKAGE_ROOT`, `INSTALL_CODEX`, `CODEX_VERSION`
-- Run: `CONTAINER_NAME`, `HOST_HTTP_PORT`, `HOST_SSH_PORT`, `CONTAINER_HTTP_PORT`, `WIZ_ENABLE_SSH`
-- Bind run: 위 run 변수와 `DATA_ROOT`
-
-Codex CLI는 기본으로 설치되고 `/opt/app/.codex`에는 standalone WIZ Spring MCP 설정이, `/opt/app/.github`에는 내장 인스트럭션과 개발 문서가 생성됩니다. Codex CLI가 필요 없는 image는 다음처럼 만들 수 있습니다.
-
-```bash
-INSTALL_CODEX=false ./build.sh runtime
-```
-
-SSH는 password 인증을 허용하지 않습니다. 공개키 로그인이 필요하면 실행 시 키를 전달합니다.
+### 1. Runtime 빌드 & alias 설정
 
 ```bash
-SSH_PUBLIC_KEY="$(cat ~/.ssh/id_ed25519.pub)" ./run.sh
-ssh -p 2223 root@127.0.0.1
-```
-
-## Runtime 빌드
-
-```bash
-cd /root/workspace/wiz-java/wiz-spring
+git clone https://github.com/season-framework/wiz-spring.git
+cd wiz-spring
 ./mvnw clean package
+
+export WIZ_RUNTIME_JAR="$PWD/target/wiz-spring-0.2.7.jar"
+alias wiz-spring='java -jar "$WIZ_RUNTIME_JAR"'
+
+wiz-spring --version
 ```
 
-빌드 결과는 `target/wiz-spring-*.jar`입니다.
+이제 현재 shell에서는 `java -jar ...` 없이 `wiz-spring <command>` 형식으로 실행할 수 있습니다.
 
-## 앱 생성
+<details>
+<summary><strong>Bash/Zsh에서 alias 계속 사용하기</strong></summary>
+
+아래 설정을 `~/.bashrc` 또는 `~/.zshrc`에 추가합니다. JAR 경로는 `pwd`로 확인한 실제 절대 경로로 바꾸세요.
 
 ```bash
-jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.2.7.jar
-workspace=/tmp/demo2
-
-rm -rf "$workspace"
-java -jar "$jar" create "$workspace" --package a.b.c
+export WIZ_RUNTIME_JAR="/absolute/path/to/wiz-spring/target/wiz-spring-0.2.7.jar"
+alias wiz-spring='java -jar "$WIZ_RUNTIME_JAR"'
 ```
 
-`--package`는 필수이며, 생성/빌드되는 Java package root가 됩니다. 위 예시는 build 결과를 `build/src/main/java/a/b/c/...`와 `build/target/classes/a/b/c/...` 아래에 만듭니다. 기본 sample로 생성한 workspace의 `devlog.md`는 표 헤더만, `devlog/`는 빈 디렉터리로 초기화됩니다. `--path`나 `--uri`로 가져온 source의 기존 devlog 이력은 그대로 보존됩니다.
-
-모든 `create` 경로는 source 준비 후 `.codex/config.toml`, `.codex/AGENTS.md`와 내장 `.github` 인스트럭션을 자동으로 설정합니다. import source에 같은 관리 대상 파일이 있으면 현재 runtime의 내장본으로 갱신하고, `.github/custom/`처럼 manifest에 없는 사용자 파일은 보존합니다. 다른 runtime JAR을 MCP 설정에 기록해야 할 때만 `--runtime-jar <jar>`를 지정합니다.
-
-기본 생성은 sample source를 만들고 clean bundle build까지 실행합니다. 생성만 하려면:
+설정을 저장한 뒤 새 terminal을 열거나 현재 shell에 다시 불러옵니다.
 
 ```bash
-java -jar "$jar" create "$workspace" --package a.b.c --skip-build
+# Bash
+source ~/.bashrc
+
+# Zsh
+source ~/.zshrc
 ```
 
-## 실행과 배포
+version을 올려 새 JAR을 빌드했다면 `WIZ_RUNTIME_JAR` 경로도 함께 갱신해야 합니다. alias는 interactive shell 전용이므로 shell script와 systemd에서는 실행 파일의 절대 경로를 사용하세요.
+
+</details>
+
+### 2. Workspace 생성
 
 ```bash
-java -jar "$jar" run --root "$workspace" --port 3000 --log /var/log/wiz.demo/application.log
+wiz-spring create ../hello-wiz \
+  --package com.example.hello
 ```
 
-`run`, `build`, `mcp`, `service install`은 `config/wiz.yml`의 `workspace: java` marker, `config/application.yml` 또는 `.yaml`, 그리고 `src/app` 또는 `bundle/src/app` 구조를 확인합니다. 일반 Spring 디렉터리나 불완전한 checkout은 서버로 실행하지 않습니다. 이 중 `build`는 실제 입력인 `src/app`을 반드시 요구하므로 deploy 전용 `bundle/src/app`만 있는 디렉터리는 실행하거나 `jar --skip-build`로 패키징할 수 있지만 다시 빌드할 수 없습니다. 실제 `run`은 현재 runtime version 및 Java package와 일치하는 완료된 `bundle/.wiz-build.json`까지 요구하며, build가 없거나 다른 runtime/package의 산출물이면 실행 전에 명확히 중단합니다(`--dry-run`은 사전 진단만 하므로 build 없이도 사용할 수 있습니다). `--log`는 Spring 로그와 project 코드의 `System.out/err`를 console에 유지하면서 파일에도 기록하며, 10 MiB마다 회전해 현재 파일과 archive 14개만 보관합니다. 시작 전 해석된 root, config, profile, Java, port, PID도 출력합니다.
+기본 sample workspace를 만들고 clean build까지 실행합니다. 기존 소스를 가져올 때는 `--path <directory>` 또는 `--uri <git-url>`을, 생성만 할 때는 `--skip-build`를 사용하세요.
 
-다시 빌드:
+### 3. 실행
 
 ```bash
-java -jar "$jar" build --root "$workspace" --clean
+wiz-spring run \
+  --root ../hello-wiz \
+  --port 3000
 ```
 
-package root를 바꾸려면 언제든 `build --package`를 사용합니다. 설정, Maven groupId와 WIZ Java source의 package 참조가 함께 변경되고 clean build가 자동 적용됩니다. 새 bundle이 완성되기 전까지 직전 정상 bundle은 보존되지만 package가 현재 workspace와 다르면 `run`이 거부합니다. 이미 배포용 standalone JAR을 만들었다면 package 변경 후 다시 패키징해야 합니다.
-
-```bash
-java -jar "$jar" build --root "$workspace" --package com.example.product
-```
-
-단일 실행 jar 패키징:
-
-```bash
-java -jar "$jar" jar --root "$workspace" --output /tmp/demo2.jar
-java -jar /tmp/demo2.jar
-```
-
-runtime bundle 디렉터리 생성:
-
-```bash
-java -jar "$jar" bundle --root "$workspace" --output /tmp/demo2-bundle
-```
-
-### Git 기반 서버 마이그레이션
-
-Git에는 `src/`, `pom.xml`, `config/application*.example.yml`, `config/wiz.yml`, `src/angular/package-lock.json`을 포함하고 실제 `config/application*.yml`, `data/`, `build/`, `bundle/`은 포함하지 않습니다. build lock, runtime snapshot, MCP 상태와 npm cache는 workspace 밖의 운영체제 runtime/state 또는 사용자 cache 경로에 저장되므로 프로젝트에 별도 숨김 framework 디렉터리를 만들거나 Git으로 옮기지 않습니다. 대상 서버에서는 runtime과 source revision을 고정하고, 비밀 설정/data는 별도 backup 또는 secret store에서 복원한 뒤 새 checkout에서 먼저 build합니다.
-
-```bash
-git fetch --prune origin
-git switch --detach <검증할-commit>
-wiz-spring build --root "$workspace" --clean
-test -f "$workspace/bundle/.wiz-build.json"
-```
-
-build와 smoke test가 성공한 checkout만 서비스에 연결한 뒤 `wiz-spring service restart <name>`으로 전환하세요. 실행 중인 checkout에 `git pull`과 build를 직접 겹치기보다 release 디렉터리를 분리하면 실패한 build가 현재 서비스와 설정을 훼손하지 않고 즉시 이전 revision으로 돌아갈 수 있습니다. 서비스는 가능하면 alias 대신 `service install --command /absolute/path/to/wiz-spring`으로 고정하고, 등록 후에는 `service logs <name> --lines 200 --follow`로 journal과 application log 위치를 함께 확인합니다. 생성되는 systemd unit은 기본적으로 workspace 소유자를 `User=`로 사용하며 필요하면 `--user`로 명시할 수 있습니다. 기본 로그는 전체 unit 이름을 사용한 서비스별 `/var/log/wiz.<name>/application.log`에 저장되며 unit에는 `LogsDirectory=wiz.<name>`이 설정됩니다. 별도 `--log`를 쓰려면 그 부모 디렉터리와 기존 파일이 service 사용자 소유이며 owner-write 가능해야 합니다.
-
-정상 build는 workspace의 정규 경로를 hash한 외부 filesystem lock으로 같은 workspace의 동시 CLI build를 직렬화합니다. `--package`의 source/config/pom 변경도 이 lock 안에서 수행하며, 사용이 끝난 in-process lock entry는 제거합니다. Maven dependency는 POM/local parent, Maven Wrapper와 `.mvn`, 사용자 Maven 설정, 실행 환경 fingerprint 및 게시된 JAR hash가 모두 같을 때 직전 resolve 결과를 재사용합니다. POM/settings/Maven option의 SNAPSHOT·version range·LATEST/RELEASE, 실제 profile activation처럼 안정성을 보장하기 어려운 입력은 매번 Maven으로 확인하고, cache miss에서는 임시 디렉터리에 받은 뒤 직전 정상본을 backup한 상태에서 교체합니다. `--clean`은 workspace의 dependency cache를 함께 비워 강제로 다시 resolve합니다. 실행 중인 Spring Boot fat JAR에서 javac classpath를 만들 때도 원본 JAR SHA-256별 추출 결과를 `WIZ_SPRING_CACHE_DIR`의 workspace별 외부 cache에 보존하고, manifest와 파일 hash가 일치할 때만 재사용합니다. bundle도 `build/target/work/bundle-next`에서 fallback, dependency manifest, CycloneDX BOM과 완료 marker까지 만든 뒤 게시하므로 clean 여부나 phase와 관계없이 새 bundle이 완성되기 전에는 직전 정상 bundle을 보존합니다. Java compile 입력은 이번 build가 resolve한 dependency와 workspace `lib/`로 한정하며, source가 사라지면 이전 class/JAR도 제거합니다. framework가 관리하는 `build/`와 그 주요 하위 경로가 symlink이면 workspace 밖을 변경하지 않고 build를 거부합니다. lock은 `WIZ_SPRING_RUNTIME_DIR` 또는 안정적인 `~/.local/state/wiz-spring/runtime`에 저장하므로 interactive build와 systemd service가 같은 운영체제 사용자라면 환경 차이와 무관하게 같은 lock을 사용합니다. owner-only lock 계약을 유지하려면 build도 systemd unit의 `User=` 계정으로 실행해야 합니다. `service install`은 현재 `WIZ_SPRING_RUNTIME_DIR`, `WIZ_SPRING_CACHE_DIR`, `WIZ_SPRING_STATE_DIR`를 unit에 고정하며 각각 `--runtime-dir`, `--cache-dir`, `--state-dir`로 명시할 수 있습니다. 명시하거나 상속한 디렉터리는 workspace 밖에 미리 만들고 service 사용자 소유 및 owner read/write/search 권한으로 준비해야 하며, 조건이 맞지 않으면 등록 단계에서 중단합니다.
-
-대용량 runtime 교체 snapshot은 tmpfs와 분리해 `WIZ_SPRING_CACHE_DIR` 또는 `~/.cache/wiz-spring`에 저장합니다. framework가 만드는 runtime/state/cache 하위 디렉터리는 현재 사용자만 접근하도록 제한합니다. snapshot은 host/machine과 process 시작 시각별 namespace를 사용하며 마지막 요청과 정상 종료 때 삭제됩니다. 강제 종료로 남은 snapshot은 같은 host의 다음 runtime 기동 때 모든 workspace key를 대상으로 정리하므로 공유 cache에서도 다른 서버의 활성 snapshot을 PID만으로 삭제하지 않습니다. cache 경로를 별도 filesystem으로 지정하면 hard-link 대신 파일 복사가 발생할 수 있으므로 충분한 disk 공간을 확보합니다.
-
-새 workspace는 package lock을 포함해 `npm ci`를 사용하며 npm의 기본 사용자 cache를 그대로 공유합니다. 일반 build는 staged `node_modules`와 Angular 증분 cache를 보존하고, dependency가 없거나 package/lock/`.npmrc` fingerprint가 바뀐 경우에만 자동 설치합니다. lockfile이 없으면 registry 결과를 고정할 수 없으므로 매 build에서 `npm install`을 다시 수행합니다. 재설치가 필요한 경우에는 호환되지 않을 수 있는 Angular 증분 cache만 비운 뒤 설치하며, CLI build 입력이 불완전하면 npm 설치 전에 fallback을 선택합니다. 실제 npm cache 위치는 `npm config get cache`로 확인할 수 있고 workspace 안에는 npm cache를 만들지 않습니다. MCP 상태는 `WIZ_SPRING_STATE_DIR`, `XDG_STATE_HOME/wiz-spring`, `~/.local/state/wiz-spring` 순서로 정한 외부 사용자 state 경로에 file lock과 atomic replace로 저장하며 `mcp --state <file>`로 명시적으로 바꿀 수 있습니다. 환경 변수와 명시 경로도 workspace 내부를 가리킬 수 없습니다.
-
-반복 build 최적화의 이전/이후 측정값, 해석 범위와 재현 방법은 [성능 비교 문서](docs/reviews/eegvhudvcsffxtopyqfcsfdwvzddwcyz-performance.md)에 기록했습니다.
-
-## Command Reference
-
-| Command | 용도 |
+| Endpoint | URL |
 | --- | --- |
-| `create <path> --package <package> [--path <source>\|--uri <git>]` | 단일 workspace를 생성하거나 source를 가져오고 `.codex` 및 내장 `.github`를 자동 설정합니다. 기본적으로 clean build까지 실행합니다. |
-| `build --root <path> [--package <package>] [--clean] [--phase reconstruct\|compile\|bundle]` | source 재구성, Java compile, frontend build/fallback, bundle 생성을 수행합니다. `--package`는 package root를 변경하고 자동으로 clean build합니다. |
-| `run --root <path> [--host <host>] [--port <port>] [--profile <profile>] [--log <file>]` | WIZ Spring 서버를 실행합니다. 기본 profile은 `dev`이고 `--log`는 크기가 제한된 회전 로그를 만듭니다. |
-| `jar --root <path> [--clean] [--skip-build] [--output <jar>]` | workspace bundle을 포함한 단일 실행 jar를 만듭니다. |
-| `bundle --root <path> [--output <dir>]` | 이미 build된 bundle과 config를 배포용 디렉터리로 복사합니다. |
-| `kill [--dry-run]` | 실행 중인 `wiz-spring run` 프로세스를 찾거나 종료합니다. |
-| `service ...` | Linux/systemd 서비스 등록, 삭제, 조회, 시작, 중지와 `logs <name>` 조회를 처리합니다. |
-| `mcp --root <path> [--state <file>]` | WIZ Spring MCP stdio 서버를 실행합니다. |
-| `completion <bash\|zsh>` | 현재 CLI 명령과 option을 반영한 shell completion script를 출력합니다. |
+| App | <http://localhost:3000> |
+| Health | <http://localhost:3000/actuator/health> |
+| OpenAPI | <http://localhost:3000/v3/api-docs> |
+| Swagger UI | <http://localhost:3000/swagger-ui.html> |
 
-`project create`, `project build`, `project jar`, `project list` 같은 multi-project 명령은 더 이상 사용하지 않습니다.
+> [!TIP]
+> `run`, `build`, `jar`, `bundle`, `mcp`의 `--root`는 생략할 수 있습니다. 현재 경로에서 `config/wiz.yml`을 찾아 workspace를 자동 감지합니다.
 
-### Shell completion
+## How it works
 
-현재 shell에서 바로 적용할 수 있습니다.
+```mermaid
+flowchart LR
+    source["WIZ source<br/>src/**"] --> build["wiz-spring build"]
+    build --> spring["Spring / Maven output<br/>build/**"]
+    build --> bundle["Atomic runtime bundle<br/>bundle/**"]
+    bundle --> run["run"]
+    bundle --> ship["jar · bundle · service"]
+```
+
+1. `create`가 sample 또는 가져온 소스를 준비하고 `.codex`, `.github`, workspace metadata를 설정합니다.
+2. `build`가 WIZ 소스를 재구성하고 Java와 Angular를 컴파일합니다.
+3. 완료 marker와 SBOM을 포함한 새 bundle이 준비되면 원자적으로 게시합니다.
+4. `run`은 runtime 버전과 Java package가 일치하는 정상 bundle만 실행합니다.
+
+## CLI reference
+
+Quick Start의 alias를 등록했거나 Docker 이미지를 사용한다면 `wiz-spring` 명령을 바로 실행할 수 있습니다.
+
+| Command | Description |
+| --- | --- |
+| `create <path> --package <package>` | 새 workspace를 만들거나 `--path`, `--uri`의 소스를 가져옵니다. |
+| `build [--root <path>] [--clean]` | source 재구성, compile, frontend build, bundle 생성을 수행합니다. |
+| `run [--root <path>] [--port <port>]` | 검증된 bundle을 실행합니다. 기본 profile은 `dev`입니다. |
+| `jar [--root <path>] [--output <jar>]` | workspace를 단일 executable JAR로 패키징합니다. |
+| `bundle [--root <path>] [--output <dir>]` | build된 runtime bundle과 config를 배포 디렉터리로 복사합니다. |
+| `service <command>` | Linux systemd 서비스의 설치, 조회, 시작, 중지, 로그를 관리합니다. |
+| `kill [--dry-run]` | 실행 중인 WIZ Spring process를 조회하거나 종료합니다. |
+| `mcp [--root <path>]` | `wiz-spring` MCP stdio 서버를 실행합니다. |
+| `completion <bash\|zsh>` | 현재 CLI에 맞는 shell completion script를 출력합니다. |
+
+전체 옵션은 CLI 자체가 가장 정확합니다.
+
+```bash
+wiz-spring --help
+wiz-spring build --help
+wiz-spring service --help
+```
+
+<details>
+<summary><strong>Shell completion</strong></summary>
+
+현재 shell에 바로 적용할 수 있습니다.
 
 ```bash
 # Bash
@@ -162,249 +160,168 @@ source <(wiz-spring completion bash)
 source <(wiz-spring completion zsh)
 ```
 
-`Tab`을 누르면 입력 커서는 현재 위치에 둔 채, 입력 줄 아래에 root command 설명 또는 현재 command의 usage, argument와 option 설명을 표시합니다. Bash에서는 같은 입력 위치에서 `Tab`을 다시 눌러도 도움말을 유지하며, Zsh에서는 네이티브 completion 목록에 도움말과 후보를 함께 표시합니다. 도움말에는 실제 `--help`와 같은 command bold, option yellow, parameter italic 스타일을 적용합니다.
+설명 패널이나 색상을 끄려면 `WIZ_SPRING_COMPLETION_HELP=false`, `WIZ_SPRING_COMPLETION_COLOR=false` 또는 표준 `NO_COLOR=1`을 사용하세요.
 
-설명 패널이나 색상이 필요 없으면 다음 환경 변수를 설정합니다.
+</details>
 
-```bash
-export WIZ_SPRING_COMPLETION_HELP=false
-export WIZ_SPRING_COMPLETION_COLOR=false
-# 표준 NO_COLOR도 지원합니다.
-export NO_COLOR=1
-```
-
-Bash에서 계속 사용하려면 표준 user completion 경로에 저장합니다.
-
-```bash
-mkdir -p ~/.local/share/bash-completion/completions
-wiz-spring completion bash > ~/.local/share/bash-completion/completions/wiz-spring
-```
-
-Zsh에서는 script를 저장한 뒤 `.zshrc`에서 source합니다. 생성된 script가 `compinit`과 `bashcompinit`을 필요한 경우 초기화합니다.
-
-```zsh
-mkdir -p ~/.local/share/wiz-spring
-wiz-spring completion zsh > ~/.local/share/wiz-spring/completion.zsh
-source ~/.local/share/wiz-spring/completion.zsh
-```
-
-## Workspace 구조
+## Workspace
 
 ```text
-demo2/
-  .codex/
-    config.toml
-    AGENTS.md
-  .github/
-    copilot-instructions.md
-    short-instructions.md
-    devdocs/
-    prompts/
-  config/
-    application.yml
-    application-dev.yml
-    application-prod.yml
-    application.example.yml
-    application-dev.example.yml
-    application-prod.example.yml
-    wiz.yml
-  devlog/
-  devlog.md
-  src/
-    app/
-    controller/
-    model/
-    portal/
-    route/
-    angular/
-  build/
-  bundle/
-  pom.xml
+hello-wiz/
+├── .codex/                 # MCP와 Codex workspace 설정
+├── .github/                # 내장 개발 지침과 문서
+├── config/
+│   ├── application.yml
+│   ├── application-dev.yml
+│   ├── application-prod.yml
+│   ├── application*.example.yml
+│   └── wiz.yml             # Java workspace marker
+├── src/
+│   ├── app/
+│   ├── controller/
+│   ├── model/
+│   ├── portal/
+│   ├── route/
+│   └── angular/
+├── build/                  # 생성된 Spring Boot / Maven project
+├── bundle/                 # runtime이 읽는 실행 산출물
+├── devlog/
+├── devlog.md
+└── pom.xml                 # 앱 Java dependency
 ```
 
-- `src/**`: WIZ source
-- `build/**`: 외부 공유 시 열어볼 수 있는 Spring Boot/Maven 표준형 build 산출물
-- `bundle/**`: runtime이 읽는 실행 산출물
-- `pom.xml`: 앱 Java dependency
-- `config/application.yml`, `config/application-<profile>.yml`: 로컬 서버와 앱 runtime 설정. 생성된 `.gitignore`의 보호 대상입니다.
-- `config/application*.example.yml`: 비밀 값 없이 공유하는 설정 예시. Git에는 이 파일들을 커밋합니다.
-- `config/wiz.yml`: Java workspace 형식과 metadata schema, 기준 `wiz-spring` 버전을 기록하는 판별용 marker입니다.
+`src/**`와 `pom.xml`이 개발자가 관리하는 핵심 입력입니다. `build/**`와 `bundle/**`은 WIZ Spring이 관리하므로 직접 수정하지 마세요.
 
-`build/`는 아래처럼 정리됩니다.
+<details>
+<summary><strong>WIZ Java source convention</strong></summary>
 
-```text
-build/
-  pom.xml
-  src/main/java/
-  src/main/resources/
-  target/classes/
-  target/dependency/
-  target/app-api.jar
-  target/frontend/
-  target/frontend-dependencies.sha256
-  target/work/source/
-  target/work/bundle-next/  # 정상 build 종료 시 정리
-```
-
-`build/src/main/java`, `build/src/main/resources`와 `build/target/classes`, `dependency`, `app-api.jar`, `frontend`는 외부에서 보아도 일반 Spring Boot/Maven project에 가까운 공개 산출물입니다. `build/target/work/source`는 WIZ app, portal, Angular 입력을 평탄화하고 frontend dependency/cache를 재사용하는 staging 경로입니다. `bundle-next`는 완료 marker까지 준비한 뒤 `bundle/`로 게시되는 일시적 경로이며, 강제 종료로 남으면 다음 build가 이전 bundle을 복구한 뒤 정리합니다. 게시된 `bundle/bom.json`은 marker 및 dependency manifest와 같은 세대의 CycloneDX 문서입니다. 모두 build가 관리하므로 직접 수정하지 않습니다.
-
-## 설정 파일과 profile
-
-`config/`의 설정은 다음 순서로 합쳐집니다. 뒤에서 읽은 값이 같은 key를 덮어씁니다.
-
-1. `wiz-spring` core 기본값
-2. workspace `config/application.yml`
-3. 선택된 profile의 `config/application-<profile>.yml`
-4. `wiz-spring run`의 `--host`, `--port`, `--profile` 같은 명시적 CLI 옵션
-
-| 파일 | 읽는 경우 |
+| Source | Role |
 | --- | --- |
-| `application.yml` | 모든 실행에서 공통으로 먼저 읽습니다. |
-| `application-dev.yml` | `dev` profile일 때 읽습니다. `wiz-spring run`과 `service regist`로 만든 서비스의 기본 profile이 `dev`입니다. |
-| `application-prod.yml` | `prod` profile일 때 읽습니다. 인자 없이 실행하는 standalone app jar의 기본 profile이 `prod`입니다. `wiz-spring run --profile prod`로도 선택할 수 있습니다. |
-| `application-<name>.yml` | `wiz-spring run --profile <name>`으로 해당 profile을 선택했을 때 읽습니다. 파일이 없어도 공통 설정만으로 실행됩니다. |
-| `application*.example.yml` | runtime은 읽지 않습니다. Git에 공유하기 위한 예시 파일입니다. |
+| `src/app/{appId}/api.java` | App API |
+| `src/app/{appId}/socket.java` | App socket |
+| `src/route/{routeId}/route.java` | HTTP route |
+| `src/controller/**/*.java` | Controller hook |
+| `src/model/**/*.java` | Model, Struct, service |
+| `src/portal/{package}/**` | Reusable portal package |
 
-Spring의 typed runtime 설정과 workspace Java 코드의 `wiz.config().namespace("application")`은 모두 위 profile 병합 결과를 사용합니다. 여러 profile이 활성화되면 나중 profile이 앞 profile의 같은 key를 덮어씁니다.
+package 선언이 없는 Java source에는 `wiz.java.package-root` 기준 package가 build 단계에서 자동으로 추가됩니다.
 
-새 workspace의 `application.yml`에는 workspace마다 결정되는 `server.port`, `wiz.java.package-root`와 공통 session cookie 보안 정책만 활성 값으로 생성됩니다. 사용처 없는 값이나 core 기본값과 같은 API/HTTP/socket/redirect/runtime 설정은 중복해서 쓰지 않습니다. 환경별 `Secure` 정책은 `application-dev.yml`과 `application-prod.yml`에 분리합니다.
+</details>
 
-Flask의 기본 client-side session과 달리 WIZ Spring은 Servlet container의 server-side `HttpSession`을 사용합니다. browser cookie에는 session data나 암호화한 사용자 정보가 아니라 임의의 session ID(`JSESSIONID`)만 들어가므로 별도 `wiz.secret`은 생성하거나 읽지 않습니다. 기본 저장소는 process memory이므로 재시작 후 session 유지나 여러 instance 간 공유가 필요하면 Spring Session의 Redis/JDBC 같은 공용 저장소를 구성해야 합니다.
+## Configuration
 
-| session 설정 | 적용 값 |
-| --- | --- |
-| 공통 `application.yml` | cookie tracking only, `HttpOnly=true`, `SameSite=Lax` |
-| `application-dev.yml` | 로컬 HTTP 개발을 위해 `Secure=false` |
-| `application-prod.yml` | HTTPS 전용으로 `Secure=true` |
+설정은 뒤에 있는 값이 앞의 값을 덮어쓰는 순서로 병합됩니다.
 
-prod profile의 로그인/session 기능은 HTTPS를 전제로 합니다. cross-site cookie가 꼭 필요한 경우에만 `SameSite=None`과 `Secure=true`를 함께 사용하고, timeout/name/path/domain 변경은 `server.servlet.session.*`에서 관리합니다. logout도 이 실제 Servlet 설정을 읽어 동일한 이름·domain·path의 cookie를 만료시킵니다.
+1. WIZ Spring 기본값
+2. `config/application.yml`
+3. `config/application-<profile>.yml`
+4. `--host`, `--port`, `--profile` 같은 CLI 옵션
 
-실제 파일에는 이후 DB/API credential 같은 환경별 값이 추가될 수 있으므로 `wiz-spring create`는 `application.yml`, `application-*.yml`을 `.gitignore`에 넣고, 처음부터 비밀 값이 없는 `application*.example.yml`을 함께 생성합니다. 팀에 공유할 변경은 example 파일에도 직접 반영하세요.
+`wiz-spring run`은 기본으로 `dev`, standalone app JAR은 기본으로 `prod` profile을 사용합니다. `prod`의 session cookie는 HTTPS를 전제로 `Secure=true`가 적용됩니다.
 
-clone한 workspace에서는 필요한 example을 실제 설정으로 복사한 뒤 로컬 값을 채웁니다.
+> [!WARNING]
+> 실제 `application*.yml`은 credential을 포함할 수 있어 기본적으로 Git에서 제외됩니다. 공유할 값은 `application*.example.yml`에 작성하세요. `jar`와 `bundle`은 실제 config를 산출물에 포함하므로 배포 전 secret 포함 여부와 artifact 접근 권한을 확인해야 합니다.
+
+## Deployment
+
+### Executable JAR
 
 ```bash
-cp config/application.example.yml config/application.yml
-cp config/application-dev.example.yml config/application-dev.yml
-# 운영 배포 환경에서만 필요할 때:
-cp config/application-prod.example.yml config/application-prod.yml
+wiz-spring jar \
+  --root ../hello-wiz \
+  --output ./hello-wiz.jar
+
+java -jar ./hello-wiz.jar
 ```
 
-`build`, `bundle`, `jar`는 Git 추적 여부와 무관하게 실제 `config/` 내용을 산출물에 복사합니다. 특히 standalone jar에는 설정이 포함되므로 배포 전에 민감 값 포함 여부와 artifact 접근 권한을 확인하세요.
+### Runtime bundle
 
-## 주요 설정
-
-```yaml
-server:
-  port: 3000
-  servlet:
-    session:
-      tracking-modes:
-        - cookie
-      cookie:
-        http-only: true
-        same-site: lax
-
-wiz:
-  java:
-    package-root: a.b.c
-  api:
-    prefix: /wiz/api
-  socket:
-    path: /wiz/app
-    allowed-origins:
-      - "*"
-  runtime:
-    devmode-cookie-name: season-wiz-devmode
-    warmup-enabled: true
+```bash
+wiz-spring bundle \
+  --root ../hello-wiz \
+  --output ./hello-wiz-bundle
 ```
 
-`wiz.api.prefix`, `wiz.socket.path`는 배포 환경에 맞게 `/wiz`를 숨기거나 다른 prefix로 바꿀 수 있습니다.
-Angular frontend는 build 단계에서 이 값을 `wiz-runtime-config.ts`로 편입합니다. 이 값을 바꾼 뒤에는 frontend bundle을 다시 빌드하세요.
+### systemd
 
-### OpenAPI와 Swagger UI
+```bash
+wiz-spring service install hello-wiz \
+  --root /srv/hello-wiz \
+  --command /usr/local/bin/wiz-spring
 
-서버 실행 후 OpenAPI JSON은 `/v3/api-docs`, YAML은 `/v3/api-docs.yaml`, Swagger UI는 `/swagger-ui.html`에서 확인합니다. 문서에는 `/smoke`, 현재 `wiz.api.prefix`를 사용하는 App API dispatcher 경로, 그리고 `bundle/src/route/*/app.json`에서 읽은 WIZ Route가 포함됩니다. `<id>`와 `<path:path>` 같은 WIZ path segment는 OpenAPI의 `{id}`, `{path}` parameter로 변환되며 실제 request/response schema는 각 동적 handler 구현에 따라 달라집니다.
-
-Swagger UI는 기본으로 문서 조회만 허용합니다. 외부 예제 URL과 URL query 기반 설정 override를 차단하고, 브라우저에 authorization을 보존하지 않으며, `Try it out`은 비활성화합니다. 개발 환경에서 호출 기능이 필요하면 신뢰할 수 있는 환경에서만 workspace 설정에 허용할 method를 명시하세요.
-
-```yaml
-springdoc:
-  swagger-ui:
-    supported-submit-methods:
-      - get
-      - post
+wiz-spring service logs hello-wiz --lines 200 --follow
 ```
 
-동적 Route metadata가 hot build 직후에도 문서에 반영되도록 OpenAPI cache는 기본 비활성화되어 있습니다. 문서 요청량이 많은 고정 배포에서는 `springdoc.cache.disabled: false`로 바꿀 수 있습니다. 운영에서 API 목록을 공개하지 않거나 별도 reverse proxy 인증을 적용하지 않는다면 두 endpoint를 함께 끕니다.
+서비스는 기본적으로 workspace 소유자로 실행됩니다. build와 service의 운영체제 사용자를 맞추고, 실행 명령은 alias가 아닌 절대 경로로 고정하는 것을 권장합니다.
 
-```yaml
-springdoc:
-  api-docs:
-    enabled: false
-  swagger-ui:
-    enabled: false
+### Docker
+
+개발 도구와 sample workspace가 포함된 runtime 이미지를 바로 만들 수 있습니다.
+
+```bash
+./build.sh runtime
+./run.sh
+
+curl http://127.0.0.1:3334/actuator/health
 ```
 
-WIZ controller 이름은 문서의 `x-wiz-controller` metadata로만 표시됩니다. 프로젝트별 인증 방식은 runtime이 일반화할 수 없으므로 OpenAPI security scheme으로 자동 추정하지 않습니다.
+workspace를 host에 유지하려면 bind 이미지를 사용합니다.
 
-`config/wiz.yml`은 runtime 설정 파일이 아니며 다음과 같은 판별 metadata만 가집니다.
+```bash
+./build.sh bind
+./run-bind.sh
 
-```yaml
-workspace: "java"
-format-version: 1
-runtime:
-  name: "wiz-spring"
-  version: "0.2.7"
+# 기본 data 위치: ./.wiz-data-bind/app
 ```
 
-`runtime.version`은 workspace를 생성한 `wiz-spring` 실행 파일의 버전입니다. 개발 classpath에서 직접 실행해 manifest version이 없으면 `dev`로 기록됩니다.
+`IMAGE`, `VERSION`, `PLATFORM`으로 build를, `CONTAINER_NAME`, `HOST_HTTP_PORT`, `HOST_SSH_PORT`, `DATA_ROOT`로 실행 환경을 조정할 수 있습니다. SSH는 공개키 인증만 허용합니다.
 
-`0.2.2`로 생성한 기존 workspace를 업그레이드할 때는 [`release-log/0.2.4.md`](release-log/0.2.4.md)의 config migration 절차를 따르세요. 기존 source를 다시 생성하지 않고 session 설정, `wiz.yml`, Git ignore/example 파일만 custom 값과 병합합니다. 첫 build 이후 package 변경이 필요하면 [`release-log/0.2.5.md`](release-log/0.2.5.md)를, 새 workspace의 자동 Codex 설정과 completion 변경은 [`release-log/0.2.6.md`](release-log/0.2.6.md)를, 운영 로그·runtime 교체·OpenAPI 변경은 [`release-log/0.2.7.md`](release-log/0.2.7.md)를 추가로 확인하세요.
+## Production checklist
 
-## Source 규칙
+- Git에는 `src/`, `pom.xml`, `config/wiz.yml`, `config/application*.example.yml`, `src/angular/package-lock.json`을 포함합니다.
+- 실제 config, `data/`, `build/`, `bundle/`은 source와 분리해 관리합니다.
+- runtime 버전과 source revision을 고정하고 새 checkout에서 `build --clean`을 먼저 수행합니다.
+- 배포 전 `bundle/.wiz-build.json`과 health endpoint를 확인합니다.
+- 실행 중인 checkout을 직접 갱신하기보다 release 디렉터리를 분리해 rollback 경로를 유지합니다.
 
-- App API: `src/app/{appId}/api.java`
-- App socket: `src/app/{appId}/socket.java`
-- Route: `src/route/{routeId}/route.java`
-- Controller hook: `src/controller/*.java`
-- Model/Struct: `src/model/**/*.java`
-- Portal package: `src/portal/{package}/...`
+## AI & MCP
 
-Source 파일에 package 선언이 없으면 build 단계에서 `wiz.java.package-root` 기준 package가 자동으로 붙습니다.
-build 산출물의 Java package는 Spring 계층형 명칭을 사용합니다.
+`create`는 별도 명령 없이 다음 항목을 workspace에 설정합니다.
 
-| Source | Generated package |
+- `.codex/config.toml`과 `.codex/AGENTS.md`
+- `.github`의 WIZ Spring 개발 지침, API 문서, prompt
+- 현재 runtime JAR을 사용하는 `wiz-spring` MCP 서버
+
+MCP 서버만 직접 실행할 수도 있습니다.
+
+```bash
+wiz-spring mcp --root ../hello-wiz
+```
+
+## Documentation
+
+| Guide | What you will find |
 | --- | --- |
-| `src/app/{appId}/api.java` | `{packageRoot}.web.api.{AppId}Api` |
-| `src/app/{appId}/socket.java` | `{packageRoot}.realtime.socket.{AppId}SocketController` |
-| `src/route/{routeId}/route.java` | `{packageRoot}.web.route.{RouteId}RouteHandler` |
-| `src/controller/**/*.java` | `{packageRoot}.security.guard...` |
-| `src/model/Struct.java` | `{packageRoot}.application.model.Struct` |
-| `src/model/struct/**/*.java` | `{packageRoot}.application.service...` |
-| `src/model/db/**/*.java` | `{packageRoot}.domain.entity...` |
-| `src/portal/{package}/model/**/*.java` | `{packageRoot}.module.{package}.application|domain|infrastructure...` |
+| [Web development guide](src/main/resources/wiz/codex-instructions/devdocs/web-development-guide/README.md) | App, Controller, Model, Route, Angular, Portal 작성법 |
+| [Runtime API reference](src/main/resources/wiz/codex-instructions/devdocs/wiz-docs/api-reference.md) | `WizContext`, response, session, socket 사용 예제 |
+| [Configuration profiles](src/main/resources/wiz/codex-instructions/devdocs/instructions/configuration-profiles.md) | profile과 설정 파일 운용 방식 |
+| [Release notes](release-log/README.md) | 버전별 변경 사항과 migration 안내 |
+| [Build performance](docs/reviews/eegvhudvcsffxtopyqfcsfdwvzddwcyz-performance.md) | 반복 build benchmark와 재현 방법 |
 
-## MCP와 Codex
+질문과 버그 제보는 [GitHub Issues](https://github.com/season-framework/wiz-spring/issues)를 이용해 주세요.
 
-WIZ Spring MCP 서버와 Codex용 인스트럭션은 runtime jar 안에 포함되어 있습니다. `create`는 기본 template, `--path`, `--uri` 구분 없이 MCP 설정을 `.codex`에, 인스트럭션과 참조 문서를 `.github`에 함께 설치합니다. 별도 `codex` 하위 명령은 사용하지 않습니다. 인스트럭션 원본은 이 저장소의 `src/main/resources/wiz/codex-instructions/`에서 관리합니다.
+## Development
 
 ```bash
-java -jar "$jar" mcp --root "$workspace"
-```
-
-MCP 도구는 workspace/source/package/app 기준 이름을 사용합니다. 예: `wiz_workspace_status`, `wiz_app_build`, `wiz_app_jar`, `wiz_app_dependency_info`, `wiz_source_create_app`, `wiz_package_create`.
-
-## 테스트
-
-```bash
+# Unit & integration tests
 ./mvnw test
-```
 
-Angular `platformBrowser()` 전환 후 실제 브라우저에서 WIZ render와 routerLink까지 확인하려면:
-
-```bash
+# 실제 브라우저 기반 Angular regression test
 node scripts/verify-angular-platform-browser.mjs
 ```
 
-이 검증은 임시 workspace에 전용 probe 페이지를 주입해 `service.render()` 이후 부모 변수, `@Input`, `@Output` DOM 갱신과 주요 routerLink 이동을 확인합니다. Playwright는 `/tmp` 아래 도구 디렉터리에 설치됩니다.
+변경 전후 테스트 결과와 재현 가능한 설명을 함께 남겨 주세요.
+
+## License
+
+WIZ Spring is open source software licensed under the [MIT License](LICENSE).
