@@ -27,9 +27,10 @@ class WizRuntimeTest {
         new ProjectBuildService().build(project, true, "bundle");
 
         WizRuntime runtime = new WizRuntime(new ProjectRegistry(pathService));
-        try (WizContext context = runtime.createContext(WizRequest.builder()
-                .cookie(ProjectRegistry.DEFAULT_DEVMODE_COOKIE_NAME, "true")
-                .build())) {
+        try (ProjectRuntimeCache cache = runtime.runtimeCache();
+                WizContext context = runtime.createContext(WizRequest.builder()
+                        .cookie(ProjectRegistry.DEFAULT_DEVMODE_COOKIE_NAME, "true")
+                        .build())) {
             WizResult result = context.response().ok(Map.of("ok", true));
 
             assertEquals("true", result.headers().get(WizRuntime.DEVMODE_HEADER).getFirst());

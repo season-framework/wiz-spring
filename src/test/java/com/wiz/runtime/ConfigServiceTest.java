@@ -12,6 +12,7 @@ import java.util.Map;
 import com.wiz.build.ProjectBuildService;
 import com.wiz.core.ProjectService;
 import com.wiz.core.WorkspaceService;
+import com.wiz.domain.ModelRegistry;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -87,7 +88,9 @@ class ConfigServiceTest {
         Files.writeString(project.configRoot().resolve("feature.yml"), "endpoint: /custom-feature\n");
         new ProjectBuildService().build(project, true, "bundle");
 
-        try (WizContext context = new WizContext(WizRequest.builder().build(), new WizResponse(), project)) {
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache();
+                WizContext context = new WizContext(WizRequest.builder().build(), new WizResponse(), project,
+                        new ModelRegistry(cache), null, cache)) {
             assertEquals("/custom-feature", context.config().namespace("feature").get("endpoint"));
         }
     }
@@ -97,19 +100,20 @@ class ConfigServiceTest {
         ProjectContext project = createApp();
         Files.writeString(project.configRoot().resolve("season.yml"), "auth_baseuri: /one\n");
         new ProjectBuildService().build(project, true, "bundle");
-        ProjectRuntimeCache cache = new ProjectRuntimeCache();
-        ProjectRuntimeCache.CachedProjectRuntime runtime = cache.get(project);
-        ConfigService config = new ConfigService(project, runtime);
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            ProjectRuntimeCache.CachedProjectRuntime runtime = cache.get(project);
+            ConfigService config = new ConfigService(project, runtime);
 
-        assertEquals("/one", config.namespace("season").get("auth_baseuri"));
-        Files.writeString(project.configRoot().resolve("season.yml"), "auth_baseuri: /two\n");
-        Files.writeString(project.bundleRoot().resolve("config/season.yml"), "auth_baseuri: /two\n");
+            assertEquals("/one", config.namespace("season").get("auth_baseuri"));
+            Files.writeString(project.configRoot().resolve("season.yml"), "auth_baseuri: /two\n");
+            Files.writeString(project.bundleRoot().resolve("config/season.yml"), "auth_baseuri: /two\n");
 
-        assertEquals("/one", config.namespace("season").get("auth_baseuri"));
+            assertEquals("/one", config.namespace("season").get("auth_baseuri"));
 
-        cache.invalidate(project);
-        ConfigService refreshed = new ConfigService(project, cache.get(project));
-        assertEquals("/two", refreshed.namespace("season").get("auth_baseuri"));
+            cache.invalidate(project);
+            ConfigService refreshed = new ConfigService(project, cache.get(project));
+            assertEquals("/two", refreshed.namespace("season").get("auth_baseuri"));
+        }
     }
 
     @Test
@@ -118,9 +122,7 @@ class ConfigServiceTest {
         Path configFile = project.configRoot().resolve("season.yml");
         Files.writeString(configFile, "auth_baseuri: /one\n");
         new ProjectBuildService().build(project, true, "bundle");
-        ProjectRuntimeCache cache = new ProjectRuntimeCache();
-
-        try {
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
             ProjectRuntimeCache.CachedProjectRuntime first = cache.get(project);
             assertEquals("/one", new ConfigService(project, first).namespace("season").get("auth_baseuri"));
 
@@ -130,8 +132,6 @@ class ConfigServiceTest {
 
             assertNotSame(first, second);
             assertEquals("/two", new ConfigService(project, second).namespace("season").get("auth_baseuri"));
-        } finally {
-            cache.close();
         }
     }
 
@@ -149,9 +149,7 @@ class ConfigServiceTest {
         new ProjectBuildService().build(project, true, "bundle");
         MockEnvironment environment = new MockEnvironment();
         environment.setActiveProfiles("dev", "local");
-        ProjectRuntimeCache cache = new ProjectRuntimeCache(environment);
-
-        try {
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache(environment)) {
             ConfigNamespace config = new ConfigService(project, cache.get(project)).namespace("application");
 
             assertEquals("local", config.get("profile-test.shared"));
@@ -159,8 +157,6 @@ class ConfigServiceTest {
             assertEquals("development", config.get("profile-test.dev-only"));
             assertEquals("workstation", config.get("profile-test.local-only"));
             assertTrue(config.find("profile-test.prod-only").isEmpty());
-        } finally {
-            cache.close();
         }
     }
 

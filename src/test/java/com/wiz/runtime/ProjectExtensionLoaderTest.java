@@ -11,6 +11,7 @@ import com.wiz.build.BuildResult;
 import com.wiz.build.ProjectBuildService;
 import com.wiz.core.ProjectService;
 import com.wiz.core.WorkspaceService;
+import com.wiz.domain.ModelRegistry;
 import com.wiz.http.ResponseEnvelope;
 
 import org.junit.jupiter.api.Test;
@@ -34,7 +35,9 @@ class ProjectExtensionLoaderTest {
         assertTrue(build.success(), build.message());
 
         MockHttpSession httpSession = new MockHttpSession();
-        try (WizContext context = new WizContext(WizRequest.builder().session(httpSession).build(), new WizResponse(), project)) {
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache();
+                WizContext context = new WizContext(WizRequest.builder().session(httpSession).build(),
+                        new WizResponse(), project, new ModelRegistry(cache), null, cache)) {
             assertEquals("com.wiz.app.application.model.AuthService", context.auth().getClass().getName());
             assertEquals("com.wiz.app.application.model.SessionService", context.session().getClass().getName());
             ResponseEnvelope envelope = (ResponseEnvelope) context.auth().check(context).entity();

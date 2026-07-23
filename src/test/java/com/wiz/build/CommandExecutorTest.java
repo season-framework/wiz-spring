@@ -46,6 +46,7 @@ class CommandExecutorTest {
         assertTrue(result.cappedOutput());
         assertTrue(result.output().contains("token=***"));
         assertFalse(result.output().contains("abc123"));
+        assertTrue(Files.notExists(root.resolve(".wiz")));
     }
 
     @Test

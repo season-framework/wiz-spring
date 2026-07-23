@@ -50,8 +50,7 @@ public class BundleCommand implements Callable<Integer> {
                 configRoot.toAbsolutePath().normalize(),
                 projectBundle.toAbsolutePath().normalize(),
                 workspace.resolve("src"),
-                workspace.resolve("build"),
-                workspace.resolve(".wiz")
+                workspace.resolve("build")
         };
         for (Path protectedPath : protectedPaths) {
             if (outputRoot.startsWith(protectedPath) || protectedPath.startsWith(outputRoot)) {

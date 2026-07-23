@@ -83,10 +83,10 @@ java -jar "$jar" create "$workspace" --package a.b.c --skip-build
 ## 실행과 배포
 
 ```bash
-java -jar "$jar" run --root "$workspace" --port 3000 --log /var/log/wiz/demo.log
+java -jar "$jar" run --root "$workspace" --port 3000 --log /var/log/wiz.demo/application.log
 ```
 
-`run`, `build`, `mcp`, `service install`은 `config/wiz.yml`의 `workspace: java` marker, `config/application.yml` 또는 `.yaml`, 그리고 `src/app` 또는 `bundle/src/app` 구조를 확인합니다. 일반 Spring 디렉터리나 불완전한 checkout은 서버로 실행하지 않습니다. 실제 `run`은 현재 runtime version으로 완료된 `bundle/.wiz-build.json`까지 요구하며, build가 없거나 다른 runtime의 산출물이면 실행 전에 명확히 중단합니다(`--dry-run`은 사전 진단만 하므로 build 없이도 사용할 수 있습니다). `--log`는 Spring 로그와 project 코드의 `System.out/err`를 console에 유지하면서 파일에도 기록하며, 10 MiB마다 회전해 현재 파일과 archive 14개만 보관합니다. 시작 전 해석된 root, config, profile, Java, port, PID도 출력합니다.
+`run`, `build`, `mcp`, `service install`은 `config/wiz.yml`의 `workspace: java` marker, `config/application.yml` 또는 `.yaml`, 그리고 `src/app` 또는 `bundle/src/app` 구조를 확인합니다. 일반 Spring 디렉터리나 불완전한 checkout은 서버로 실행하지 않습니다. 이 중 `build`는 실제 입력인 `src/app`을 반드시 요구하므로 deploy 전용 `bundle/src/app`만 있는 디렉터리는 실행하거나 `jar --skip-build`로 패키징할 수 있지만 다시 빌드할 수 없습니다. 실제 `run`은 현재 runtime version 및 Java package와 일치하는 완료된 `bundle/.wiz-build.json`까지 요구하며, build가 없거나 다른 runtime/package의 산출물이면 실행 전에 명확히 중단합니다(`--dry-run`은 사전 진단만 하므로 build 없이도 사용할 수 있습니다). `--log`는 Spring 로그와 project 코드의 `System.out/err`를 console에 유지하면서 파일에도 기록하며, 10 MiB마다 회전해 현재 파일과 archive 14개만 보관합니다. 시작 전 해석된 root, config, profile, Java, port, PID도 출력합니다.
 
 다시 빌드:
 
@@ -94,7 +94,7 @@ java -jar "$jar" run --root "$workspace" --port 3000 --log /var/log/wiz/demo.log
 java -jar "$jar" build --root "$workspace" --clean
 ```
 
-package root를 바꾸려면 언제든 `build --package`를 사용합니다. 설정, Maven groupId와 WIZ Java source의 package 참조가 함께 변경되고 기존 generated Spring tree와 bundle을 제거하는 clean build가 자동 적용됩니다. 이미 배포용 standalone JAR을 만들었다면 package 변경 후 다시 패키징해야 합니다.
+package root를 바꾸려면 언제든 `build --package`를 사용합니다. 설정, Maven groupId와 WIZ Java source의 package 참조가 함께 변경되고 clean build가 자동 적용됩니다. 새 bundle이 완성되기 전까지 직전 정상 bundle은 보존되지만 package가 현재 workspace와 다르면 `run`이 거부합니다. 이미 배포용 standalone JAR을 만들었다면 package 변경 후 다시 패키징해야 합니다.
 
 ```bash
 java -jar "$jar" build --root "$workspace" --package com.example.product
@@ -115,7 +115,7 @@ java -jar "$jar" bundle --root "$workspace" --output /tmp/demo2-bundle
 
 ### Git 기반 서버 마이그레이션
 
-Git에는 `src/`, `pom.xml`, `config/application*.example.yml`, `config/wiz.yml`, `src/angular/package-lock.json`을 포함하고 실제 `config/application*.yml`, `data/`, `build/`, `bundle/`, `.wiz/`는 포함하지 않습니다. 대상 서버에서는 runtime과 source revision을 고정하고, 비밀 설정/data는 별도 backup 또는 secret store에서 복원한 뒤 새 checkout에서 먼저 build합니다.
+Git에는 `src/`, `pom.xml`, `config/application*.example.yml`, `config/wiz.yml`, `src/angular/package-lock.json`을 포함하고 실제 `config/application*.yml`, `data/`, `build/`, `bundle/`은 포함하지 않습니다. build lock, runtime snapshot, MCP 상태와 npm cache는 workspace 밖의 운영체제 runtime/state 또는 사용자 cache 경로에 저장되므로 프로젝트에 별도 숨김 framework 디렉터리를 만들거나 Git으로 옮기지 않습니다. 대상 서버에서는 runtime과 source revision을 고정하고, 비밀 설정/data는 별도 backup 또는 secret store에서 복원한 뒤 새 checkout에서 먼저 build합니다.
 
 ```bash
 git fetch --prune origin
@@ -124,9 +124,15 @@ wiz-spring build --root "$workspace" --clean
 test -f "$workspace/bundle/.wiz-build.json"
 ```
 
-build와 smoke test가 성공한 checkout만 서비스에 연결한 뒤 `wiz-spring service restart <name>`으로 전환하세요. 실행 중인 checkout에 `git pull`과 build를 직접 겹치기보다 release 디렉터리를 분리하면 실패한 build가 현재 서비스와 설정을 훼손하지 않고 즉시 이전 revision으로 돌아갈 수 있습니다. 서비스는 가능하면 alias 대신 `service install --command /absolute/path/to/wiz-spring`으로 고정하고, 등록 후에는 `service logs <name> --lines 200 --follow`로 journal과 application log 위치를 함께 확인합니다.
+build와 smoke test가 성공한 checkout만 서비스에 연결한 뒤 `wiz-spring service restart <name>`으로 전환하세요. 실행 중인 checkout에 `git pull`과 build를 직접 겹치기보다 release 디렉터리를 분리하면 실패한 build가 현재 서비스와 설정을 훼손하지 않고 즉시 이전 revision으로 돌아갈 수 있습니다. 서비스는 가능하면 alias 대신 `service install --command /absolute/path/to/wiz-spring`으로 고정하고, 등록 후에는 `service logs <name> --lines 200 --follow`로 journal과 application log 위치를 함께 확인합니다. 생성되는 systemd unit은 기본적으로 workspace 소유자를 `User=`로 사용하며 필요하면 `--user`로 명시할 수 있습니다. 기본 로그는 전체 unit 이름을 사용한 서비스별 `/var/log/wiz.<name>/application.log`에 저장되며 unit에는 `LogsDirectory=wiz.<name>`이 설정됩니다. 별도 `--log`를 쓰려면 그 부모 디렉터리와 기존 파일이 service 사용자 소유이며 owner-write 가능해야 합니다.
 
-정상 build는 `.wiz/build.lock` filesystem lock으로 같은 workspace의 동시 CLI build를 직렬화하고, Maven dependency를 임시 디렉터리에 받은 뒤 직전 정상본을 backup한 상태에서 교체합니다. 새 workspace는 package lock을 포함해 `npm ci`를 사용합니다. `.wiz/npm-cache`는 재다운로드를 줄이기 위한 build cache이므로 Git으로 복사하지 말고 용량을 감시하며, 정비 시간에 삭제한 경우 다음 clean build에서 다시 생성됩니다. runtime 교체용 `.wiz/runtime-snapshots`는 요청이 끝나면 삭제되고 비정상 종료로 남은 다른 PID의 snapshot은 다음 기동 시 정리됩니다.
+정상 build는 workspace의 정규 경로를 hash한 외부 filesystem lock으로 같은 workspace의 동시 CLI build를 직렬화합니다. `--package`의 source/config/pom 변경도 이 lock 안에서 수행하며, 사용이 끝난 in-process lock entry는 제거합니다. Maven dependency는 POM/local parent, Maven Wrapper와 `.mvn`, 사용자 Maven 설정, 실행 환경 fingerprint 및 게시된 JAR hash가 모두 같을 때 직전 resolve 결과를 재사용합니다. POM/settings/Maven option의 SNAPSHOT·version range·LATEST/RELEASE, 실제 profile activation처럼 안정성을 보장하기 어려운 입력은 매번 Maven으로 확인하고, cache miss에서는 임시 디렉터리에 받은 뒤 직전 정상본을 backup한 상태에서 교체합니다. `--clean`은 workspace의 dependency cache를 함께 비워 강제로 다시 resolve합니다. 실행 중인 Spring Boot fat JAR에서 javac classpath를 만들 때도 원본 JAR SHA-256별 추출 결과를 `WIZ_SPRING_CACHE_DIR`의 workspace별 외부 cache에 보존하고, manifest와 파일 hash가 일치할 때만 재사용합니다. bundle도 `build/target/work/bundle-next`에서 fallback, dependency manifest, CycloneDX BOM과 완료 marker까지 만든 뒤 게시하므로 clean 여부나 phase와 관계없이 새 bundle이 완성되기 전에는 직전 정상 bundle을 보존합니다. Java compile 입력은 이번 build가 resolve한 dependency와 workspace `lib/`로 한정하며, source가 사라지면 이전 class/JAR도 제거합니다. framework가 관리하는 `build/`와 그 주요 하위 경로가 symlink이면 workspace 밖을 변경하지 않고 build를 거부합니다. lock은 `WIZ_SPRING_RUNTIME_DIR` 또는 안정적인 `~/.local/state/wiz-spring/runtime`에 저장하므로 interactive build와 systemd service가 같은 운영체제 사용자라면 환경 차이와 무관하게 같은 lock을 사용합니다. owner-only lock 계약을 유지하려면 build도 systemd unit의 `User=` 계정으로 실행해야 합니다. `service install`은 현재 `WIZ_SPRING_RUNTIME_DIR`, `WIZ_SPRING_CACHE_DIR`, `WIZ_SPRING_STATE_DIR`를 unit에 고정하며 각각 `--runtime-dir`, `--cache-dir`, `--state-dir`로 명시할 수 있습니다. 명시하거나 상속한 디렉터리는 workspace 밖에 미리 만들고 service 사용자 소유 및 owner read/write/search 권한으로 준비해야 하며, 조건이 맞지 않으면 등록 단계에서 중단합니다.
+
+대용량 runtime 교체 snapshot은 tmpfs와 분리해 `WIZ_SPRING_CACHE_DIR` 또는 `~/.cache/wiz-spring`에 저장합니다. framework가 만드는 runtime/state/cache 하위 디렉터리는 현재 사용자만 접근하도록 제한합니다. snapshot은 host/machine과 process 시작 시각별 namespace를 사용하며 마지막 요청과 정상 종료 때 삭제됩니다. 강제 종료로 남은 snapshot은 같은 host의 다음 runtime 기동 때 모든 workspace key를 대상으로 정리하므로 공유 cache에서도 다른 서버의 활성 snapshot을 PID만으로 삭제하지 않습니다. cache 경로를 별도 filesystem으로 지정하면 hard-link 대신 파일 복사가 발생할 수 있으므로 충분한 disk 공간을 확보합니다.
+
+새 workspace는 package lock을 포함해 `npm ci`를 사용하며 npm의 기본 사용자 cache를 그대로 공유합니다. 일반 build는 staged `node_modules`와 Angular 증분 cache를 보존하고, dependency가 없거나 package/lock/`.npmrc` fingerprint가 바뀐 경우에만 자동 설치합니다. lockfile이 없으면 registry 결과를 고정할 수 없으므로 매 build에서 `npm install`을 다시 수행합니다. 재설치가 필요한 경우에는 호환되지 않을 수 있는 Angular 증분 cache만 비운 뒤 설치하며, CLI build 입력이 불완전하면 npm 설치 전에 fallback을 선택합니다. 실제 npm cache 위치는 `npm config get cache`로 확인할 수 있고 workspace 안에는 npm cache를 만들지 않습니다. MCP 상태는 `WIZ_SPRING_STATE_DIR`, `XDG_STATE_HOME/wiz-spring`, `~/.local/state/wiz-spring` 순서로 정한 외부 사용자 state 경로에 file lock과 atomic replace로 저장하며 `mcp --state <file>`로 명시적으로 바꿀 수 있습니다. 환경 변수와 명시 경로도 workspace 내부를 가리킬 수 없습니다.
+
+반복 build 최적화의 이전/이후 측정값, 해석 범위와 재현 방법은 [성능 비교 문서](docs/reviews/eegvhudvcsffxtopyqfcsfdwvzddwcyz-performance.md)에 기록했습니다.
 
 ## Command Reference
 
@@ -235,10 +241,12 @@ build/
   target/dependency/
   target/app-api.jar
   target/frontend/
-  .wiz/source/
+  target/frontend-dependencies.sha256
+  target/work/source/
+  target/work/bundle-next/  # 정상 build 종료 시 정리
 ```
 
-`build/src/main/java`, `build/src/main/resources`, `build/target/**`는 외부에서 보아도 일반 Spring Boot/Maven project에 가까운 공개 산출물입니다. `build/.wiz/source`는 WIZ app, portal, Angular 입력을 평탄화한 내부 staging 경로이며 직접 수정하지 않습니다.
+`build/src/main/java`, `build/src/main/resources`와 `build/target/classes`, `dependency`, `app-api.jar`, `frontend`는 외부에서 보아도 일반 Spring Boot/Maven project에 가까운 공개 산출물입니다. `build/target/work/source`는 WIZ app, portal, Angular 입력을 평탄화하고 frontend dependency/cache를 재사용하는 staging 경로입니다. `bundle-next`는 완료 marker까지 준비한 뒤 `bundle/`로 게시되는 일시적 경로이며, 강제 종료로 남으면 다음 build가 이전 bundle을 복구한 뒤 정리합니다. 게시된 `bundle/bom.json`은 marker 및 dependency manifest와 같은 세대의 CycloneDX 문서입니다. 모두 build가 관리하므로 직접 수정하지 않습니다.
 
 ## 설정 파일과 profile
 

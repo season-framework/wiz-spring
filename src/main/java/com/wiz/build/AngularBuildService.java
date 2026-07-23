@@ -1,17 +1,22 @@
 package com.wiz.build;
 
 import java.io.IOException;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Stream;
 
 import com.wiz.runtime.ProjectContext;
@@ -65,7 +70,30 @@ public class AngularBuildService {
 
         ArrayList<CommandResult> commands = new ArrayList<>();
         try {
-            if (clean) {
+            buildLogger.info("[frontend-stage] staging WIZ sources for Angular CLI");
+            sourceStagingService.stage(project);
+            Optional<BuildReadiness> readiness = buildReadiness(angularRoot, true);
+            if (readiness.isEmpty()) {
+                buildLogger.info("[frontend] Angular package is present but not self-contained for CLI build; using minimal web bundle fallback");
+                return FrontendBuildResult.skipped("Angular package is present but not self-contained for CLI build; using minimal web bundle fallback");
+            }
+
+            String dependencyFingerprint = dependencyFingerprint(angularRoot);
+            boolean dependenciesPresent = frontendDependenciesPresent(angularRoot);
+            boolean dependencyLockPresent = dependencyLockPresent(angularRoot);
+            boolean dependencyFingerprintMatches = dependencyLockPresent
+                    && dependencyFingerprintMatches(project, dependencyFingerprint);
+            boolean installDependencies = clean || !dependenciesPresent || !dependencyFingerprintMatches;
+            if (installDependencies) {
+                String reason = clean
+                        ? "clean build"
+                        : (!dependenciesPresent
+                                ? "dependencies are missing"
+                                : (!dependencyLockPresent
+                                        ? "dependency lockfile is missing"
+                                        : "package metadata changed"));
+                buildLogger.info("[frontend-install] required: " + reason);
+                delete(angularRoot.resolve(".angular/cache"));
                 buildLogger.info("[frontend-install] command: npm " + installCommand(angularRoot));
                 CommandResult install = commandExecutor.run(
                         "frontend-install",
@@ -80,15 +108,11 @@ public class AngularBuildService {
                 if (!install.success()) {
                     return FrontendBuildResult.failed(install.summary(), commands);
                 }
+                writeDependencyFingerprint(project, dependencyFingerprint);
             } else {
-                buildLogger.info("[frontend-install] skipped for normal build");
-                if (!frontendDependenciesPresent(angularRoot)) {
-                    return FrontendBuildResult.failed("Frontend dependencies are missing; run build with --clean to install npm packages", commands);
-                }
+                buildLogger.info("[frontend-install] skipped; dependencies match package metadata");
             }
 
-            buildLogger.info("[frontend-stage] staging WIZ sources for Angular CLI");
-            sourceStagingService.stage(project);
             buildLogger.info("[frontend-pug] compiling Pug templates when present");
             CommandResult pug = pugBuildService.compile(project, angularRoot, buildLogger);
             commands.add(pug);
@@ -97,7 +121,7 @@ public class AngularBuildService {
                 return FrontendBuildResult.failed(pug.summary(), commands);
             }
 
-            Optional<BuildReadiness> readiness = buildReadiness(angularRoot);
+            readiness = buildReadiness(angularRoot, false);
             if (readiness.isEmpty()) {
                 buildLogger.info("[frontend] Angular package is present but not self-contained for CLI build; using minimal web bundle fallback");
                 return FrontendBuildResult.skipped("Angular package is present but not self-contained for CLI build; using minimal web bundle fallback");
@@ -134,7 +158,58 @@ public class AngularBuildService {
                 && Files.isDirectory(angularRoot.resolve("node_modules/pug"));
     }
 
-    private Optional<BuildReadiness> buildReadiness(Path angularRoot) throws IOException {
+    private String dependencyFingerprint(Path angularRoot) throws IOException {
+        MessageDigest digest = sha256();
+        for (String name : List.of("package.json", "package-lock.json", "npm-shrinkwrap.json", ".npmrc")) {
+            Path input = angularRoot.resolve(name);
+            if (!Files.isRegularFile(input, LinkOption.NOFOLLOW_LINKS)) {
+                continue;
+            }
+            digest.update(name.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            digest.update((byte) 0);
+            try (var stream = Files.newInputStream(input)) {
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = stream.read(buffer)) >= 0) {
+                    digest.update(buffer, 0, read);
+                }
+            }
+            digest.update((byte) 0);
+        }
+        return HexFormat.of().formatHex(digest.digest());
+    }
+
+    private boolean dependencyFingerprintMatches(ProjectContext project, String fingerprint) throws IOException {
+        Path state = ProjectBuildLayout.frontendDependencyFingerprint(project);
+        return Files.isRegularFile(state, LinkOption.NOFOLLOW_LINKS)
+                && Files.readString(state).trim().equals(fingerprint);
+    }
+
+    private void writeDependencyFingerprint(ProjectContext project, String fingerprint) throws IOException {
+        Path state = ProjectBuildLayout.frontendDependencyFingerprint(project);
+        Files.createDirectories(state.getParent());
+        Path temporary = state.resolveSibling(state.getFileName() + ".tmp-" + UUID.randomUUID());
+        try {
+            Files.writeString(temporary, fingerprint + System.lineSeparator());
+            try {
+                Files.move(temporary, state, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException exception) {
+                Files.move(temporary, state, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
+    }
+
+    private MessageDigest sha256() {
+        try {
+            return MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is not available", exception);
+        }
+    }
+
+    private Optional<BuildReadiness> buildReadiness(Path angularRoot, boolean allowPugIndex) throws IOException {
         Path angularJson = angularRoot.resolve("angular.json");
         if (!Files.isRegularFile(angularJson)) {
             return Optional.empty();
@@ -146,12 +221,21 @@ public class AngularBuildService {
         String main = string(options, "main", "src/main.ts");
         String tsConfig = string(options, "tsConfig", "tsconfig.app.json");
         String outputPath = outputPath(options);
-        if (!Files.isRegularFile(angularRoot.resolve(index))
+        Path indexPath = angularRoot.resolve(index);
+        if (!(Files.isRegularFile(indexPath) || (allowPugIndex && Files.isRegularFile(pugAlternative(indexPath))))
                 || !Files.isRegularFile(angularRoot.resolve(main))
                 || !Files.isRegularFile(angularRoot.resolve(tsConfig))) {
             return Optional.empty();
         }
         return Optional.of(new BuildReadiness(outputPath));
+    }
+
+    private Path pugAlternative(Path indexPath) {
+        String name = indexPath.getFileName().toString();
+        if (!name.endsWith(".html")) {
+            return indexPath.resolveSibling(name + ".pug");
+        }
+        return indexPath.resolveSibling(name.substring(0, name.length() - ".html".length()) + ".pug");
     }
 
     private Optional<Map<String, Object>> buildOptions(Map<String, Object> angularJson) {
@@ -181,10 +265,15 @@ public class AngularBuildService {
     }
 
     private String installCommand(Path angularRoot) {
-        if (Files.isRegularFile(angularRoot.resolve("package-lock.json")) || Files.isRegularFile(angularRoot.resolve("npm-shrinkwrap.json"))) {
+        if (dependencyLockPresent(angularRoot)) {
             return "ci";
         }
         return "install";
+    }
+
+    private boolean dependencyLockPresent(Path angularRoot) {
+        return Files.isRegularFile(angularRoot.resolve("package-lock.json"), LinkOption.NOFOLLOW_LINKS)
+                || Files.isRegularFile(angularRoot.resolve("npm-shrinkwrap.json"), LinkOption.NOFOLLOW_LINKS);
     }
 
     private void logCommandResult(BuildLogger logger, CommandResult result) {
@@ -257,7 +346,7 @@ public class AngularBuildService {
     }
 
     private void delete(Path path) throws IOException {
-        if (!Files.exists(path)) {
+        if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
             return;
         }
         try (Stream<Path> paths = Files.walk(path)) {

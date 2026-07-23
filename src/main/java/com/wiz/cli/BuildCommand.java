@@ -8,9 +8,7 @@ import com.wiz.build.BuildLogger;
 import com.wiz.build.BuildResult;
 import com.wiz.build.MavenExecutableResolver;
 import com.wiz.build.ProjectBuildService;
-import com.wiz.core.WorkspacePackageService;
 import com.wiz.runtime.PathService;
-import com.wiz.runtime.ProjectContext;
 
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -21,7 +19,7 @@ public class BuildCommand implements Callable<Integer> {
     @Option(names = "--root", description = "WIZ workspace root. Defaults to auto-detecting from the current directory.")
     private Path root;
 
-    @Option(names = "--clean", description = "Clean generated build and bundle directories first.")
+    @Option(names = "--clean", description = "Recreate generated build state; publish the bundle only after a successful bundle build.")
     private boolean clean;
 
     @Option(names = "--package", description = "Change the Java package root. Package changes automatically use a clean build.")
@@ -34,17 +32,25 @@ public class BuildCommand implements Callable<Integer> {
     public Integer call() throws Exception {
         PathService paths = pathService(root);
         String requestedPhase = phase == null || phase.isBlank() ? "bundle" : phase.trim();
+        if (!ProjectBuildService.isSupportedPhase(requestedPhase)) {
+            System.out.println("Supported build phases: reconstruct, compile, bundle");
+            return 2;
+        }
+        Path appRoot = paths.root().resolve("src/app");
+        if (!ProjectBuildService.hasBuildSource(appRoot)) {
+            System.out.println(ProjectBuildService.missingBuildSourceMessage(paths.root()));
+            return 2;
+        }
         Path maven = requireMavenWhenNeeded(paths.root(), requestedPhase);
         if (maven != null) {
             System.out.println("Maven: " + maven);
         }
-        WorkspacePackageService.PackageSelection selection = new WorkspacePackageService()
-                .selectForBuild(paths, packageRoot);
-        ProjectContext context = selection.context();
-        if (selection.changed()) {
-            System.out.println("Java package updated: " + context.packageRoot());
+        ProjectBuildService.PackageBuildResult packageBuild = new ProjectBuildService()
+                .build(paths, packageRoot, clean, requestedPhase, BuildLogger.console());
+        if (packageBuild.packageChanged()) {
+            System.out.println("Java package updated: " + packageBuild.packageRoot());
         }
-        BuildResult result = new ProjectBuildService().build(context, clean || selection.changed(), requestedPhase, BuildLogger.console());
+        BuildResult result = packageBuild.result();
         System.out.println(result.message());
         System.out.println("Phases: " + String.join(",", result.phases()));
         return result.exitCode();

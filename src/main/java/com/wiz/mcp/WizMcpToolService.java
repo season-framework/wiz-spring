@@ -3,10 +3,15 @@ package com.wiz.mcp;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -32,6 +37,7 @@ import com.wiz.core.ProjectService;
 import com.wiz.runtime.PathService;
 import com.wiz.runtime.ProjectContext;
 import com.wiz.runtime.SafePath;
+import com.wiz.runtime.WorkspaceRuntimePaths;
 
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
@@ -51,10 +57,12 @@ public class WizMcpToolService {
         this.rootLocked = workspaceRoot != null;
         this.workspaceRoot = initialWorkspaceRoot(workspaceRoot);
         this.explicitStatePath = statePath == null ? envPath("WIZ_STATE_PATH") : statePath.toAbsolutePath().normalize();
+        validateExplicitStatePath();
         loadState();
         if (this.workspaceRoot == null) {
             this.workspaceRoot = new PathService(Path.of(".")).findWorkspaceRoot(Path.of(".")).orElse(null);
         }
+        validateExplicitStatePath();
     }
 
     public List<Map<String, Object>> toolDefinitions() {
@@ -183,6 +191,7 @@ public class WizMcpToolService {
             case "wiz_package_delete_controller" -> deleteController(projectName(args), stringArg(args, "packageName"), controllerNameArg(args));
             default -> throw new IllegalArgumentException("Unknown tool: " + name);
         };
+        saveState();
         return jsonResult(data);
     }
 
@@ -1139,41 +1148,96 @@ public class WizMcpToolService {
         if (target == null) {
             return;
         }
+        Path temporary = null;
         try {
-            Files.createDirectories(target.getParent());
-            LinkedHashMap<String, Object> raw = new LinkedHashMap<>();
-            if (Files.isRegularFile(target)) {
-                try {
-                    raw = objectMapper.readValue(Files.readAllBytes(target), new TypeReference<LinkedHashMap<String, Object>>() {
-                    });
-                } catch (Exception ignored) {
-                    raw = new LinkedHashMap<>();
+            target = prepareStateTarget(target);
+            Path lockPath = target.resolveSibling(target.getFileName() + ".lock");
+            try (FileChannel channel = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
+                WorkspaceRuntimePaths.secureFile(lockPath);
+                try (FileLock ignored = channel.lock()) {
+                    LinkedHashMap<String, Object> raw = readState(target);
+                    Object sessionsValue = raw.get("sessions");
+                    LinkedHashMap<String, Object> sessions;
+                    if (sessionsValue instanceof Map<?, ?> map) {
+                        sessions = new LinkedHashMap<>();
+                        map.forEach((key, value) -> sessions.put(String.valueOf(key), value));
+                    } else {
+                        sessions = new LinkedHashMap<>();
+                        raw.put("sessions", sessions);
+                    }
+                    String sessionId = latestSessionId(sessions);
+                    if (sessionId == null) {
+                        sessionId = "_mcp";
+                    }
+                    LinkedHashMap<String, Object> session = new LinkedHashMap<>();
+                    Object existing = sessions.get(sessionId);
+                    if (existing instanceof Map<?, ?> map) {
+                        map.forEach((key, value) -> session.put(String.valueOf(key), value));
+                    }
+                    session.put("workspacePath", requireWorkspaceRoot().toString());
+                    session.put("lastUsed", Instant.now().toEpochMilli());
+                    sessions.put(sessionId, session);
+                    temporary = Files.createTempFile(target.getParent(), "mcp-state-", ".json.tmp");
+                    Files.writeString(temporary,
+                            objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(raw) + "\n");
+                    WorkspaceRuntimePaths.secureFile(temporary);
+                    moveState(temporary, target);
+                    temporary = null;
+                    WorkspaceRuntimePaths.secureFile(target);
+                    statePath = target;
                 }
             }
-            Object sessionsValue = raw.get("sessions");
-            LinkedHashMap<String, Object> sessions;
-            if (sessionsValue instanceof Map<?, ?> map) {
-                sessions = new LinkedHashMap<>();
-                map.forEach((key, value) -> sessions.put(String.valueOf(key), value));
-            } else {
-                sessions = new LinkedHashMap<>();
-                raw.put("sessions", sessions);
-            }
-            String sessionId = latestSessionId(sessions);
-            if (sessionId == null) {
-                sessionId = "_mcp";
-            }
-            LinkedHashMap<String, Object> session = new LinkedHashMap<>();
-            Object existing = sessions.get(sessionId);
-            if (existing instanceof Map<?, ?> map) {
-                map.forEach((key, value) -> session.put(String.valueOf(key), value));
-            }
-            session.put("workspacePath", requireWorkspaceRoot().toString());
-            session.put("lastUsed", Instant.now().toEpochMilli());
-            sessions.put(sessionId, session);
-            Files.writeString(target, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(raw) + "\n");
-            statePath = target;
         } catch (Exception ignored) {
+        } finally {
+            if (temporary != null) {
+                try {
+                    Files.deleteIfExists(temporary);
+                } catch (IOException ignored) {
+                }
+            }
+        }
+    }
+
+    private LinkedHashMap<String, Object> readState(Path target) {
+        if (!Files.isRegularFile(target)) {
+            return new LinkedHashMap<>();
+        }
+        try {
+            return objectMapper.readValue(Files.readAllBytes(target), new TypeReference<LinkedHashMap<String, Object>>() {
+            });
+        } catch (Exception ignored) {
+            return new LinkedHashMap<>();
+        }
+    }
+
+    private Path prepareStateTarget(Path target) throws IOException {
+        Path root = workspaceRoot;
+        if (root != null) {
+            WorkspaceRuntimePaths.requireOutsideWorkspace(root, target);
+            if (target.toAbsolutePath().normalize().equals(WorkspaceRuntimePaths.mcpState(root))) {
+                return WorkspaceRuntimePaths.prepareMcpState(root);
+            }
+        }
+        Files.createDirectories(target.getParent());
+        return target;
+    }
+
+    private void validateExplicitStatePath() {
+        if (workspaceRoot == null || explicitStatePath == null) {
+            return;
+        }
+        try {
+            WorkspaceRuntimePaths.requireOutsideWorkspace(workspaceRoot, explicitStatePath);
+        } catch (IOException exception) {
+            throw new IllegalArgumentException(exception.getMessage(), exception);
+        }
+    }
+
+    private void moveState(Path source, Path target) throws IOException {
+        try {
+            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+        } catch (AtomicMoveNotSupportedException exception) {
+            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
         }
     }
 
@@ -1184,28 +1248,14 @@ public class WizMcpToolService {
         if (statePath != null) {
             return statePath;
         }
-        List<Path> candidates = new ArrayList<>();
-        if (workspaceRoot != null) {
-            candidates.add(workspaceRoot.resolve(".wiz/mcp-state.json"));
+        Path root = workspaceRoot;
+        if (root == null) {
+            root = envPath("WIZ_WORKSPACE");
         }
-        Path envRoot = envPath("WIZ_WORKSPACE");
-        if (envRoot != null) {
-            candidates.add(envRoot.resolve(".wiz/mcp-state.json"));
+        if (root == null) {
+            root = new PathService(Path.of(".")).findWorkspaceRoot(Path.of(".")).orElse(null);
         }
-        Path current = Path.of(".").toAbsolutePath().normalize();
-        while (current != null) {
-            candidates.add(current.resolve(".wiz/mcp-state.json"));
-            current = current.getParent();
-        }
-        for (Path candidate : candidates) {
-            if (Files.isRegularFile(candidate)) {
-                return candidate;
-            }
-        }
-        if (workspaceRoot != null) {
-            return workspaceRoot.resolve(".wiz/mcp-state.json");
-        }
-        return candidates.isEmpty() ? null : candidates.get(0);
+        return root == null ? null : WorkspaceRuntimePaths.mcpState(root);
     }
 
     @SuppressWarnings("unchecked")

@@ -18,6 +18,7 @@ import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -69,15 +70,15 @@ public class ProjectRuntimeCache implements AutoCloseable {
 
     @Autowired
     public ProjectRuntimeCache(Environment environment) {
-        this(new ObjectMapper(), activeProfiles(environment), URLClassLoader::new);
+        this(new ObjectMapper(), activeProfiles(environment), ProjectRuntimeClassLoader::new);
     }
 
     public ProjectRuntimeCache() {
-        this(new ObjectMapper(), "default", URLClassLoader::new);
+        this(new ObjectMapper(), "default", ProjectRuntimeClassLoader::new);
     }
 
     public ProjectRuntimeCache(ObjectMapper objectMapper) {
-        this(objectMapper, "default", URLClassLoader::new);
+        this(objectMapper, "default", ProjectRuntimeClassLoader::new);
     }
 
     ProjectRuntimeCache(ObjectMapper objectMapper, String profile, ClassLoaderFactory classLoaderFactory) {
@@ -88,7 +89,9 @@ public class ProjectRuntimeCache implements AutoCloseable {
         this.objectMapper = objectMapper == null ? new ObjectMapper() : objectMapper;
         this.profiles = profiles == null || profiles.isEmpty() ? List.of("default") : List.copyOf(profiles);
         this.profile = String.join(",", this.profiles);
-        this.classLoaderFactory = classLoaderFactory == null ? URLClassLoader::new : classLoaderFactory;
+        this.classLoaderFactory = classLoaderFactory == null
+                ? ProjectRuntimeClassLoader::new
+                : classLoaderFactory;
         this.runtimeParentClassLoader = stableRuntimeParentClassLoader();
     }
 
@@ -115,9 +118,13 @@ public class ProjectRuntimeCache implements AutoCloseable {
         try {
             acquiredGuard = BuildReadGuard.tryAcquire(project);
         } catch (IOException exception) {
-            LOGGER.warn("Could not acquire WIZ build lock while loading project runtime; marker validation will still be used: project={}",
-                    project.name(), exception);
-            acquiredGuard = BuildReadGuard.unlocked();
+            if (fallback != null) {
+                LOGGER.warn("Could not access WIZ build lock; continuing with the last completed runtime: project={}",
+                        project.name(), exception);
+                return fallback;
+            }
+            throw new IllegalStateException("Could not access WIZ build lock while loading project runtime: "
+                    + project.name(), exception);
         }
         BuildReadGuard guard = acquiredGuard;
         if (guard == null) {
@@ -217,7 +224,8 @@ public class ProjectRuntimeCache implements AutoCloseable {
     private CachedProjectRuntime markerRuntimeForIdentity(RuntimeIdentity identity) {
         return runtimes.entrySet().stream()
                 .filter(entry -> entry.getKey().identity().equals(identity))
-                .filter(entry -> entry.getKey().version().startsWith("marker:"))
+                .filter(entry -> entry.getKey().version().startsWith("marker:")
+                        || entry.getKey().version().startsWith("runtime:"))
                 .map(Map.Entry::getValue)
                 .findFirst()
                 .orElse(null);
@@ -244,6 +252,10 @@ public class ProjectRuntimeCache implements AutoCloseable {
                 }
             }
         }
+    }
+
+    static void cleanupAbandonedRuntimeSnapshots() {
+        RuntimeSnapshot.cleanupAbandonedSnapshotsAcrossWorkspaces(RuntimeSnapshot.CURRENT_PROCESS, true);
     }
 
     private CachedProjectRuntime createRuntime(ProjectContext project, RuntimeKey key) {
@@ -359,12 +371,34 @@ public class ProjectRuntimeCache implements AutoCloseable {
             if (!value.containsKey("buildFinishedAt") || !value.containsKey("buildPhases")) {
                 return BuildMarkerToken.unstable("build marker is incomplete");
             }
+            String runtimeDigest = markerRuntimeDigest(value);
+            if (runtimeDigest != null) {
+                return BuildMarkerToken.complete("runtime:" + runtimeDigest);
+            }
             return BuildMarkerToken.complete("marker:" + after.lastModifiedTime().toMillis() + ":" + digest(contents));
         } catch (NoSuchFileException exception) {
             return BuildMarkerToken.missing();
         } catch (IOException | RuntimeException exception) {
             return BuildMarkerToken.unstable("build marker cannot be read");
         }
+    }
+
+    private String markerRuntimeDigest(Map<String, Object> marker) {
+        Object value = marker.get("runtimeDigest");
+        if (value == null) {
+            return null;
+        }
+        if (!(value instanceof Map<?, ?> digestValue)) {
+            throw new IllegalArgumentException("runtimeDigest must be an object");
+        }
+        Object algorithm = digestValue.get("algorithm");
+        Object digest = digestValue.get("value");
+        String normalized = digest == null ? "" : digest.toString().trim().toLowerCase(Locale.ROOT);
+        if (!"SHA-256".equalsIgnoreCase(String.valueOf(algorithm))
+                || !normalized.matches("[0-9a-f]{64}")) {
+            throw new IllegalArgumentException("runtimeDigest is invalid");
+        }
+        return normalized;
     }
 
     private boolean sameMarkerFile(BasicFileAttributes first, BasicFileAttributes second) {
@@ -566,10 +600,10 @@ public class ProjectRuntimeCache implements AutoCloseable {
         }
 
         private static BuildReadGuard tryAcquire(ProjectContext project) throws IOException {
-            Path lockFile = project.root().toAbsolutePath().normalize().resolve(".wiz/build.lock");
-            Files.createDirectories(lockFile.getParent());
+            Path lockFile = WorkspaceRuntimePaths.prepareBuildLock(project.root());
             FileChannel channel = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
             try {
+                WorkspaceRuntimePaths.secureFile(lockFile);
                 FileLock lock = channel.tryLock();
                 if (lock == null) {
                     closeQuietly(channel);
@@ -587,10 +621,6 @@ public class ProjectRuntimeCache implements AutoCloseable {
                 }
                 throw exception;
             }
-        }
-
-        private static BuildReadGuard unlocked() {
-            return new BuildReadGuard(null, null);
         }
 
         private static void closeQuietly(FileChannel channel) {
@@ -633,15 +663,19 @@ public class ProjectRuntimeCache implements AutoCloseable {
 
     private record RuntimeSnapshot(Path root, ProjectContext project, URL[] classPathUrls) implements AutoCloseable {
 
+        private static final AtomicBoolean GLOBAL_CLEANUP_COMPLETED = new AtomicBoolean();
+        private static final SnapshotProcessIdentity CURRENT_PROCESS = currentProcessIdentity();
+
         private static RuntimeSnapshot create(ProjectContext project, String version) throws IOException {
-            Path snapshotsRoot = project.root().resolve(".wiz/runtime-snapshots");
-            long processId = ProcessHandle.current().pid();
-            cleanupDeadProcessSnapshots(snapshotsRoot, processId);
-            Path snapshots = snapshotsRoot.resolve(Long.toString(processId));
-            Files.createDirectories(snapshots);
+            WorkspaceRuntimePaths.runtimeSnapshots(project.root());
+            cleanupAbandonedSnapshotsAcrossWorkspaces(CURRENT_PROCESS, false);
+            Path snapshotsRoot = WorkspaceRuntimePaths.prepareRuntimeSnapshots(project.root());
+            cleanupDeadProcessSnapshots(snapshotsRoot, CURRENT_PROCESS);
+            Path snapshots = snapshotsRoot.resolve(CURRENT_PROCESS.directoryName());
+            WorkspaceRuntimePaths.ensurePrivateDirectory(snapshots);
             String prefix = snapshotPrefix(version);
             Path root = snapshots.resolve(prefix + "-" + UUID.randomUUID()).toAbsolutePath().normalize();
-            Files.createDirectories(root);
+            WorkspaceRuntimePaths.ensurePrivateDirectory(root);
             try {
                 Path bundle = root.resolve("bundle");
                 linkTreeIfPresent(project.bundleRoot().resolve("src/app"), bundle.resolve("src/app"));
@@ -694,23 +728,23 @@ public class ProjectRuntimeCache implements AutoCloseable {
             }
         }
 
-        private static void cleanupDeadProcessSnapshots(Path snapshotsRoot, long currentProcessId) {
+        private static void cleanupDeadProcessSnapshots(Path snapshotsRoot, SnapshotProcessIdentity currentProcess) {
             if (!Files.isDirectory(snapshotsRoot, LinkOption.NOFOLLOW_LINKS)) {
                 return;
             }
             try (Stream<Path> children = Files.list(snapshotsRoot)) {
                 for (Path child : children.filter(path -> Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)).toList()) {
-                    long processId;
-                    try {
-                        processId = Long.parseLong(child.getFileName().toString());
-                    } catch (NumberFormatException exception) {
+                    Optional<SnapshotProcessIdentity> identity = SnapshotProcessIdentity.parse(
+                            child.getFileName().toString());
+                    if (identity.isEmpty()) {
                         continue;
                     }
-                    if (processId == currentProcessId || processAlive(processId)) {
+                    if (identity.get().equals(currentProcess) || processAlive(identity.get())) {
                         continue;
                     }
                     try {
                         deleteTree(child);
+                        deleteEmptyParents(child.getParent());
                     } catch (IOException exception) {
                         LOGGER.warn("Failed to delete abandoned project runtime snapshot: {}", child, exception);
                     }
@@ -720,11 +754,89 @@ public class ProjectRuntimeCache implements AutoCloseable {
             }
         }
 
-        private static boolean processAlive(long processId) {
+        private static void cleanupAbandonedSnapshotsAcrossWorkspaces(SnapshotProcessIdentity currentProcess,
+                boolean force) {
+            if (!force && !GLOBAL_CLEANUP_COMPLETED.compareAndSet(false, true)) {
+                return;
+            }
+            Path workspacesRoot;
             try {
-                return ProcessHandle.of(processId).map(ProcessHandle::isAlive).orElse(false);
+                workspacesRoot = WorkspaceRuntimePaths.prepareCacheWorkspacesRoot();
+            } catch (IOException exception) {
+                LOGGER.warn("Failed to validate the WIZ runtime snapshot cache before cleanup", exception);
+                return;
+            }
+            try (Stream<Path> workspaces = Files.list(workspacesRoot)) {
+                for (Path workspace : workspaces
+                        .filter(path -> Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS))
+                        .toList()) {
+                    Path snapshotsRoot = WorkspaceRuntimePaths.cacheRuntimeSnapshotsRoot(workspace);
+                    cleanupDeadProcessSnapshots(snapshotsRoot, currentProcess);
+                    deleteEmptyParents(snapshotsRoot);
+                }
+            } catch (IOException exception) {
+                LOGGER.warn("Failed to scan abandoned WIZ runtime snapshots: {}", workspacesRoot, exception);
+            }
+        }
+
+        private static void deleteEmptyParents(Path snapshotsRoot) {
+            if (snapshotsRoot == null) {
+                return;
+            }
+            try {
+                Files.deleteIfExists(snapshotsRoot);
+                Path sharedSnapshotsRoot = snapshotsRoot.getParent();
+                if (sharedSnapshotsRoot != null) {
+                    Files.deleteIfExists(sharedSnapshotsRoot);
+                    Path workspaceRoot = sharedSnapshotsRoot.getParent();
+                    if (workspaceRoot != null) {
+                        Files.deleteIfExists(workspaceRoot);
+                    }
+                }
+            } catch (java.nio.file.DirectoryNotEmptyException ignored) {
+                // Another runtime snapshot for this workspace is still active.
+            } catch (IOException exception) {
+                LOGGER.debug("Failed to remove empty WIZ runtime snapshot directories: {}", snapshotsRoot, exception);
+            }
+        }
+
+        private static boolean processAlive(SnapshotProcessIdentity identity) {
+            try {
+                return ProcessHandle.of(identity.processId())
+                        .filter(ProcessHandle::isAlive)
+                        .map(process -> process.info().startInstant()
+                                .map(start -> start.toEpochMilli() == identity.startEpochMillis())
+                                .orElse(true))
+                        .orElse(false);
             } catch (SecurityException exception) {
                 return true;
+            }
+        }
+
+        private static SnapshotProcessIdentity currentProcessIdentity() {
+            ProcessHandle process = ProcessHandle.current();
+            long started = process.info().startInstant().orElseGet(Instant::now).toEpochMilli();
+            return new SnapshotProcessIdentity(process.pid(), started);
+        }
+
+        private record SnapshotProcessIdentity(long processId, long startEpochMillis) {
+
+            private String directoryName() {
+                return processId + "-" + startEpochMillis;
+            }
+
+            private static Optional<SnapshotProcessIdentity> parse(String name) {
+                if (name == null || !name.matches("[0-9]+-[0-9]+")) {
+                    return Optional.empty();
+                }
+                int separator = name.indexOf('-');
+                try {
+                    return Optional.of(new SnapshotProcessIdentity(
+                            Long.parseLong(name.substring(0, separator)),
+                            Long.parseLong(name.substring(separator + 1))));
+                } catch (NumberFormatException ignored) {
+                    return Optional.empty();
+                }
             }
         }
 
@@ -773,6 +885,7 @@ public class ProjectRuntimeCache implements AutoCloseable {
             if (processRoot != null) {
                 try {
                     Files.deleteIfExists(processRoot);
+                    deleteEmptyParents(processRoot.getParent());
                 } catch (java.nio.file.DirectoryNotEmptyException ignored) {
                     // Other project runtime snapshots are still active.
                 }

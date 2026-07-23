@@ -27,7 +27,8 @@ class AngularBuildServiceTest {
     @Test
     void skipsWhenAngularPackageIsMissingOrIncomplete() throws Exception {
         ProjectContext project = newProject();
-        AngularBuildService service = new AngularBuildService(new FakeCommandExecutor());
+        FakeCommandExecutor executor = new FakeCommandExecutor();
+        AngularBuildService service = new AngularBuildService(executor);
 
         FrontendBuildResult missing = service.build(project);
 
@@ -44,6 +45,7 @@ class AngularBuildServiceTest {
 
         assertTrue(incomplete.success());
         assertTrue(incomplete.skipped());
+        assertTrue(executor.phases.isEmpty());
     }
 
     @Test
@@ -77,14 +79,21 @@ class AngularBuildServiceTest {
     }
 
     @Test
-    void normalBuildSkipsNpmInstallWhenDependenciesExist() throws Exception {
+    void normalBuildSkipsNpmInstallWhenDependencyFingerprintIsUnchanged() throws Exception {
         ProjectContext project = newProject();
         Path angularRoot = ProjectBuildLayout.stagedAngularRoot(project);
         writeReadyAngularPackage(angularRoot);
         Files.createDirectories(angularRoot.resolve("node_modules/pug"));
 
         FakeCommandExecutor executor = new FakeCommandExecutor();
-        FrontendBuildResult result = new AngularBuildService(executor).build(project, false, BuildLogger.quiet());
+        AngularBuildService service = new AngularBuildService(executor);
+        FrontendBuildResult initial = service.build(project, true, BuildLogger.quiet());
+        assertTrue(initial.success(), initial.message());
+        assertEquals(List.of("frontend-install", "frontend-build"), executor.phases);
+        assertTrue(Files.isRegularFile(ProjectBuildLayout.frontendDependencyFingerprint(project)));
+
+        executor.phases.clear();
+        FrontendBuildResult result = service.build(project, false, BuildLogger.quiet());
 
         assertTrue(result.success());
         assertTrue(result.built());
@@ -92,7 +101,28 @@ class AngularBuildServiceTest {
     }
 
     @Test
-    void normalBuildFailsWithoutInstallingWhenDependenciesAreMissing() throws Exception {
+    void normalBuildReinstallsWhenDependencyLockfileIsMissing() throws Exception {
+        ProjectContext project = newProject();
+        Path angularRoot = ProjectBuildLayout.stagedAngularRoot(project);
+        writeReadyAngularPackage(angularRoot);
+        Files.delete(angularRoot.resolve("package-lock.json"));
+        Files.createDirectories(angularRoot.resolve("node_modules/pug"));
+
+        FakeCommandExecutor executor = new FakeCommandExecutor();
+        AngularBuildService service = new AngularBuildService(executor);
+        FrontendBuildResult initial = service.build(project, true, BuildLogger.quiet());
+        assertTrue(initial.success(), initial.message());
+
+        executor.phases.clear();
+        FrontendBuildResult repeated = service.build(project, false, BuildLogger.quiet());
+
+        assertTrue(repeated.success(), repeated.message());
+        assertTrue(repeated.built());
+        assertEquals(List.of("frontend-install", "frontend-build"), executor.phases);
+    }
+
+    @Test
+    void normalBuildAutomaticallyInstallsMissingDependencies() throws Exception {
         ProjectContext project = newProject();
         Path angularRoot = ProjectBuildLayout.stagedAngularRoot(project);
         writeReadyAngularPackage(angularRoot);
@@ -101,9 +131,54 @@ class AngularBuildServiceTest {
         FakeCommandExecutor executor = new FakeCommandExecutor();
         FrontendBuildResult result = new AngularBuildService(executor).build(project, false, BuildLogger.quiet());
 
-        assertFalse(result.success());
-        assertTrue(result.message().contains("--clean"));
-        assertTrue(executor.phases.isEmpty());
+        assertTrue(result.success(), result.message());
+        assertTrue(result.built());
+        assertEquals(List.of("frontend-install", "frontend-build"), executor.phases);
+        assertTrue(Files.isDirectory(angularRoot.resolve("node_modules/pug")));
+        assertTrue(Files.isRegularFile(ProjectBuildLayout.frontendDependencyFingerprint(project)));
+    }
+
+    @Test
+    void normalBuildReinstallsDependenciesWhenPackageMetadataChanges() throws Exception {
+        ProjectContext project = newProject();
+        Path angularRoot = ProjectBuildLayout.stagedAngularRoot(project);
+        writeReadyAngularPackage(angularRoot);
+        Files.createDirectories(angularRoot.resolve("node_modules/pug"));
+        FakeCommandExecutor executor = new FakeCommandExecutor();
+        AngularBuildService service = new AngularBuildService(executor);
+        FrontendBuildResult initial = service.build(project, true, BuildLogger.quiet());
+        assertTrue(initial.success(), initial.message());
+
+        executor.phases.clear();
+        Files.writeString(angularRoot.resolve("package.json"),
+                "{\"scripts\":{\"build\":\"ng build\"},\"dependencies\":{\"example\":\"2.0.0\"}}\n");
+
+        FrontendBuildResult changed = service.build(project, false, BuildLogger.quiet());
+
+        assertTrue(changed.success(), changed.message());
+        assertTrue(changed.built());
+        assertEquals(List.of("frontend-install", "frontend-build"), executor.phases);
+    }
+
+    @Test
+    void normalBuildReinstallsDependenciesWhenWorkspaceNpmConfigurationChanges() throws Exception {
+        ProjectContext project = newProject();
+        Path angularRoot = ProjectBuildLayout.stagedAngularRoot(project);
+        writeReadyAngularPackage(angularRoot);
+        Files.createDirectories(angularRoot.resolve("node_modules/pug"));
+        FakeCommandExecutor executor = new FakeCommandExecutor();
+        AngularBuildService service = new AngularBuildService(executor);
+        FrontendBuildResult initial = service.build(project, true, BuildLogger.quiet());
+        assertTrue(initial.success(), initial.message());
+
+        executor.phases.clear();
+        Files.writeString(angularRoot.resolve(".npmrc"), "install-links=false\n");
+
+        FrontendBuildResult changed = service.build(project, false, BuildLogger.quiet());
+
+        assertTrue(changed.success(), changed.message());
+        assertTrue(changed.built());
+        assertEquals(List.of("frontend-install", "frontend-build"), executor.phases);
     }
 
     @Test
@@ -149,6 +224,7 @@ class AngularBuildServiceTest {
         Files.createDirectories(angularRoot.resolve("src"));
         Files.createDirectories(angularRoot.resolve("node_modules/.bin"));
         Files.writeString(angularRoot.resolve("package.json"), "{\"scripts\":{\"build\":\"ng build\"}}\n");
+        Files.writeString(angularRoot.resolve("package-lock.json"), "{\"lockfileVersion\":3}\n");
         Files.writeString(angularRoot.resolve("angular.json"), minimalAngularJson());
         Files.writeString(angularRoot.resolve("src/index.html"), "<app-root></app-root>\n");
         Files.writeString(angularRoot.resolve("src/main.ts"), "console.log('main');\n");
@@ -211,7 +287,11 @@ class AngularBuildServiceTest {
         @Override
         public CommandResult run(String phase, Path workspaceRoot, Path cwd, List<String> argv, Duration timeout, int outputCapBytes, BuildLogger logger) throws IOException {
             phases.add(phase);
-            if (phase.equals("frontend-build")) {
+            if (phase.equals("frontend-install")) {
+                Files.createDirectories(cwd.resolve("node_modules/.bin"));
+                Files.createDirectories(cwd.resolve("node_modules/pug"));
+                Files.writeString(cwd.resolve("node_modules/.bin/ng"), "#!/usr/bin/env node\n");
+            } else if (phase.equals("frontend-build")) {
                 Path output = cwd.resolve("dist/build");
                 Files.createDirectories(output);
                 Files.writeString(output.resolve("index.html"), "<html></html>\n");

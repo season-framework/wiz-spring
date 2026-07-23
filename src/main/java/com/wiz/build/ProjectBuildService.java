@@ -1,20 +1,20 @@
 package com.wiz.build;
 
-import java.io.IOException;
 import java.io.File;
+import java.io.IOException;
 import java.io.StringWriter;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
-import java.nio.file.LinkOption;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -22,7 +22,6 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.jar.JarEntry;
-import java.util.jar.JarFile;
 import java.util.jar.JarOutputStream;
 import java.util.stream.Stream;
 
@@ -33,10 +32,11 @@ import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
 
 import com.wiz.core.ProjectJavaNaming;
+import com.wiz.core.WorkspacePackageService;
 import com.wiz.runtime.BuildMarkerService;
-import com.wiz.runtime.ProjectClassPath;
+import com.wiz.runtime.PathService;
 import com.wiz.runtime.ProjectContext;
-import com.wiz.runtime.SafePath;
+import com.wiz.runtime.WorkspaceRuntimePaths;
 
 import org.springframework.stereotype.Service;
 
@@ -46,17 +46,29 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 public class ProjectBuildService {
 
-    private static final ConcurrentHashMap<Path, ReentrantLock> LOCKS = new ConcurrentHashMap<>();
+    private static final List<String> SUPPORTED_PHASES = List.of("reconstruct", "compile", "bundle");
+    private static final ConcurrentHashMap<Path, BuildLockEntry> LOCKS = new ConcurrentHashMap<>();
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final AngularBuildService angularBuildService;
+    private final MavenDependencyCache mavenDependencyCache;
+    private final BootJarClasspathCache bootJarClasspathCache;
     private final BuildMarkerService buildMarkerService = new BuildMarkerService();
 
     public ProjectBuildService() {
-        this(new AngularBuildService());
+        this(new AngularBuildService(), new MavenDependencyCache(), new BootJarClasspathCache());
     }
 
     ProjectBuildService(AngularBuildService angularBuildService) {
+        this(angularBuildService, new MavenDependencyCache(), new BootJarClasspathCache());
+    }
+
+    ProjectBuildService(
+            AngularBuildService angularBuildService,
+            MavenDependencyCache mavenDependencyCache,
+            BootJarClasspathCache bootJarClasspathCache) {
         this.angularBuildService = angularBuildService;
+        this.mavenDependencyCache = mavenDependencyCache;
+        this.bootJarClasspathCache = bootJarClasspathCache;
     }
 
     public BuildResult build(ProjectContext project, boolean clean, String phase) throws IOException {
@@ -66,13 +78,57 @@ public class ProjectBuildService {
     public BuildResult build(ProjectContext project, boolean clean, String phase, BuildLogger logger) throws IOException {
         BuildLogger buildLogger = logger == null ? BuildLogger.quiet() : logger;
         String requestedPhase = phase == null || phase.isBlank() ? "bundle" : phase;
-        if (!List.of("reconstruct", "compile", "bundle").contains(requestedPhase)) {
+        if (!isSupportedPhase(requestedPhase)) {
             return new BuildResult(2, List.of(requestedPhase), "Supported build phases: reconstruct, compile, bundle");
         }
+        if (!hasBuildSource(project.appRoot())) {
+            return new BuildResult(2, List.of(requestedPhase), missingBuildSourceMessage(project.root()));
+        }
+        validateManagedOutputPaths(project);
 
-        Path normalizedRoot = project.root().toAbsolutePath().normalize();
-        ReentrantLock lock = LOCKS.computeIfAbsent(normalizedRoot, ignored -> new ReentrantLock());
-        lock.lock();
+        return withWorkspaceBuildLock(project.root(), buildLogger,
+                () -> runBuildLocked(project, clean, requestedPhase, buildLogger));
+    }
+
+    public PackageBuildResult build(
+            PathService paths,
+            String requestedPackageRoot,
+            boolean clean,
+            String phase,
+            BuildLogger logger) throws IOException {
+        BuildLogger buildLogger = logger == null ? BuildLogger.quiet() : logger;
+        String requestedPhase = phase == null || phase.isBlank() ? "bundle" : phase;
+        if (!isSupportedPhase(requestedPhase)) {
+            return new PackageBuildResult(
+                    new BuildResult(2, List.of(requestedPhase), "Supported build phases: reconstruct, compile, bundle"),
+                    false,
+                    paths.packageRoot());
+        }
+        if (!hasBuildSource(paths.root().resolve("src/app"))) {
+            return new PackageBuildResult(
+                    new BuildResult(2, List.of(requestedPhase), missingBuildSourceMessage(paths.root())),
+                    false,
+                    paths.packageRoot());
+        }
+        return withWorkspaceBuildLock(paths.root(), buildLogger, () -> {
+            WorkspacePackageService.PackageSelection selection = new WorkspacePackageService()
+                    .selectForBuild(paths, requestedPackageRoot);
+            ProjectContext project = selection.context();
+            validateManagedOutputPaths(project);
+            BuildResult result = runBuildLocked(
+                    project,
+                    clean || selection.changed(),
+                    requestedPhase,
+                    buildLogger);
+            return new PackageBuildResult(result, selection.changed(), project.packageRoot());
+        });
+    }
+
+    private BuildResult runBuildLocked(
+            ProjectContext project,
+            boolean clean,
+            String requestedPhase,
+            BuildLogger buildLogger) throws IOException {
         Instant startedAt = Instant.now();
         long totalStarted = System.nanoTime();
         buildLogger.info("== WIZ app build ==");
@@ -81,25 +137,58 @@ public class ProjectBuildService {
         buildLogger.info("Java home: " + System.getProperty("java.home"));
         buildLogger.info("Clean: " + clean);
         buildLogger.info("Phase: " + requestedPhase);
+        return buildLocked(project, clean, requestedPhase, buildLogger, startedAt, totalStarted);
+    }
+
+    private <T> T withWorkspaceBuildLock(Path workspaceRoot, BuildLogger buildLogger, BuildStep<T> action) throws IOException {
+        Path normalizedRoot = workspaceRoot.toAbsolutePath().normalize();
+        Path lockPath = WorkspaceRuntimePaths.buildLock(normalizedRoot);
+        BuildLockEntry entry = LOCKS.compute(lockPath, (ignored, current) -> {
+            BuildLockEntry selected = current == null ? new BuildLockEntry() : current;
+            selected.references++;
+            return selected;
+        });
+        entry.lock.lock();
         try {
-            Path lockFile = normalizedRoot.resolve(".wiz/build.lock");
-            Files.createDirectories(lockFile.getParent());
+            Path lockFile = WorkspaceRuntimePaths.prepareBuildLock(normalizedRoot);
             buildLogger.info("Build lock: " + lockFile);
-            try (FileChannel lockChannel = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-                    FileLock ignored = lockChannel.lock()) {
-                return buildLocked(project, clean, requestedPhase, buildLogger, startedAt, totalStarted);
+            try (FileChannel lockChannel = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
+                WorkspaceRuntimePaths.secureFile(lockFile);
+                try (FileLock ignored = lockChannel.lock()) {
+                    return action.run();
+                }
             }
         } finally {
-            lock.unlock();
+            entry.lock.unlock();
+            LOCKS.computeIfPresent(lockPath, (ignored, current) -> {
+                if (current != entry) {
+                    return current;
+                }
+                entry.references--;
+                return entry.references == 0 ? null : entry;
+            });
         }
+    }
+
+    public static boolean isSupportedPhase(String phase) {
+        return SUPPORTED_PHASES.contains(phase);
+    }
+
+    public static boolean hasBuildSource(Path appRoot) {
+        return Files.isDirectory(appRoot, LinkOption.NOFOLLOW_LINKS);
+    }
+
+    public static String missingBuildSourceMessage(Path workspaceRoot) {
+        return "WIZ Spring build requires source directory " + workspaceRoot.resolve("src/app")
+                + ". A deploy-only bundle can be run or packaged with --skip-build, but it cannot be rebuilt.";
     }
 
     private BuildResult buildLocked(ProjectContext project, boolean clean, String requestedPhase,
             BuildLogger buildLogger, Instant startedAt, long totalStarted) throws IOException {
+        recoverInterruptedBundlePublish(project, buildLogger);
         if (clean) {
             timed(buildLogger, "clean", () -> {
                 delete(project.buildRoot());
-                delete(project.bundleRoot());
                 return null;
             });
         }
@@ -128,39 +217,73 @@ public class ProjectBuildService {
         if (!frontend.success()) {
             return finish(buildLogger, totalStarted, new BuildResult(1, List.of("reconstruct", "java-source", "app-dependencies", "java-compile", frontend.phase()), frontend.message()));
         }
-        timed(buildLogger, "bundle", () -> {
-            bundle(project);
-            return null;
-        });
         if (!frontend.built()) {
-            timed(buildLogger, "frontend-fallback", () -> {
-                writeMinimalWebBundle(project);
+            delete(ProjectBuildLayout.frontendOutputRoot(project));
+        }
+
+        List<String> phases = List.of("reconstruct", "java-source", "app-dependencies", "java-compile", frontend.phase(), "bundle");
+        Path stagingRoot = ProjectBuildLayout.bundleStagingRoot(project);
+        ProjectContext stagingProject = withBundleRoot(project, stagingRoot);
+        delete(stagingRoot);
+        try {
+            timed(buildLogger, "bundle", () -> {
+                assembleBundle(project, stagingProject);
                 return null;
             });
+            if (!frontend.built()) {
+                timed(buildLogger, "frontend-fallback", () -> {
+                    writeMinimalWebBundle(stagingProject);
+                    return null;
+                });
+            }
+            SupplyChainManifestService.Result supplyChain = timed(buildLogger, "supply-chain",
+                    () -> new SupplyChainManifestService().write(stagingProject, Instant.now()));
+            buildMarkerService.write(stagingProject, phases, frontend.built() ? "real" : "fallback", startedAt, Instant.now(),
+                    new BuildMarkerService.DependencySummary(
+                            "bundle/" + SupplyChainManifestService.DEPENDENCY_MANIFEST_FILE,
+                            supplyChain.digestAlgorithm(),
+                            supplyChain.dependencyDigest(),
+                            supplyChain.dependencyCount(),
+                            "bundle/" + SupplyChainManifestService.CYCLONEDX_BOM_FILE));
+            timed(buildLogger, "bundle-publish", () -> {
+                replaceDirectory(stagingRoot, project.bundleRoot(), ProjectBuildLayout.bundlePreviousRoot(project), buildLogger);
+                return null;
+            });
+        } finally {
+            delete(stagingRoot);
         }
-        List<String> phases = List.of("reconstruct", "java-source", "app-dependencies", "java-compile", frontend.phase(), "bundle");
-        SupplyChainManifestService.Result supplyChain = timed(buildLogger, "supply-chain", () -> new SupplyChainManifestService().write(project, Instant.now()));
-        buildMarkerService.write(project, phases, frontend.built() ? "real" : "fallback", startedAt, Instant.now(),
-                new BuildMarkerService.DependencySummary(
-                        "bundle/" + SupplyChainManifestService.DEPENDENCY_MANIFEST_FILE,
-                        supplyChain.digestAlgorithm(),
-                        supplyChain.dependencyDigest(),
-                        supplyChain.dependencyCount(),
-                        project.buildRoot().relativize(ProjectBuildLayout.cyclonedxBom(project)).toString().replace('\\', '/')));
         return finish(buildLogger, totalStarted, new BuildResult(0, phases, "Generated Java WIZ app bundle"));
     }
 
+    private void recoverInterruptedBundlePublish(ProjectContext project, BuildLogger logger) throws IOException {
+        Path previous = ProjectBuildLayout.bundlePreviousRoot(project);
+        if (Files.notExists(previous)) {
+            return;
+        }
+        if (Files.notExists(project.bundleRoot())) {
+            Files.createDirectories(project.bundleRoot().getParent());
+            moveDirectory(previous, project.bundleRoot());
+            logger.info("[bundle-recovery] restored the last published bundle after an interrupted replacement");
+            return;
+        }
+        try {
+            delete(previous);
+        } catch (IOException cleanupFailure) {
+            logger.info("[bundle-recovery] previous bundle cleanup deferred: " + previous
+                    + " (" + cleanupFailure.getMessage() + ")");
+        }
+    }
+
     public void reconstruct(ProjectContext project) throws IOException {
+        validateManagedOutputPaths(project);
         reconstruct(project, false);
     }
 
     private void reconstruct(ProjectContext project, boolean preserveFrontendDependencies) throws IOException {
         Files.createDirectories(project.buildRoot());
-        deleteLegacyBuildArtifacts(project);
-        SafePath root = new SafePath(project.buildRoot());
-        Path buildSourceRoot = root.resolveForWrite(".wiz/source");
+        Path buildSourceRoot = ProjectBuildLayout.stagedSourceRoot(project);
         if (preserveFrontendDependencies) {
-            deleteBuildSourceRootExceptFrontendDependencies(buildSourceRoot);
+            deleteBuildSourceRootExceptFrontendCaches(buildSourceRoot);
         } else {
             delete(buildSourceRoot);
         }
@@ -170,40 +293,44 @@ public class ProjectBuildService {
         new AppMetadataNormalizer(objectMapper).normalize(project, buildSourceRoot);
     }
 
-    private void deleteLegacyBuildArtifacts(ProjectContext project) throws IOException {
-        for (String path : List.of(
-                "main",
-                "classes",
-                "app-api.jar",
-                "dist",
-                "compiler-classpath",
-                "src/angular",
-                "src/app",
-                "src/assets",
-                "src/auth",
-                "src/controller",
-                "src/libs",
-                "src/model",
-                "src/portal",
-                "src/route",
-                "src/session",
-                "src/styles")) {
-            delete(project.buildRoot().resolve(path));
-        }
-    }
-
-    private void deleteBuildSourceRootExceptFrontendDependencies(Path buildSourceRoot) throws IOException {
-        Path nodeModules = buildSourceRoot.resolve("angular/node_modules");
-        if (!Files.exists(nodeModules)) {
+    private void deleteBuildSourceRootExceptFrontendCaches(Path buildSourceRoot) throws IOException {
+        Path angularRoot = buildSourceRoot.resolve("angular");
+        Path nodeModules = angularRoot.resolve("node_modules");
+        Path angularState = angularRoot.resolve(".angular");
+        Path angularCache = angularState.resolve("cache");
+        boolean preserveNodeModules = Files.isDirectory(angularRoot, LinkOption.NOFOLLOW_LINKS)
+                && Files.isDirectory(nodeModules, LinkOption.NOFOLLOW_LINKS);
+        boolean preserveAngularCache = Files.isDirectory(angularRoot, LinkOption.NOFOLLOW_LINKS)
+                && Files.isDirectory(angularState, LinkOption.NOFOLLOW_LINKS)
+                && Files.isDirectory(angularCache, LinkOption.NOFOLLOW_LINKS);
+        if (!preserveNodeModules && !preserveAngularCache) {
             delete(buildSourceRoot);
             return;
         }
-        try (Stream<Path> paths = Files.walk(buildSourceRoot)) {
-            for (Path item : paths.sorted(Comparator.reverseOrder()).toList()) {
-                if (item.equals(buildSourceRoot) || item.equals(nodeModules) || item.startsWith(nodeModules) || nodeModules.startsWith(item)) {
-                    continue;
+
+        deleteChildrenExcept(buildSourceRoot, List.of(angularRoot));
+        ArrayList<Path> preservedAngularChildren = new ArrayList<>();
+        if (preserveNodeModules) {
+            preservedAngularChildren.add(nodeModules);
+        }
+        if (preserveAngularCache) {
+            preservedAngularChildren.add(angularState);
+        }
+        deleteChildrenExcept(angularRoot, preservedAngularChildren);
+        if (preserveAngularCache) {
+            deleteChildrenExcept(angularState, List.of(angularCache));
+        }
+    }
+
+    private void deleteChildrenExcept(Path directory, List<Path> preservedChildren) throws IOException {
+        if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
+            return;
+        }
+        try (Stream<Path> children = Files.list(directory)) {
+            for (Path child : children.toList()) {
+                if (!preservedChildren.contains(child)) {
+                    delete(child);
                 }
-                Files.deleteIfExists(item);
             }
         }
     }
@@ -241,6 +368,14 @@ public class ProjectBuildService {
     @FunctionalInterface
     private interface BuildStep<T> {
         T run() throws IOException;
+    }
+
+    private static final class BuildLockEntry {
+        private final ReentrantLock lock = new ReentrantLock();
+        private int references;
+    }
+
+    public record PackageBuildResult(BuildResult result, boolean packageChanged, String packageRoot) {
     }
 
     private void reconstructProjectJava(ProjectContext project) throws IOException {
@@ -426,6 +561,7 @@ public class ProjectBuildService {
     private BuildResult compileProjectJava(ProjectContext project, BuildLogger logger) throws IOException {
         Path sourceRoot = ProjectBuildLayout.generatedJavaSourceRoot(project);
         if (!Files.isDirectory(sourceRoot)) {
+            deleteJavaOutputs(project);
             logger.info("[java-compile] No Java app sources");
             return new BuildResult(0, List.of("reconstruct", "java-source", "app-dependencies", "java-compile"), "No Java app sources");
         }
@@ -435,17 +571,18 @@ public class ProjectBuildService {
             sources = paths.filter(path -> Files.isRegularFile(path) && path.toString().endsWith(".java")).toList();
         }
         if (sources.isEmpty()) {
+            deleteJavaOutputs(project);
             logger.info("[java-compile] No Java app sources");
             return new BuildResult(0, List.of("reconstruct", "java-source", "app-dependencies", "java-compile"), "No Java app sources");
         }
 
+        deleteJavaOutputs(project);
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         if (compiler == null) {
             return new BuildResult(1, List.of("reconstruct", "java-source", "app-dependencies", "java-compile"), "JDK compiler is required to build Java app APIs");
         }
 
         Path classesRoot = ProjectBuildLayout.classesRoot(project);
-        delete(classesRoot);
         Files.createDirectories(classesRoot);
         logger.info("[java-compile] source files: " + sources.size());
         logger.info("[java-compile] output: " + classesRoot);
@@ -456,7 +593,7 @@ public class ProjectBuildService {
             Iterable<? extends JavaFileObject> units = fileManager.getJavaFileObjectsFromPaths(sources);
             List<String> options = List.of(
                     "--release", "21",
-                    "-classpath", compilerClasspath(project),
+                    "-classpath", compilerClasspath(project, logger),
                     "-d", classesRoot.toString());
             logger.info("[java-compile] javac --release 21 -d " + classesRoot + " (" + sources.size() + " sources)");
             boolean success = Boolean.TRUE.equals(compiler.getTask(output, fileManager, diagnostics, options, null, units).call());
@@ -468,6 +605,7 @@ public class ProjectBuildService {
                 logger.output(text + System.lineSeparator());
             }
             if (!success) {
+                deleteJavaOutputs(project);
                 return new BuildResult(1, List.of("reconstruct", "java-source", "app-dependencies", "java-compile"), text);
             }
         }
@@ -477,19 +615,36 @@ public class ProjectBuildService {
         return new BuildResult(0, List.of("reconstruct", "java-source", "app-dependencies", "java-compile"), "Compiled Java app APIs");
     }
 
-    private String compilerClasspath(ProjectContext project) throws IOException {
+    private void deleteJavaOutputs(ProjectContext project) throws IOException {
+        delete(ProjectBuildLayout.classesRoot(project));
+        Files.deleteIfExists(ProjectBuildLayout.appApiJar(project));
+    }
+
+    private String compilerClasspath(ProjectContext project, BuildLogger logger) throws IOException {
         LinkedHashSet<String> entries = new LinkedHashSet<>();
+        LinkedHashSet<String> activeBootCacheKeys = new LinkedHashSet<>();
         String classpath = System.getProperty("java.class.path", "");
         if (!classpath.isBlank()) {
             for (String entry : classpath.split(java.util.regex.Pattern.quote(File.pathSeparator))) {
                 if (!entry.isBlank()) {
                     entries.add(entry);
                     Path path = Path.of(entry);
-                    if (Files.isRegularFile(path) && isBootJar(path)) {
-                        entries.addAll(extractBootJarClasspath(project, path));
+                    if (Files.isRegularFile(path)) {
+                        Optional<BootJarClasspathCache.Result> cached = bootJarClasspathCache.resolve(
+                                project.root(), path, logger);
+                        if (cached.isPresent()) {
+                            BootJarClasspathCache.Result result = cached.get();
+                            activeBootCacheKeys.add(result.key());
+                            result.classpathEntries().stream()
+                                    .map(Path::toString)
+                                    .forEach(entries::add);
+                        }
                     }
                 }
             }
+        }
+        if (!activeBootCacheKeys.isEmpty()) {
+            bootJarClasspathCache.prune(project.root(), activeBootCacheKeys, logger);
         }
         for (Path dependency : compilerDependencyJars(project)) {
             entries.add(dependency.toString());
@@ -498,10 +653,14 @@ public class ProjectBuildService {
     }
 
     private List<Path> compilerDependencyJars(ProjectContext project) throws IOException {
-        LinkedHashSet<Path> jars = new LinkedHashSet<>();
-        jars.addAll(jarsIn(ProjectBuildLayout.dependencyRoot(project)));
-        jars.addAll(ProjectClassPath.dependencyJars(project));
-        return List.copyOf(jars);
+        LinkedHashMap<String, Path> jars = new LinkedHashMap<>();
+        for (Path jar : jarsIn(ProjectBuildLayout.dependencyRoot(project))) {
+            jars.put(jar.getFileName().toString(), jar);
+        }
+        for (Path jar : jarsIn(project.root().resolve("lib"))) {
+            jars.put(jar.getFileName().toString(), jar);
+        }
+        return List.copyOf(jars.values());
     }
 
     private List<Path> jarsIn(Path directory) throws IOException {
@@ -518,57 +677,11 @@ public class ProjectBuildService {
     }
 
     private void resolveProjectDependencies(ProjectContext project, BuildLogger logger) throws IOException {
-        Path pom = project.root().resolve("pom.xml");
-        Path output = ProjectBuildLayout.dependencyRoot(project);
-        Path staging = ProjectBuildLayout.dependencyStagingRoot(project);
-        delete(staging);
-        if (!Files.isRegularFile(pom)) {
-            delete(output);
-            logger.info("[app-dependencies] no workspace pom.xml");
-            return;
-        }
-        Files.createDirectories(staging);
-        logger.info("[app-dependencies] pom: " + pom);
-        logger.info("[app-dependencies] staging: " + staging);
-        CommandResult result;
-        try {
-            result = new CommandExecutor().run(
-                    "maven-dependencies",
-                    project.root(),
-                    project.root(),
-                    List.of(
-                            "mvn",
-                            "--batch-mode",
-                            "-f", pom.toString(),
-                            "dependency:copy-dependencies",
-                            "-DincludeScope=runtime",
-                            "-DoutputDirectory=" + staging),
-                    Duration.ofMinutes(10),
-                    1024 * 1024,
-                    logger);
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            delete(staging);
-            throw new IOException("Project Maven dependency resolution was interrupted", exception);
-        } catch (IOException | RuntimeException exception) {
-            delete(staging);
-            throw exception;
-        }
-        logger.info("[app-dependencies] exitCode=" + result.exitCode()
-                + " duration=" + formatDuration(result.durationMillis())
-                + " timedOut=" + result.timedOut()
-                + " cappedOutput=" + result.cappedOutput());
-        if (result.exitCode() != 0) {
-            delete(staging);
-            throw new IOException("Project Maven dependency resolution failed with exit code " + result.exitCode()
-                    + System.lineSeparator() + result.output());
-        }
-        replaceDirectory(staging, output);
-        logger.info("[app-dependencies] installed: " + output);
+        mavenDependencyCache.resolve(project, logger);
     }
 
-    private void replaceDirectory(Path source, Path target) throws IOException {
-        Path previous = target.resolveSibling("." + target.getFileName() + "-previous");
+    private void replaceDirectory(Path source, Path target, Path previous, BuildLogger logger) throws IOException {
+        Files.createDirectories(previous.getParent());
         if (Files.notExists(target) && Files.exists(previous)) {
             moveDirectory(previous, target);
         }
@@ -589,7 +702,12 @@ public class ProjectBuildService {
             }
             throw failure;
         }
-        delete(previous);
+        try {
+            delete(previous);
+        } catch (IOException cleanupFailure) {
+            logger.info("[cleanup] published output is ready, but previous directory could not be removed: "
+                    + previous + " (" + cleanupFailure.getMessage() + ")");
+        }
     }
 
     private void moveDirectory(Path source, Path target) throws IOException {
@@ -600,69 +718,53 @@ public class ProjectBuildService {
         }
     }
 
-    private boolean isBootJar(Path jarPath) {
-        try (JarFile jar = new JarFile(jarPath.toFile())) {
-            return jar.getEntry("BOOT-INF/classes/") != null || jar.getEntry("BOOT-INF/classpath.idx") != null;
-        } catch (IOException exception) {
-            return false;
-        }
-    }
-
-    private List<String> extractBootJarClasspath(ProjectContext project, Path jarPath) throws IOException {
-        Path classpathRoot = ProjectBuildLayout.compilerClasspathRoot(project);
-        Path classes = classpathRoot.resolve("classes");
-        Path libs = classpathRoot.resolve("lib");
-        delete(classpathRoot);
-        Files.createDirectories(classes);
-        Files.createDirectories(libs);
-
-        ArrayList<String> entries = new ArrayList<>();
-        try (JarFile jar = new JarFile(jarPath.toFile())) {
-            for (JarEntry entry : java.util.Collections.list(jar.entries())) {
-                String name = entry.getName();
-                if (entry.isDirectory()) {
-                    continue;
-                }
-                if (name.startsWith("BOOT-INF/classes/")) {
-                    Path target = classes.resolve(name.substring("BOOT-INF/classes/".length())).normalize();
-                    if (!target.startsWith(classes)) {
-                        throw new IllegalArgumentException("Boot jar classpath extraction escapes target directory");
-                    }
-                    Files.createDirectories(target.getParent());
-                    try (var input = jar.getInputStream(entry)) {
-                        Files.copy(input, target, StandardCopyOption.REPLACE_EXISTING);
-                    }
-                } else if (name.startsWith("BOOT-INF/lib/") && name.endsWith(".jar")) {
-                    Path target = libs.resolve(Path.of(name).getFileName().toString()).normalize();
-                    if (!target.startsWith(libs)) {
-                        throw new IllegalArgumentException("Boot jar dependency extraction escapes target directory");
-                    }
-                    try (var input = jar.getInputStream(entry)) {
-                        Files.copy(input, target, StandardCopyOption.REPLACE_EXISTING);
-                    }
-                    entries.add(target.toString());
-                }
-            }
-        }
-        entries.add(0, classes.toString());
-        return entries;
-    }
-
     public void bundle(ProjectContext project) throws IOException {
-        delete(project.bundleRoot());
-        Files.createDirectories(project.bundleRoot());
-        copyIfExists(ProjectBuildLayout.frontendOutputRoot(project), project.bundleWwwRoot());
-        copyIfExists(ProjectBuildLayout.stagedAssetsRoot(project), project.bundleAssetsRoot());
-        copyIfExists(ProjectBuildLayout.stagedControllerRoot(project), project.bundleRoot().resolve("src/controller"));
-        copyIfExists(ProjectBuildLayout.stagedModelRoot(project), project.bundleRoot().resolve("src/model"));
-        copyIfExists(ProjectBuildLayout.stagedRouteRoot(project), project.bundleRoot().resolve("src/route"));
-        copyIfExists(project.configRoot(), project.bundleRoot().resolve("config"));
-        copyIfExists(ProjectBuildLayout.stagedAppRoot(project), project.bundleRoot().resolve("src/app"));
-        copyIfExists(ProjectBuildLayout.dependencyRoot(project), project.bundleRoot().resolve("lib"));
-        copyIfExists(project.root().resolve("lib"), project.bundleRoot().resolve("lib"));
-        copyIfExists(ProjectBuildLayout.classesRoot(project), project.bundleRoot().resolve("classes"));
-        copyFileIfExists(ProjectBuildLayout.appApiJar(project), project.bundleRoot().resolve("app-api.jar"));
-        copyFileIfExists(ProjectBuildLayout.generatedPom(project), project.bundleRoot().resolve("pom.xml"));
+        validateManagedOutputPaths(project);
+        Path stagingRoot = ProjectBuildLayout.bundleStagingRoot(project);
+        delete(stagingRoot);
+        try {
+            assembleBundle(project, withBundleRoot(project, stagingRoot));
+            replaceDirectory(stagingRoot, project.bundleRoot(), ProjectBuildLayout.bundlePreviousRoot(project), BuildLogger.quiet());
+        } finally {
+            delete(stagingRoot);
+        }
+    }
+
+    private void assembleBundle(ProjectContext sourceProject, ProjectContext destinationProject) throws IOException {
+        Files.createDirectories(destinationProject.bundleRoot());
+        copyIfExists(ProjectBuildLayout.frontendOutputRoot(sourceProject), destinationProject.bundleWwwRoot());
+        copyIfExists(ProjectBuildLayout.stagedAssetsRoot(sourceProject), destinationProject.bundleAssetsRoot());
+        copyIfExists(ProjectBuildLayout.stagedControllerRoot(sourceProject), destinationProject.bundleRoot().resolve("src/controller"));
+        copyIfExists(ProjectBuildLayout.stagedModelRoot(sourceProject), destinationProject.bundleRoot().resolve("src/model"));
+        copyIfExists(ProjectBuildLayout.stagedRouteRoot(sourceProject), destinationProject.bundleRoot().resolve("src/route"));
+        copyIfExists(sourceProject.configRoot(), destinationProject.bundleRoot().resolve("config"));
+        copyIfExists(ProjectBuildLayout.stagedAppRoot(sourceProject), destinationProject.bundleRoot().resolve("src/app"));
+        copyJarDirectory(ProjectBuildLayout.dependencyRoot(sourceProject), destinationProject.bundleRoot().resolve("lib"));
+        copyIfExists(sourceProject.root().resolve("lib"), destinationProject.bundleRoot().resolve("lib"));
+        copyIfExists(ProjectBuildLayout.classesRoot(sourceProject), destinationProject.bundleRoot().resolve("classes"));
+        copyFileIfExists(ProjectBuildLayout.appApiJar(sourceProject), destinationProject.bundleRoot().resolve("app-api.jar"));
+        copyFileIfExists(ProjectBuildLayout.generatedPom(sourceProject), destinationProject.bundleRoot().resolve("pom.xml"));
+    }
+
+    private void copyJarDirectory(Path source, Path target) throws IOException {
+        for (Path jar : jarsIn(source)) {
+            copyFileIfExists(jar, target.resolve(jar.getFileName().toString()));
+        }
+    }
+
+    private ProjectContext withBundleRoot(ProjectContext project, Path bundleRoot) {
+        return new ProjectContext(
+                project.name(),
+                project.packageRoot(),
+                project.root(),
+                project.sourceRoot(),
+                project.appRoot(),
+                project.modelRoot(),
+                project.routeRoot(),
+                project.assetsRoot(),
+                project.configRoot(),
+                project.buildRoot(),
+                bundleRoot);
     }
 
     private String handlerClass(ProjectContext project, String appId, Path appJson) throws IOException {
@@ -739,9 +841,14 @@ public class ProjectBuildService {
         Files.createDirectories(jar.getParent());
         try (JarOutputStream output = new JarOutputStream(Files.newOutputStream(jar));
                 Stream<Path> paths = Files.walk(classesRoot)) {
-            for (Path item : paths.filter(Files::isRegularFile).toList()) {
+            for (Path item : paths
+                    .filter(Files::isRegularFile)
+                    .sorted(Comparator.comparing(path -> classesRoot.relativize(path).toString()))
+                    .toList()) {
                 String entryName = classesRoot.relativize(item).toString().replace('\\', '/');
-                output.putNextEntry(new JarEntry(entryName));
+                JarEntry entry = new JarEntry(entryName);
+                entry.setTime(0L);
+                output.putNextEntry(entry);
                 Files.copy(item, output);
                 output.closeEntry();
             }
@@ -912,8 +1019,48 @@ public class ProjectBuildService {
         }
     }
 
+    private void validateManagedOutputPaths(ProjectContext project) {
+        Path workspaceRoot = project.root().toAbsolutePath().normalize();
+        Path expectedBuildRoot = workspaceRoot.resolve("build");
+        Path expectedBundleRoot = workspaceRoot.resolve("bundle");
+        if (!project.buildRoot().toAbsolutePath().normalize().equals(expectedBuildRoot)
+                || !project.bundleRoot().toAbsolutePath().normalize().equals(expectedBundleRoot)) {
+            throw new IllegalArgumentException("WIZ build outputs must use the workspace build/ and bundle/ directories");
+        }
+        for (Path managedPath : List.of(
+                ProjectBuildLayout.stagedSourceRoot(project),
+                ProjectBuildLayout.generatedJavaSourceRoot(project),
+                ProjectBuildLayout.generatedResourcesRoot(project),
+                ProjectBuildLayout.generatedPom(project),
+                ProjectBuildLayout.classesRoot(project),
+                ProjectBuildLayout.appApiJar(project),
+                ProjectBuildLayout.dependencyRoot(project),
+                ProjectBuildLayout.dependencyStagingRoot(project),
+                ProjectBuildLayout.frontendOutputRoot(project),
+                ProjectBuildLayout.frontendDependencyFingerprint(project),
+                ProjectBuildLayout.bundleStagingRoot(project),
+                ProjectBuildLayout.bundlePreviousRoot(project),
+                project.bundleRoot())) {
+            rejectSymbolicLinkAncestors(workspaceRoot, managedPath);
+        }
+    }
+
+    private void rejectSymbolicLinkAncestors(Path workspaceRoot, Path managedPath) {
+        Path normalized = managedPath.toAbsolutePath().normalize();
+        if (!normalized.startsWith(workspaceRoot)) {
+            throw new IllegalArgumentException("WIZ managed build path escapes the workspace: " + managedPath);
+        }
+        Path current = workspaceRoot;
+        for (Path segment : workspaceRoot.relativize(normalized)) {
+            current = current.resolve(segment);
+            if (Files.isSymbolicLink(current)) {
+                throw new IllegalArgumentException("Symbolic links are not allowed in managed build paths: " + current);
+            }
+        }
+    }
+
     private void delete(Path path) throws IOException {
-        if (!Files.exists(path)) {
+        if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
             return;
         }
         try (Stream<Path> paths = Files.walk(path)) {

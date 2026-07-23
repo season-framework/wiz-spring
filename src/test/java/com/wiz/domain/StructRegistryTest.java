@@ -11,6 +11,7 @@ import com.wiz.core.ProjectService;
 import com.wiz.core.WorkspaceService;
 import com.wiz.runtime.PathService;
 import com.wiz.runtime.ProjectContext;
+import com.wiz.runtime.ProjectRuntimeCache;
 import com.wiz.runtime.WizContext;
 import com.wiz.runtime.WizRequest;
 import com.wiz.runtime.WizResponse;
@@ -33,14 +34,17 @@ class StructRegistryTest {
         Files.createDirectories(project.modelRoot().resolve("struct"));
         Files.writeString(project.modelRoot().resolve("struct/UserStruct.java"), "public final class UserStruct { public String name() { return \"user\"; } }\n");
         new ProjectBuildService().build(project, true, "bundle");
-        ModelRegistry models = new ModelRegistry();
-        StructRegistry structs = new StructRegistry(models);
 
-        try (WizContext context = new WizContext(WizRequest.builder().build(), new WizResponse(), project, models)) {
-            Object value = structs.get(context, "user", Object.class);
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            ModelRegistry models = new ModelRegistry(cache);
+            StructRegistry structs = new StructRegistry(models);
+            try (WizContext context = new WizContext(WizRequest.builder().build(), new WizResponse(), project,
+                    models, null, cache)) {
+                Object value = structs.get(context, "user", Object.class);
 
-            Method method = value.getClass().getMethod("name");
-            assertEquals("user", method.invoke(value));
+                Method method = value.getClass().getMethod("name");
+                assertEquals("user", method.invoke(value));
+            }
         }
     }
 

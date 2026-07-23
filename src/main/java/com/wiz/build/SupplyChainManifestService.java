@@ -2,8 +2,10 @@ package com.wiz.build;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
@@ -14,6 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.UUID;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.stream.Stream;
@@ -35,7 +38,6 @@ public class SupplyChainManifestService {
     public Result write(ProjectContext project, Instant generatedAt) throws IOException {
         Instant timestamp = generatedAt == null ? Instant.now() : generatedAt;
         Files.createDirectories(project.bundleRoot());
-        Files.createDirectories(ProjectBuildLayout.targetRoot(project));
 
         List<Artifact> dependencies = dependencyArtifacts(project);
         List<Artifact> projectArtifacts = projectArtifacts(project);
@@ -43,14 +45,29 @@ public class SupplyChainManifestService {
         String dependencyDigest = dependencyDigest(dependencies);
 
         Path manifest = project.bundleRoot().resolve(DEPENDENCY_MANIFEST_FILE);
-        Files.writeString(manifest, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(
+        writeAtomically(manifest, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(
                 manifest(project, timestamp, dependencyDigest, dependencies, projectArtifacts, buildInputs)) + "\n");
 
         Path bom = ProjectBuildLayout.cyclonedxBom(project);
-        Files.writeString(bom, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(
+        writeAtomically(bom, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(
                 cyclonedxBom(project, timestamp, dependencies)) + "\n");
 
         return new Result(manifest, bom, DIGEST_ALGORITHM, dependencyDigest, dependencies.size());
+    }
+
+    private void writeAtomically(Path target, String content) throws IOException {
+        Files.createDirectories(target.getParent());
+        Path temporary = target.resolveSibling(target.getFileName() + ".tmp-" + UUID.randomUUID());
+        try {
+            Files.writeString(temporary, content);
+            try {
+                Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException exception) {
+                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
     }
 
     private LinkedHashMap<String, Object> manifest(
@@ -72,7 +89,7 @@ public class SupplyChainManifestService {
         manifest.put("dependencies", artifactMaps(dependencies));
         manifest.put("projectArtifacts", artifactMaps(projectArtifacts));
         manifest.put("buildInputs", artifactMaps(buildInputs));
-        manifest.put("cycloneDxBom", "target/" + CYCLONEDX_BOM_FILE);
+        manifest.put("cycloneDxBom", CYCLONEDX_BOM_FILE);
         return manifest;
     }
 

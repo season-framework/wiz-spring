@@ -5,7 +5,7 @@ WIZ Spring은 기존 WIZ 프로젝트 구조를 유지하되 서버 런타임을
 프로젝트 백엔드는 `api.java`, `route.java`, `socket.java`, `src/controller/*.java`, `src/model/**/*.java`가 source of truth이고,
 `build/`와 `bundle/`은 `wiz-spring build`가 매번 재생성하는 산출물이다.
 
-`build/`의 공개 구조는 Spring Boot/Maven 관례를 따른다. 생성 Java source는 `build/src/main/java`, config resource는 `build/src/main/resources`, compile output과 dependency는 `build/target/**` 아래에 둔다. WIZ 내부 staging은 `build/.wiz/source`에 있으며 직접 수정하지 않는다.
+`build/`의 공개 구조는 Spring Boot/Maven 관례를 따른다. 생성 Java source는 `build/src/main/java`, config resource는 `build/src/main/resources`, compile output과 dependency는 `build/target/**` 아래에 둔다. 일시적 WIZ source staging은 `build/target/work/source`에 있으며 clean build에서 재생성되므로 직접 수정하지 않는다. build lock/runtime snapshot과 MCP 상태는 workspace 밖의 운영체제 runtime/state 경로에 저장하고 npm은 기본 사용자 cache를 사용한다.
 
 기본 개발 흐름:
 

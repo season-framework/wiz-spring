@@ -11,6 +11,7 @@ import com.wiz.core.ProjectService;
 import com.wiz.core.WorkspaceService;
 import com.wiz.runtime.PathService;
 import com.wiz.runtime.ProjectContext;
+import com.wiz.runtime.ProjectRuntimeCache;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -37,10 +38,13 @@ class RouteRegistryTest {
                 + "}\n");
         new ProjectBuildService().build(project, true, "bundle");
 
-        RouteDefinition auth = new RouteRegistry().definitions(project).stream()
-                .filter(definition -> definition.route().equals("/auth/<path:path>"))
-                .findFirst()
-                .orElseThrow();
+        RouteDefinition auth;
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            auth = new RouteRegistry(cache).definitions(project).stream()
+                    .filter(definition -> definition.route().equals("/auth/<path:path>"))
+                    .findFirst()
+                    .orElseThrow();
+        }
 
         assertEquals("portal.season.auth", auth.id());
         assertEquals("portal/season/base", auth.controllerName());
@@ -61,10 +65,13 @@ class RouteRegistryTest {
                 + "}\n");
         new ProjectBuildService().build(project, true, "bundle");
 
-        RouteDefinition ping = new RouteRegistry().definitions(project).stream()
-                .filter(definition -> definition.id().equals("ping"))
-                .findFirst()
-                .orElseThrow();
+        RouteDefinition ping;
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            ping = new RouteRegistry(cache).definitions(project).stream()
+                    .filter(definition -> definition.id().equals("ping"))
+                    .findFirst()
+                    .orElseThrow();
+        }
 
         assertEquals("base", ping.controllerName());
     }

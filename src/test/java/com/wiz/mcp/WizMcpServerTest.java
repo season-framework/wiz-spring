@@ -30,7 +30,7 @@ class WizMcpServerTest {
                 """;
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         WizMcpServer server = new WizMcpServer(
-                new WizMcpToolService(tempDir, null),
+                new WizMcpToolService(tempDir.resolve("workspace"), tempDir.resolve("state/server.json")),
                 new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8)),
                 output);
 

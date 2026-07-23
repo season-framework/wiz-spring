@@ -83,6 +83,12 @@ public class RunCommand implements Callable<Integer> {
         if (!bundled || !java.nio.file.Files.isDirectory(project.bundleRoot().resolve("src/app"))) {
             throw incompleteBundle(workspaceRoot, "the last completed build does not contain a runnable app bundle");
         }
+        String buildPackageRoot = String.valueOf(marker.getOrDefault("javaPackageRoot", ""));
+        if (!project.packageRoot().equals(buildPackageRoot)) {
+            throw incompleteBundle(workspaceRoot,
+                    "bundle Java package " + (buildPackageRoot.isBlank() ? "is unknown" : "is " + buildPackageRoot)
+                            + " but the workspace package is " + project.packageRoot());
+        }
         String buildVersion = String.valueOf(marker.getOrDefault("runtimeVersion", ""));
         String runtimeVersion = WizSpringVersion.current();
         if (!runtimeVersion.equals(buildVersion)) {

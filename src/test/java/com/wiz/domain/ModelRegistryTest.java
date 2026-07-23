@@ -13,6 +13,7 @@ import com.wiz.core.ProjectService;
 import com.wiz.core.WorkspaceService;
 import com.wiz.runtime.PathService;
 import com.wiz.runtime.ProjectContext;
+import com.wiz.runtime.ProjectRuntimeCache;
 import com.wiz.runtime.WizContext;
 import com.wiz.runtime.WizRequest;
 import com.wiz.runtime.WizResponse;
@@ -28,9 +29,10 @@ class ModelRegistryTest {
     @Test
     void resolvesProjectLocalAndPortalModelNamespaces() throws Exception {
         ProjectContext project = projectWithModels();
-        ModelRegistry models = new ModelRegistry();
 
-        try (WizContext context = new WizContext(WizRequest.builder().build(), new WizResponse(), project, models)) {
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache();
+                WizContext context = new WizContext(WizRequest.builder().build(), new WizResponse(), project,
+                        new ModelRegistry(cache), null, cache)) {
             Object rootStruct = context.models().get("struct", Object.class);
             Object userStruct = context.models().get("struct/user", Object.class);
             Object userEntity = context.models().get("db/user", Object.class);
@@ -51,9 +53,10 @@ class ModelRegistryTest {
     @Test
     void cachesProjectModelsPerRequestContext() throws Exception {
         ProjectContext project = projectWithModels();
-        ModelRegistry models = new ModelRegistry();
 
-        try (WizContext context = new WizContext(WizRequest.builder().build(), new WizResponse(), project, models)) {
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache();
+                WizContext context = new WizContext(WizRequest.builder().build(), new WizResponse(), project,
+                        new ModelRegistry(cache), null, cache)) {
             Object first = context.models().get("struct", Object.class);
             Object second = context.models().get("struct", Object.class);
 
@@ -65,7 +68,9 @@ class ModelRegistryTest {
     void failsClearlyForUnknownNamespace() throws Exception {
         ProjectContext project = projectWithModels();
 
-        try (WizContext context = new WizContext(WizRequest.builder().build(), new WizResponse(), project, new ModelRegistry())) {
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache();
+                WizContext context = new WizContext(WizRequest.builder().build(), new WizResponse(), project,
+                        new ModelRegistry(cache), null, cache)) {
             assertThrows(IllegalArgumentException.class, () -> context.models().get("missing/service", Object.class));
         }
     }

@@ -11,10 +11,12 @@ import com.wiz.build.ProjectBuildService;
 import com.wiz.config.WizRedirectProperties;
 import com.wiz.core.ProjectService;
 import com.wiz.core.WorkspaceService;
+import com.wiz.domain.ModelRegistry;
 import com.wiz.http.ResponseEnvelope;
 import com.wiz.runtime.PathService;
 import com.wiz.runtime.ProjectContext;
 import com.wiz.runtime.ProjectRegistry;
+import com.wiz.runtime.ProjectRuntimeCache;
 import com.wiz.runtime.WizRequest;
 import com.wiz.runtime.WizResult;
 import com.wiz.runtime.WizRuntime;
@@ -39,7 +41,11 @@ class RouteDispatcherTest {
         ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         new ProjectBuildService().build(project, true, "bundle");
 
-        WizResult result = dispatcher(workspace).dispatch(WizRequest.builder().path("/auth/check").build()).orElseThrow();
+        WizResult result;
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            result = dispatcher(workspace, cache).dispatch(WizRequest.builder().path("/auth/check").build())
+                    .orElseThrow();
+        }
         ResponseEnvelope envelope = (ResponseEnvelope) result.entity();
 
         assertEquals(200, result.httpStatus());
@@ -56,7 +62,11 @@ class RouteDispatcherTest {
         MockHttpSession session = new MockHttpSession();
         session.setAttribute("id", "u1");
 
-        WizResult result = dispatcher(workspace).dispatch(WizRequest.builder().path("/auth/logout").queryString("returnTo=/dashboard").session(session).build()).orElseThrow();
+        WizResult result;
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            result = dispatcher(workspace, cache).dispatch(WizRequest.builder().path("/auth/logout")
+                    .queryString("returnTo=/dashboard").session(session).build()).orElseThrow();
+        }
 
         assertEquals(302, result.httpStatus());
         assertEquals(List.of("/dashboard"), result.headers().get(HttpHeaders.LOCATION));
@@ -81,10 +91,13 @@ class RouteDispatcherTest {
         MockHttpSession session = new MockHttpSession(servletContext);
         session.setAttribute("id", "u1");
 
-        WizResult result = dispatcher(workspace).dispatch(WizRequest.builder()
-                .path("/auth/logout")
-                .session(session)
-                .build()).orElseThrow();
+        WizResult result;
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            result = dispatcher(workspace, cache).dispatch(WizRequest.builder()
+                    .path("/auth/logout")
+                    .session(session)
+                    .build()).orElseThrow();
+        }
 
         String cookie = result.headers().get(HttpHeaders.SET_COOKIE).getFirst();
         assertTrue(cookie.startsWith("WIZSESSION=;"));
@@ -102,10 +115,13 @@ class RouteDispatcherTest {
         ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         new ProjectBuildService().build(project, true, "bundle");
 
-        WizResult result = dispatcher(workspace).dispatch(WizRequest.builder()
-                .path("/auth/logout")
-                .queryString("returnTo=https%3A%2F%2Fexample.com%2Fafter-logout")
-                .build()).orElseThrow();
+        WizResult result;
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            result = dispatcher(workspace, cache).dispatch(WizRequest.builder()
+                    .path("/auth/logout")
+                    .queryString("returnTo=https%3A%2F%2Fexample.com%2Fafter-logout")
+                    .build()).orElseThrow();
+        }
 
         assertEquals(302, result.httpStatus());
         assertEquals(List.of("https://example.com/after-logout"), result.headers().get(HttpHeaders.LOCATION));
@@ -120,10 +136,13 @@ class RouteDispatcherTest {
         WizRedirectProperties redirectProperties = new WizRedirectProperties();
         redirectProperties.setPolicy(WizRedirectProperties.Policy.LOCAL_ONLY);
 
-        WizResult result = dispatcher(workspace, redirectProperties).dispatch(WizRequest.builder()
-                .path("/auth/logout")
-                .queryString("returnTo=https%3A%2F%2Fexample.com%2Fafter-logout")
-                .build()).orElseThrow();
+        WizResult result;
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            result = dispatcher(workspace, redirectProperties, cache).dispatch(WizRequest.builder()
+                    .path("/auth/logout")
+                    .queryString("returnTo=https%3A%2F%2Fexample.com%2Fafter-logout")
+                    .build()).orElseThrow();
+        }
 
         assertEquals(302, result.httpStatus());
         assertEquals(List.of("/"), result.headers().get(HttpHeaders.LOCATION));
@@ -141,7 +160,11 @@ class RouteDispatcherTest {
         session.setAttribute("name", "User One");
         session.setAttribute("role", "user");
 
-        WizResult result = dispatcher(workspace).dispatch(WizRequest.builder().path("/auth/check").session(session).build()).orElseThrow();
+        WizResult result;
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            result = dispatcher(workspace, cache).dispatch(WizRequest.builder().path("/auth/check")
+                    .session(session).build()).orElseThrow();
+        }
         ResponseEnvelope envelope = (ResponseEnvelope) result.entity();
 
         assertEquals(200, result.httpStatus());
@@ -157,7 +180,9 @@ class RouteDispatcherTest {
         ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         new ProjectBuildService().build(project, true, "bundle");
 
-        assertTrue(dispatcher(workspace).dispatch(WizRequest.builder().path("/dashboard").build()).isEmpty());
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            assertTrue(dispatcher(workspace, cache).dispatch(WizRequest.builder().path("/dashboard").build()).isEmpty());
+        }
     }
 
     @Test
@@ -167,8 +192,15 @@ class RouteDispatcherTest {
         ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         new ProjectBuildService().build(project, true, "bundle");
 
-        WizResult oidc = dispatcher(workspace).dispatch(WizRequest.builder().path("/auth/oidc/login/main/callback").build()).orElseThrow();
-        WizResult saml = dispatcher(workspace).dispatch(WizRequest.builder().path("/auth/saml/login/season/index").build()).orElseThrow();
+        WizResult oidc;
+        WizResult saml;
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            RouteDispatcher dispatcher = dispatcher(workspace, cache);
+            oidc = dispatcher.dispatch(WizRequest.builder().path("/auth/oidc/login/main/callback").build())
+                    .orElseThrow();
+            saml = dispatcher.dispatch(WizRequest.builder().path("/auth/saml/login/season/index").build())
+                    .orElseThrow();
+        }
 
         assertEquals(501, oidc.httpStatus());
         assertEquals(501, saml.httpStatus());
@@ -184,24 +216,31 @@ class RouteDispatcherTest {
         java.nio.file.Files.writeString(project.routeRoot().resolve("custom.echo/route.java"), echoRouteJava());
         new ProjectBuildService().build(project, true, "bundle");
 
-        WizResult result = dispatcher(workspace).dispatch(WizRequest.builder().path("/echo/alice").build()).orElseThrow();
+        WizResult result;
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            result = dispatcher(workspace, cache).dispatch(WizRequest.builder().path("/echo/alice").build())
+                    .orElseThrow();
+        }
         ResponseEnvelope envelope = (ResponseEnvelope) result.entity();
 
         assertEquals(200, result.httpStatus());
         assertEquals(Map.of("name", "alice"), envelope.data());
     }
 
-    private RouteDispatcher dispatcher(Path workspace) {
-        return dispatcher(workspace, new WizRedirectProperties());
+    private RouteDispatcher dispatcher(Path workspace, ProjectRuntimeCache cache) {
+        return dispatcher(workspace, new WizRedirectProperties(), cache);
     }
 
-    private RouteDispatcher dispatcher(Path workspace, WizRedirectProperties redirectProperties) {
+    private RouteDispatcher dispatcher(Path workspace, WizRedirectProperties redirectProperties,
+            ProjectRuntimeCache cache) {
         ProjectRegistry registry = new ProjectRegistry(new PathService(workspace));
+        WizRuntime runtime = new WizRuntime(registry, new ModelRegistry(cache), redirectProperties, cache);
         return new RouteDispatcher(
-                new WizRuntime(registry, redirectProperties),
-                new RouteRegistry(),
-                new ControllerChain(),
-                List.of());
+                runtime,
+                new RouteRegistry(cache),
+                new ControllerChain(cache),
+                List.of(),
+                cache);
     }
 
     private String echoRouteJava() {

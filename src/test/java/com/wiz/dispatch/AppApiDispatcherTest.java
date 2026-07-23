@@ -8,12 +8,15 @@ import java.nio.file.Path;
 import java.util.Map;
 
 import com.wiz.build.ProjectBuildService;
+import com.wiz.config.WizRedirectProperties;
 import com.wiz.core.ProjectService;
 import com.wiz.core.WorkspaceService;
+import com.wiz.domain.ModelRegistry;
 import com.wiz.http.ResponseEnvelope;
 import com.wiz.runtime.PathService;
 import com.wiz.runtime.ProjectContext;
 import com.wiz.runtime.ProjectRegistry;
+import com.wiz.runtime.ProjectRuntimeCache;
 import com.wiz.runtime.WizRequest;
 import com.wiz.runtime.WizResult;
 import com.wiz.runtime.WizRuntime;
@@ -35,9 +38,12 @@ class AppApiDispatcherTest {
         setDashboardController(project, "base");
         Files.writeString(project.appRoot().resolve("page.dashboard/api.java"), simpleOverviewApi());
         new ProjectBuildService().build(project, true, "bundle");
-        AppApiDispatcher dispatcher = dispatcher(workspace);
 
-        WizResult result = dispatcher.dispatch(WizRequest.builder().method("POST").path("/wiz/api/page.dashboard/overview").build(), "page.dashboard", "overview", "");
+        WizResult result;
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            result = dispatcher(workspace, cache).dispatch(WizRequest.builder().method("POST")
+                    .path("/wiz/api/page.dashboard/overview").build(), "page.dashboard", "overview", "");
+        }
 
         ResponseEnvelope envelope = (ResponseEnvelope) result.entity();
         assertEquals(200, result.httpStatus());
@@ -53,7 +59,11 @@ class AppApiDispatcherTest {
         setDashboardController(project, "base");
         new ProjectBuildService().build(project, true, "bundle");
 
-        WizResult result = dispatcher(workspace).dispatch(WizRequest.builder().build(), "page.dashboard", "missing", "");
+        WizResult result;
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            result = dispatcher(workspace, cache).dispatch(WizRequest.builder().build(),
+                    "page.dashboard", "missing", "");
+        }
 
         ResponseEnvelope envelope = (ResponseEnvelope) result.entity();
         assertEquals(404, result.httpStatus());
@@ -70,9 +80,16 @@ class AppApiDispatcherTest {
         Files.writeString(project.appRoot().resolve("page.dashboard/api.java"), requiredQueryApi());
         new ProjectBuildService().build(project, true, "bundle");
 
-        WizResult missing = dispatcher(workspace).dispatch(WizRequest.builder().method("POST").build(), "page.dashboard", "required", "");
+        WizResult missing;
+        WizResult present;
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            AppApiDispatcher dispatcher = dispatcher(workspace, cache);
+            missing = dispatcher.dispatch(WizRequest.builder().method("POST").build(),
+                    "page.dashboard", "required", "");
+            present = dispatcher.dispatch(WizRequest.builder().method("POST").queryString("value=ok").build(),
+                    "page.dashboard", "required", "");
+        }
         ResponseEnvelope missingEnvelope = (ResponseEnvelope) missing.entity();
-        WizResult present = dispatcher(workspace).dispatch(WizRequest.builder().method("POST").queryString("value=ok").build(), "page.dashboard", "required", "");
         ResponseEnvelope presentEnvelope = (ResponseEnvelope) present.entity();
 
         assertEquals(400, missing.httpStatus());
@@ -92,7 +109,11 @@ class AppApiDispatcherTest {
         Files.writeString(project.sourceRoot().resolve("controller/GuardController.java"), guardControllerApi());
         new ProjectBuildService().build(project, true, "bundle");
 
-        WizResult result = dispatcher(workspace).dispatch(WizRequest.builder().method("POST").build(), "page.dashboard", "overview", "");
+        WizResult result;
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            result = dispatcher(workspace, cache).dispatch(WizRequest.builder().method("POST").build(),
+                    "page.dashboard", "overview", "");
+        }
         ResponseEnvelope envelope = (ResponseEnvelope) result.entity();
 
         assertEquals(401, result.httpStatus());
@@ -109,7 +130,11 @@ class AppApiDispatcherTest {
         Files.writeString(project.sourceRoot().resolve("controller/BaseController.java"), baseControllerApi());
         new ProjectBuildService().build(project, true, "bundle");
 
-        WizResult result = dispatcher(workspace).dispatch(WizRequest.builder().method("POST").build(), "page.dashboard", "overview", "");
+        WizResult result;
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            result = dispatcher(workspace, cache).dispatch(WizRequest.builder().method("POST").build(),
+                    "page.dashboard", "overview", "");
+        }
         ResponseEnvelope envelope = (ResponseEnvelope) result.entity();
 
         assertEquals(409, result.httpStatus());
@@ -130,7 +155,11 @@ class AppApiDispatcherTest {
         Files.writeString(project.appRoot().resolve("page.dashboard/api.java"), modelApi());
         new ProjectBuildService().build(project, true, "bundle");
 
-        WizResult result = dispatcher(workspace).dispatch(WizRequest.builder().method("POST").build(), "page.dashboard", "models", "");
+        WizResult result;
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            result = dispatcher(workspace, cache).dispatch(WizRequest.builder().method("POST").build(),
+                    "page.dashboard", "models", "");
+        }
         ResponseEnvelope envelope = (ResponseEnvelope) result.entity();
 
         assertEquals(200, result.httpStatus());
@@ -148,7 +177,11 @@ class AppApiDispatcherTest {
         new ProjectBuildService().build(project, true, "bundle");
         MockHttpSession session = new MockHttpSession();
 
-        WizResult result = dispatcher(workspace).dispatch(WizRequest.builder().method("POST").session(session).build(), "page.dashboard", "login", "");
+        WizResult result;
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            result = dispatcher(workspace, cache).dispatch(WizRequest.builder().method("POST").session(session).build(),
+                    "page.dashboard", "login", "");
+        }
         ResponseEnvelope envelope = (ResponseEnvelope) result.entity();
 
         assertEquals(200, result.httpStatus());
@@ -167,16 +200,27 @@ class AppApiDispatcherTest {
         setDashboardController(project, "user");
         new ProjectBuildService().build(project, true, "bundle");
 
-        WizResult anonymous = dispatcher(workspace).dispatch(WizRequest.builder().method("POST").build(), "page.dashboard", "overview", "");
+        WizResult anonymous;
+        WizResult user;
+        WizResult nonAdmin;
+        WizResult admin;
         MockHttpSession userSession = new MockHttpSession();
         userSession.setAttribute("id", "u1");
-        WizResult user = dispatcher(workspace).dispatch(WizRequest.builder().method("POST").session(userSession).build(), "page.dashboard", "overview", "");
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            AppApiDispatcher dispatcher = dispatcher(workspace, cache);
+            anonymous = dispatcher.dispatch(WizRequest.builder().method("POST").build(),
+                    "page.dashboard", "overview", "");
+            user = dispatcher.dispatch(WizRequest.builder().method("POST").session(userSession).build(),
+                    "page.dashboard", "overview", "");
 
-        setDashboardController(project, "admin");
-        new ProjectBuildService().build(project, true, "bundle");
-        WizResult nonAdmin = dispatcher(workspace).dispatch(WizRequest.builder().method("POST").session(userSession).build(), "page.dashboard", "overview", "");
-        userSession.setAttribute("role", "admin");
-        WizResult admin = dispatcher(workspace).dispatch(WizRequest.builder().method("POST").session(userSession).build(), "page.dashboard", "overview", "");
+            setDashboardController(project, "admin");
+            new ProjectBuildService().build(project, true, "bundle");
+            nonAdmin = dispatcher.dispatch(WizRequest.builder().method("POST").session(userSession).build(),
+                    "page.dashboard", "overview", "");
+            userSession.setAttribute("role", "admin");
+            admin = dispatcher.dispatch(WizRequest.builder().method("POST").session(userSession).build(),
+                    "page.dashboard", "overview", "");
+        }
 
         assertEquals(401, anonymous.httpStatus());
         assertEquals(200, user.httpStatus());
@@ -184,9 +228,10 @@ class AppApiDispatcherTest {
         assertEquals(200, admin.httpStatus());
     }
 
-    private AppApiDispatcher dispatcher(Path workspace) {
+    private AppApiDispatcher dispatcher(Path workspace, ProjectRuntimeCache cache) {
         ProjectRegistry registry = new ProjectRegistry(new PathService(workspace));
-        return new AppApiDispatcher(new WizRuntime(registry));
+        WizRuntime runtime = new WizRuntime(registry, new ModelRegistry(cache), new WizRedirectProperties(), cache);
+        return new AppApiDispatcher(runtime);
     }
 
     private void setDashboardController(ProjectContext project, String controller) throws IOException {

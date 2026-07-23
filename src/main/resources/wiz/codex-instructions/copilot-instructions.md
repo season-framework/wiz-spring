@@ -9,7 +9,8 @@
 - 프로젝트 백엔드는 Java source를 빌드해 bundle에 포함한다. 동적 서버 스크립트 실행을 전제로 설계하지 않는다.
 - 프론트엔드는 기존 WIZ의 `view.pug`, `view.ts`, `view.scss`, `app.json`, portal asset 패턴을 유지한다.
 - `build/`, `bundle/`, `target/`, `node_modules/`, `.angular/`는 생성 산출물이다. 수정은 `src/`, `config/`, `pom.xml`, `src/angular/package.json`에서 시작한다.
-- `build/`는 공개 Spring Boot/Maven build 산출물로 `pom.xml`, `src/main/java`, `src/main/resources`, `target/classes`, `target/dependency`, `target/app-api.jar`, `target/frontend`를 가진다. WIZ 내부 staging은 `build/.wiz/source` 아래에만 둔다.
+- `build/`는 공개 Spring Boot/Maven build 산출물로 `pom.xml`, `src/main/java`, `src/main/resources`, `target/classes`, `target/dependency`, `target/app-api.jar`, `target/frontend`를 가진다. 일시적 WIZ source staging은 `build/target/work/source`에 두며 직접 수정하지 않는다.
+- build lock/runtime snapshot과 MCP 상태는 workspace 밖의 운영체제 runtime/state 경로를 사용하고 npm은 기본 사용자 cache를 사용한다. 프로젝트 내부에 별도 숨김 framework 디렉터리를 만들지 않는다.
 
 ## Source of truth
 

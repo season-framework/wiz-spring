@@ -3,9 +3,11 @@ package com.wiz.core;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.LinkOption;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Stream;
@@ -15,6 +17,7 @@ import com.wiz.runtime.ProjectContext;
 import com.wiz.security.GitUriPolicy;
 import com.wiz.security.SecretMasker;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -35,9 +38,16 @@ public class ProjectService {
             "!/config/application-*.example.yaml");
 
     private final PathService paths;
+    private final GitCloneCommand gitCloneCommand;
 
+    @Autowired
     public ProjectService(PathService paths) {
+        this(paths, ProjectService::runGitClone);
+    }
+
+    ProjectService(PathService paths, GitCloneCommand gitCloneCommand) {
         this.paths = paths;
+        this.gitCloneCommand = gitCloneCommand;
     }
 
     public ProjectContext createApp(String uri, Path sourcePath) throws IOException, InterruptedException {
@@ -287,48 +297,90 @@ public class ProjectService {
 
     private void cloneProject(String uri, Path target) throws IOException, InterruptedException {
         String validatedUri = GitUriPolicy.validate(uri);
-        Path cloneTarget = Files.createTempDirectory(target, ".wiz-clone-");
-        Process process = new ProcessBuilder("git", "clone", validatedUri, cloneTarget.toString())
+        Path cloneParent = target.toAbsolutePath().normalize().getParent();
+        Path cloneTarget = cloneParent == null
+                ? Files.createTempDirectory("wiz-clone-")
+                : Files.createTempDirectory(cloneParent, "wiz-clone-");
+        try {
+            gitCloneCommand.clone(validatedUri, cloneTarget);
+            copyDirectory(cloneTarget, target);
+        } finally {
+            delete(cloneTarget);
+        }
+    }
+
+    private static void runGitClone(String uri, Path cloneTarget) throws IOException, InterruptedException {
+        Process process = new ProcessBuilder("git", "clone", uri, cloneTarget.toString())
                 .redirectErrorStream(true)
                 .start();
         String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
         int exitCode = process.waitFor();
         if (exitCode != 0) {
-            delete(cloneTarget);
-            throw new IllegalStateException("git clone failed with exit code " + exitCode + System.lineSeparator() + SecretMasker.mask(output));
+            throw new IllegalStateException("git clone failed with exit code " + exitCode
+                    + System.lineSeparator() + SecretMasker.mask(output));
         }
-        copyDirectory(cloneTarget, target);
-        delete(cloneTarget);
     }
 
     private void copyDirectory(Path source, Path target) throws IOException {
-        if (!Files.isDirectory(source)) {
-            throw new IllegalArgumentException("Source path must be a directory: " + source);
+        Path normalizedSource = source.toAbsolutePath().normalize();
+        Path normalizedTarget = target.toAbsolutePath().normalize();
+        if (!Files.isDirectory(normalizedSource)) {
+            throw new IllegalArgumentException("Source path must be a directory: " + normalizedSource);
         }
-        try (Stream<Path> paths = Files.walk(source)) {
-            for (Path item : paths.toList()) {
-                Path relative = source.relativize(item);
-                Path destination = target.resolve(relative.toString()).normalize();
-                if (!destination.startsWith(target.normalize())) {
-                    throw new IllegalArgumentException("App source copy escapes target directory");
+        Path nestedTarget = nestedTargetWithinSource(normalizedSource, normalizedTarget);
+        Files.walkFileTree(normalizedSource, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) throws IOException {
+                if ((!directory.equals(normalizedSource) && isExcludedImportDirectory(directory))
+                        || directory.equals(nestedTarget)) {
+                    return FileVisitResult.SKIP_SUBTREE;
                 }
-                if (Files.isSymbolicLink(item)) {
+                Path destination = copyDestination(normalizedSource, normalizedTarget, directory);
+                Files.createDirectories(destination);
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
+                Path relative = normalizedSource.relativize(file);
+                if (Files.isSymbolicLink(file)) {
                     throw new IllegalArgumentException("Symbolic links are not allowed in app source copies: " + relative);
                 }
-                if (relative.toString().contains(".git" + java.io.File.separator) || relative.toString().equals(".git")) {
-                    continue;
-                }
-                if (Files.isDirectory(item, LinkOption.NOFOLLOW_LINKS)) {
-                    Files.createDirectories(destination);
-                } else {
-                    if (Files.exists(destination)) {
-                        continue;
-                    }
+                Path destination = copyDestination(normalizedSource, normalizedTarget, file);
+                if (!Files.exists(destination)) {
                     Files.createDirectories(destination.getParent());
-                    Files.copy(item, destination);
+                    Files.copy(file, destination);
                 }
+                return FileVisitResult.CONTINUE;
             }
+        });
+    }
+
+    private Path nestedTargetWithinSource(Path source, Path target) throws IOException {
+        Path realSource = source.toRealPath();
+        Path realTarget = target.toRealPath();
+        if (realSource.equals(realTarget) || !realTarget.startsWith(realSource)) {
+            return null;
         }
+        return source.resolve(realSource.relativize(realTarget)).normalize();
+    }
+
+    private boolean isExcludedImportDirectory(Path directory) {
+        Path name = directory.getFileName();
+        return name != null && name.toString().equals(".git");
+    }
+
+    private Path copyDestination(Path source, Path target, Path item) {
+        Path destination = target.resolve(source.relativize(item)).normalize();
+        if (!destination.startsWith(target)) {
+            throw new IllegalArgumentException("App source copy escapes target directory");
+        }
+        return destination;
+    }
+
+    @FunctionalInterface
+    interface GitCloneCommand {
+        void clone(String uri, Path cloneTarget) throws IOException, InterruptedException;
     }
 
     private void delete(Path path) throws IOException {

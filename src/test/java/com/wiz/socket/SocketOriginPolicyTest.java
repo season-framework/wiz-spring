@@ -102,29 +102,33 @@ class SocketOriginPolicyTest {
     void socketIoPollingQueueIsBoundedByConfiguredCapacity() {
         WizSocketProperties properties = new WizSocketProperties();
         properties.setPollingQueueCapacity(1);
-        SocketIoHttpController controller = new SocketIoHttpController(new FakeSocketDispatcher(), new ObjectMapper(), properties);
-        String sid = sid(controller.poll(null, null));
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            SocketIoHttpController controller = new SocketIoHttpController(new FakeSocketDispatcher(cache), new ObjectMapper(), properties);
+            String sid = sid(controller.poll(null, null));
 
-        assertEquals(HttpStatus.OK, controller.receive(sid, "40/wiz/app/page.chat,", null).getStatusCode());
-        assertTrue(controller.poll(sid, null).getBody().contains("\"sid\""));
-        assertEquals(HttpStatus.OK, controller.receive(sid, "42/wiz/app/page.chat,[\"send\",\"one\"]", null).getStatusCode());
-        assertEquals(HttpStatus.OK, controller.receive(sid, "42/wiz/app/page.chat,[\"send\",\"two\"]", null).getStatusCode());
+            assertEquals(HttpStatus.OK, controller.receive(sid, "40/wiz/app/page.chat,", null).getStatusCode());
+            assertTrue(controller.poll(sid, null).getBody().contains("\"sid\""));
+            assertEquals(HttpStatus.OK, controller.receive(sid, "42/wiz/app/page.chat,[\"send\",\"one\"]", null).getStatusCode());
+            assertEquals(HttpStatus.OK, controller.receive(sid, "42/wiz/app/page.chat,[\"send\",\"two\"]", null).getStatusCode());
 
-        assertEquals(1, controller.queueSize(sid));
-        String payload = controller.poll(sid, null).getBody();
-        assertFalse(payload.contains("send-1"));
-        assertTrue(payload.contains("send-2"));
+            assertEquals(1, controller.queueSize(sid));
+            String payload = controller.poll(sid, null).getBody();
+            assertFalse(payload.contains("send-1"));
+            assertTrue(payload.contains("send-2"));
+        }
     }
 
     @Test
     void socketIoPollingUsesConfiguredNamespacePrefix() {
         WizSocketProperties properties = new WizSocketProperties();
         properties.setPath("/custom/app");
-        SocketIoHttpController controller = new SocketIoHttpController(new FakeSocketDispatcher(), new ObjectMapper(), properties);
-        String sid = sid(controller.poll(null, null));
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            SocketIoHttpController controller = new SocketIoHttpController(new FakeSocketDispatcher(cache), new ObjectMapper(), properties);
+            String sid = sid(controller.poll(null, null));
 
-        assertEquals(HttpStatus.OK, controller.receive(sid, "40/custom/app/page.chat,", null).getStatusCode());
-        assertTrue(controller.poll(sid, null).getBody().contains("40/custom/app/page.chat"));
+            assertEquals(HttpStatus.OK, controller.receive(sid, "40/custom/app/page.chat,", null).getStatusCode());
+            assertTrue(controller.poll(sid, null).getBody().contains("40/custom/app/page.chat"));
+        }
     }
 
     private String sid(ResponseEntity<String> response) {
@@ -178,8 +182,8 @@ class SocketOriginPolicyTest {
 
         private final AtomicInteger sequence = new AtomicInteger();
 
-        private FakeSocketDispatcher() {
-            super(null, new SocketRoomRegistry(), new ProjectRuntimeCache());
+        private FakeSocketDispatcher(ProjectRuntimeCache cache) {
+            super(null, new SocketRoomRegistry(), cache);
         }
 
         @Override

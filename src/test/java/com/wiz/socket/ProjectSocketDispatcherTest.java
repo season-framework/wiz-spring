@@ -12,6 +12,7 @@ import com.wiz.core.ProjectService;
 import com.wiz.core.WorkspaceService;
 import com.wiz.runtime.PathService;
 import com.wiz.runtime.ProjectContext;
+import com.wiz.runtime.ProjectRuntimeCache;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -31,15 +32,17 @@ class ProjectSocketDispatcherTest {
         BuildResult build = new ProjectBuildService().build(project, true, "bundle");
         assertTrue(build.success(), build.message());
 
-        SocketRoomRegistry rooms = new SocketRoomRegistry();
-        ProjectSocketDispatcher dispatcher = new ProjectSocketDispatcher(new PathService(workspace), rooms);
-        SocketNamespace namespace = new SocketNamespace("page.dashboard");
-        SocketSession session = authenticatedSocket("sid-1", namespace);
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            SocketRoomRegistry rooms = new SocketRoomRegistry();
+            ProjectSocketDispatcher dispatcher = new ProjectSocketDispatcher(new PathService(workspace), rooms, cache);
+            SocketNamespace namespace = new SocketNamespace("page.dashboard");
+            SocketSession session = authenticatedSocket("sid-1", namespace);
 
-        assertTrue(dispatcher.dispatch(session, "connect", Map.of()).accepted());
-        assertTrue(dispatcher.dispatch(session, "join", Map.of("id", "room-1")).accepted());
-        assertTrue(rooms.contains(namespace, "room-1", "sid-1"));
-        assertFalse(dispatcher.dispatch(session, "missing", Map.of()).accepted());
+            assertTrue(dispatcher.dispatch(session, "connect", Map.of()).accepted());
+            assertTrue(dispatcher.dispatch(session, "join", Map.of("id", "room-1")).accepted());
+            assertTrue(rooms.contains(namespace, "room-1", "sid-1"));
+            assertFalse(dispatcher.dispatch(session, "missing", Map.of()).accepted());
+        }
     }
 
     @Test
@@ -51,11 +54,13 @@ class ProjectSocketDispatcherTest {
         BuildResult build = new ProjectBuildService().build(project, true, "bundle");
         assertTrue(build.success(), build.message());
 
-        ProjectSocketDispatcher dispatcher = new ProjectSocketDispatcher(new PathService(workspace), new SocketRoomRegistry());
-        SocketNamespace namespace = new SocketNamespace("page.dashboard");
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            ProjectSocketDispatcher dispatcher = new ProjectSocketDispatcher(new PathService(workspace), new SocketRoomRegistry(), cache);
+            SocketNamespace namespace = new SocketNamespace("page.dashboard");
 
-        assertFalse(dispatcher.dispatch(new SocketSession("sid-1", namespace), "connect", Map.of()).accepted());
-        assertTrue(dispatcher.dispatch(authenticatedSocket("sid-2", namespace), "connect", Map.of()).accepted());
+            assertFalse(dispatcher.dispatch(new SocketSession("sid-1", namespace), "connect", Map.of()).accepted());
+            assertTrue(dispatcher.dispatch(authenticatedSocket("sid-2", namespace), "connect", Map.of()).accepted());
+        }
     }
 
     @Test
@@ -68,15 +73,17 @@ class ProjectSocketDispatcherTest {
         BuildResult firstBuild = new ProjectBuildService().build(project, true, "bundle");
         assertTrue(firstBuild.success(), firstBuild.message());
 
-        ProjectSocketDispatcher dispatcher = new ProjectSocketDispatcher(new PathService(workspace), new SocketRoomRegistry());
-        SocketSession session = authenticatedSocket("sid-1", new SocketNamespace("page.dashboard"));
-        assertTrue(dispatcher.dispatch(session, "version", Map.of()).message().contains("one"));
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            ProjectSocketDispatcher dispatcher = new ProjectSocketDispatcher(new PathService(workspace), new SocketRoomRegistry(), cache);
+            SocketSession session = authenticatedSocket("sid-1", new SocketNamespace("page.dashboard"));
+            assertTrue(dispatcher.dispatch(session, "version", Map.of()).message().contains("one"));
 
-        java.nio.file.Files.writeString(socketSource, versionSocketJava("two"));
-        BuildResult secondBuild = new ProjectBuildService().build(project, true, "bundle");
-        assertTrue(secondBuild.success(), secondBuild.message());
+            java.nio.file.Files.writeString(socketSource, versionSocketJava("two"));
+            BuildResult secondBuild = new ProjectBuildService().build(project, true, "bundle");
+            assertTrue(secondBuild.success(), secondBuild.message());
 
-        assertTrue(dispatcher.dispatch(session, "version", Map.of()).message().contains("two"));
+            assertTrue(dispatcher.dispatch(session, "version", Map.of()).message().contains("two"));
+        }
     }
 
     private SocketSession authenticatedSocket(String id, SocketNamespace namespace) {

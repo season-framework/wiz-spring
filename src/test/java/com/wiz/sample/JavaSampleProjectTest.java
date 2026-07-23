@@ -57,142 +57,145 @@ class JavaSampleProjectTest {
         assertTrue(Files.exists(project.bundleRoot().resolve("app-api.jar")));
         assertTrue(Files.exists(project.bundleRoot().resolve("classes/com/wiz/app/realtime/socket/PageChatSocketController.class")));
 
-        SocketRoomRegistry rooms = new SocketRoomRegistry();
-        ProjectSocketDispatcher socketDispatcher = new ProjectSocketDispatcher(new PathService(workspace), rooms);
-        SocketNamespace chatNamespace = new SocketNamespace("page.chat");
-        MockHttpSession chatHttpSession = new MockHttpSession();
-        chatHttpSession.setAttribute("id", "admin");
-        chatHttpSession.setAttribute("role", "admin");
-        SocketSession chatSession = new SocketSession("chat-1", chatNamespace, Map.of(), chatHttpSession, "127.0.0.1");
-        assertTrue(socketDispatcher.dispatch(chatSession, "join", Map.of("room", "lobby")).accepted());
-        SocketEventResult chat = socketDispatcher.dispatch(chatSession, "send", Map.of("room", "lobby", "name", "Admin", "text", "hello"));
-        assertEquals("chat.message", chat.event());
-        assertEquals("lobby", chat.room());
-        assertTrue(chat.message().contains("hello"));
+        try (ProjectRuntimeCache socketCache = new ProjectRuntimeCache();
+                ProjectRuntimeCache apiCache = new ProjectRuntimeCache()) {
+            SocketRoomRegistry rooms = new SocketRoomRegistry();
+            ProjectSocketDispatcher socketDispatcher = new ProjectSocketDispatcher(new PathService(workspace), rooms, socketCache);
+            SocketNamespace chatNamespace = new SocketNamespace("page.chat");
+            MockHttpSession chatHttpSession = new MockHttpSession();
+            chatHttpSession.setAttribute("id", "admin");
+            chatHttpSession.setAttribute("role", "admin");
+            SocketSession chatSession = new SocketSession("chat-1", chatNamespace, Map.of(), chatHttpSession, "127.0.0.1");
+            assertTrue(socketDispatcher.dispatch(chatSession, "join", Map.of("room", "lobby")).accepted());
+            SocketEventResult chat = socketDispatcher.dispatch(chatSession, "send", Map.of("room", "lobby", "name", "Admin", "text", "hello"));
+            assertEquals("chat.message", chat.event());
+            assertEquals("lobby", chat.room());
+            assertTrue(chat.message().contains("hello"));
 
-        AppApiDispatcher dispatcher = dispatcher(workspace);
-        MockHttpSession session = new MockHttpSession();
+            AppApiDispatcher dispatcher = dispatcher(workspace, apiCache);
+            MockHttpSession session = new MockHttpSession();
 
-        WizResult anonymousDashboard = dispatch(dispatcher, WizRequest.builder().method("POST").build(), "page.dashboard", "overview");
-        assertEquals(401, anonymousDashboard.httpStatus());
+            WizResult anonymousDashboard = dispatch(dispatcher, WizRequest.builder().method("POST").build(), "page.dashboard", "overview");
+            assertEquals(401, anonymousDashboard.httpStatus());
 
-        ResponseEnvelope missingLogin = envelope(dispatch(dispatcher, WizRequest.builder()
-                .method("POST")
-                .session(session)
-                .formParam("email", "")
-                .formParam("password", "")
-                .build(), "page.access", "login"));
-        assertEquals(400, missingLogin.code());
-        assertEquals("이메일과 비밀번호를 입력해주세요.", dataMap(missingLogin.data()).get("message"));
+            ResponseEnvelope missingLogin = envelope(dispatch(dispatcher, WizRequest.builder()
+                    .method("POST")
+                    .session(session)
+                    .formParam("email", "")
+                    .formParam("password", "")
+                    .build(), "page.access", "login"));
+            assertEquals(400, missingLogin.code());
+            assertEquals("이메일과 비밀번호를 입력해주세요.", dataMap(missingLogin.data()).get("message"));
 
-        ResponseEnvelope login = envelope(dispatch(dispatcher, WizRequest.builder()
-                .method("POST")
-                .session(session)
-                .jsonBody("{\"email\":\"admin@example.com\",\"password\":\"admin1234\"}")
-                .build(), "page.access", "login"));
-        assertEquals(200, login.code());
-        assertEquals("admin", session.getAttribute("role"));
+            ResponseEnvelope login = envelope(dispatch(dispatcher, WizRequest.builder()
+                    .method("POST")
+                    .session(session)
+                    .jsonBody("{\"email\":\"admin@example.com\",\"password\":\"admin1234\"}")
+                    .build(), "page.access", "login"));
+            assertEquals(200, login.code());
+            assertEquals("admin", session.getAttribute("role"));
 
-        Map<String, Object> dashboard = dataMap(dispatch(dispatcher, request(session), "page.dashboard", "overview"));
-        List<Map<String, Object>> stats = dataList(dashboard.get("stats"));
-        assertEquals(4, stats.size());
-        assertEquals("📄", stats.getFirst().get("icon"));
-        List<Map<String, Object>> recent = dataList(dashboard.get("recent"));
-        assertFalse(recent.isEmpty());
-        assertTrue(recent.getFirst().containsKey("avatarColor"));
+            Map<String, Object> dashboard = dataMap(dispatch(dispatcher, request(session), "page.dashboard", "overview"));
+            List<Map<String, Object>> stats = dataList(dashboard.get("stats"));
+            assertEquals(4, stats.size());
+            assertEquals("📄", stats.getFirst().get("icon"));
+            List<Map<String, Object>> recent = dataList(dashboard.get("recent"));
+            assertFalse(recent.isEmpty());
+            assertTrue(recent.getFirst().containsKey("avatarColor"));
 
-        List<Map<String, Object>> members = dataList(envelope(dispatch(dispatcher, request(session), "page.members", "list")).data());
-        assertTrue(members.size() >= 5);
-        assertTrue(members.stream().anyMatch(member -> "admin@example.com".equals(member.get("email")) && !member.containsKey("password")));
+            List<Map<String, Object>> members = dataList(envelope(dispatch(dispatcher, request(session), "page.members", "list")).data());
+            assertTrue(members.size() >= 5);
+            assertTrue(members.stream().anyMatch(member -> "admin@example.com".equals(member.get("email")) && !member.containsKey("password")));
 
-        ResponseEnvelope invite = envelope(dispatch(dispatcher, WizRequest.builder()
-                .method("POST")
-                .session(session)
-                .formParam("email", "eve@example.com")
-                .formParam("role", "viewer")
-                .build(), "page.members", "invite"));
-        assertEquals(200, invite.code());
+            ResponseEnvelope invite = envelope(dispatch(dispatcher, WizRequest.builder()
+                    .method("POST")
+                    .session(session)
+                    .formParam("email", "eve@example.com")
+                    .formParam("role", "viewer")
+                    .build(), "page.members", "invite"));
+            assertEquals(200, invite.code());
 
-        List<Map<String, Object>> invited = dataList(envelope(dispatch(dispatcher, WizRequest.builder()
-                .method("POST")
-                .session(session)
-                .queryParam("text", "eve@example.com")
-                .build(), "page.members", "list")).data());
-        assertEquals(1, invited.size());
-        String invitedId = invited.getFirst().get("id").toString();
+            List<Map<String, Object>> invited = dataList(envelope(dispatch(dispatcher, WizRequest.builder()
+                    .method("POST")
+                    .session(session)
+                    .queryParam("text", "eve@example.com")
+                    .build(), "page.members", "list")).data());
+            assertEquals(1, invited.size());
+            String invitedId = invited.getFirst().get("id").toString();
 
-        Map<String, Object> memberDetail = dataMap(dispatch(dispatcher, WizRequest.builder()
-                .method("POST")
-                .session(session)
-                .queryParam("id", invitedId)
-                .build(), "page.members", "detail"));
-        assertEquals("eve@example.com", memberDetail.get("email"));
+            Map<String, Object> memberDetail = dataMap(dispatch(dispatcher, WizRequest.builder()
+                    .method("POST")
+                    .session(session)
+                    .queryParam("id", invitedId)
+                    .build(), "page.members", "detail"));
+            assertEquals("eve@example.com", memberDetail.get("email"));
 
-        ResponseEnvelope mypage = envelope(dispatch(dispatcher, request(session), "page.mypage", "get"));
-        assertEquals("admin@example.com", dataMap(mypage.data()).get("email"));
+            ResponseEnvelope mypage = envelope(dispatch(dispatcher, request(session), "page.mypage", "get"));
+            assertEquals("admin@example.com", dataMap(mypage.data()).get("email"));
 
-        ResponseEnvelope updateProfile = envelope(dispatch(dispatcher, WizRequest.builder()
-                .method("POST")
-                .session(session)
-                .formParam("name", "Admin Updated")
-                .formParam("mobile", "010-9999-0000")
-                .build(), "page.mypage", "update_profile"));
-        assertEquals(200, updateProfile.code());
-        assertEquals("Admin Updated", session.getAttribute("name"));
+            ResponseEnvelope updateProfile = envelope(dispatch(dispatcher, WizRequest.builder()
+                    .method("POST")
+                    .session(session)
+                    .formParam("name", "Admin Updated")
+                    .formParam("mobile", "010-9999-0000")
+                    .build(), "page.mypage", "update_profile"));
+            assertEquals(200, updateProfile.code());
+            assertEquals("Admin Updated", session.getAttribute("name"));
 
-        ResponseEnvelope changePassword = envelope(dispatch(dispatcher, WizRequest.builder()
-                .method("POST")
-                .session(session)
-                .formParam("current_password", "admin1234")
-                .formParam("new_password", "admin4321")
-                .build(), "page.mypage", "change_password"));
-        assertEquals(200, changePassword.code());
+            ResponseEnvelope changePassword = envelope(dispatch(dispatcher, WizRequest.builder()
+                    .method("POST")
+                    .session(session)
+                    .formParam("current_password", "admin1234")
+                    .formParam("new_password", "admin4321")
+                    .build(), "page.mypage", "change_password"));
+            assertEquals(200, changePassword.code());
 
-        List<?> categories = dataList(envelope(dispatch(dispatcher, request(session), "portal.post.list", "categories")).data());
-        assertTrue(categories.contains("공지사항"));
+            List<?> categories = dataList(envelope(dispatch(dispatcher, request(session), "portal.post.list", "categories")).data());
+            assertTrue(categories.contains("공지사항"));
 
-        Map<String, Object> search = dataMap(dispatch(dispatcher, WizRequest.builder()
-                .method("POST")
-                .queryParam("page", "1")
-                .queryParam("dump", "5")
-                .build(), "portal.post.list", "search"));
-        List<Map<String, Object>> posts = dataList(search.get("rows"));
-        assertFalse(posts.isEmpty());
-        String postId = posts.getFirst().get("id").toString();
+            Map<String, Object> search = dataMap(dispatch(dispatcher, WizRequest.builder()
+                    .method("POST")
+                    .queryParam("page", "1")
+                    .queryParam("dump", "5")
+                    .build(), "portal.post.list", "search"));
+            List<Map<String, Object>> posts = dataList(search.get("rows"));
+            assertFalse(posts.isEmpty());
+            String postId = posts.getFirst().get("id").toString();
 
-        Map<String, Object> postDetail = dataMap(dispatch(dispatcher, WizRequest.builder()
-                .method("POST")
-                .queryParam("id", postId)
-                .build(), "portal.post.detail", "get"));
-        assertNotNull(postDetail.get("summary"));
+            Map<String, Object> postDetail = dataMap(dispatch(dispatcher, WizRequest.builder()
+                    .method("POST")
+                    .queryParam("id", postId)
+                    .build(), "portal.post.detail", "get"));
+            assertNotNull(postDetail.get("summary"));
 
-        String newPostJson = objectMapper.writeValueAsString(Map.of(
-                "id", "new",
-                "title", "Integration Post",
-                "content", "Created from the Java sample integration test",
-                "category", "공지사항"));
-        Map<String, Object> savedPost = dataMap(dispatch(dispatcher, WizRequest.builder()
-                .method("POST")
-                .session(session)
-                .formParam("data", newPostJson)
-                .build(), "portal.post.detail", "save"));
-        assertEquals("Integration Post", savedPost.get("title"));
-        assertEquals("draft", savedPost.get("status"));
-        assertEquals("Admin Updated", savedPost.get("author"));
+            String newPostJson = objectMapper.writeValueAsString(Map.of(
+                    "id", "new",
+                    "title", "Integration Post",
+                    "content", "Created from the Java sample integration test",
+                    "category", "공지사항"));
+            Map<String, Object> savedPost = dataMap(dispatch(dispatcher, WizRequest.builder()
+                    .method("POST")
+                    .session(session)
+                    .formParam("data", newPostJson)
+                    .build(), "portal.post.detail", "save"));
+            assertEquals("Integration Post", savedPost.get("title"));
+            assertEquals("draft", savedPost.get("status"));
+            assertEquals("Admin Updated", savedPost.get("author"));
 
-        ResponseEnvelope deletePost = envelope(dispatch(dispatcher, WizRequest.builder()
-                .method("POST")
-                .session(session)
-                .formParam("id", savedPost.get("id").toString())
-                .build(), "portal.post.detail", "delete"));
-        assertEquals(200, deletePost.code());
+            ResponseEnvelope deletePost = envelope(dispatch(dispatcher, WizRequest.builder()
+                    .method("POST")
+                    .session(session)
+                    .formParam("id", savedPost.get("id").toString())
+                    .build(), "portal.post.detail", "delete"));
+            assertEquals(200, deletePost.code());
 
-        ResponseEnvelope removeMember = envelope(dispatch(dispatcher, WizRequest.builder()
-                .method("POST")
-                .session(session)
-                .formParam("id", invitedId)
-                .build(), "page.members", "remove"));
-        assertEquals(200, removeMember.code());
+            ResponseEnvelope removeMember = envelope(dispatch(dispatcher, WizRequest.builder()
+                    .method("POST")
+                    .session(session)
+                    .formParam("id", invitedId)
+                    .build(), "page.members", "remove"));
+            assertEquals(200, removeMember.code());
+        }
     }
 
     @Test
@@ -204,23 +207,25 @@ class JavaSampleProjectTest {
         BuildResult build = new ProjectBuildService().build(project, true, "bundle");
         assertTrue(build.success(), build.message());
 
-        ProjectRuntimeCache cache = warmup(workspace);
-        assertTrue(Files.exists(project.root().resolve("data/app.db")));
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            warmup(workspace, cache);
+            assertTrue(Files.exists(project.root().resolve("data/app.db")));
 
-        AppApiDispatcher dispatcher = dispatcher(workspace, cache);
-        MockHttpSession session = new MockHttpSession();
-        ResponseEnvelope login = envelope(dispatch(dispatcher, WizRequest.builder()
-                .method("POST")
-                .session(session)
-                .formParam("email", "admin@example.com")
-                .formParam("password", "admin1234")
-                .build(), "page.access", "login"));
-        assertEquals(200, login.code());
-        assertEquals("admin", session.getAttribute("role"));
+            AppApiDispatcher dispatcher = dispatcher(workspace, cache);
+            MockHttpSession session = new MockHttpSession();
+            ResponseEnvelope login = envelope(dispatch(dispatcher, WizRequest.builder()
+                    .method("POST")
+                    .session(session)
+                    .formParam("email", "admin@example.com")
+                    .formParam("password", "admin1234")
+                    .build(), "page.access", "login"));
+            assertEquals(200, login.code());
+            assertEquals("admin", session.getAttribute("role"));
 
-        Map<String, Object> dashboard = dataMap(dispatch(dispatcher, request(session), "page.dashboard", "overview"));
-        assertEquals(4, dataList(dashboard.get("stats")).size());
-        assertFalse(dataList(dashboard.get("recent")).isEmpty());
+            Map<String, Object> dashboard = dataMap(dispatch(dispatcher, request(session), "page.dashboard", "overview"));
+            assertEquals(4, dataList(dashboard.get("stats")).size());
+            assertFalse(dataList(dashboard.get("recent")).isEmpty());
+        }
     }
 
     @Test
@@ -231,17 +236,12 @@ class JavaSampleProjectTest {
         }
     }
 
-    private AppApiDispatcher dispatcher(Path workspace) {
-        return new AppApiDispatcher(new WizRuntime(new ProjectRegistry(new PathService(workspace))));
-    }
-
     private AppApiDispatcher dispatcher(Path workspace, ProjectRuntimeCache cache) {
         ProjectRegistry registry = new ProjectRegistry(new PathService(workspace));
         return new AppApiDispatcher(new WizRuntime(registry, new ModelRegistry(cache), new WizRedirectProperties(), cache));
     }
 
-    private ProjectRuntimeCache warmup(Path workspace) {
-        ProjectRuntimeCache cache = new ProjectRuntimeCache();
+    private void warmup(Path workspace, ProjectRuntimeCache cache) {
         new ProjectWarmupService(
                 new ProjectRegistry(new PathService(workspace)),
                 cache,
@@ -249,7 +249,6 @@ class JavaSampleProjectTest {
                 new WizRedirectProperties(),
                 new WizRuntimeProperties())
                 .run(null);
-        return cache;
     }
 
     private WizRequest request(MockHttpSession session) {

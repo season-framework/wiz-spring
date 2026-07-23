@@ -8,11 +8,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.attribute.PosixFilePermission;
+import java.util.Comparator;
 import java.util.Map;
+import java.util.Set;
 
 import com.wiz.core.ProjectService;
 import com.wiz.core.WorkspaceService;
 import com.wiz.runtime.PathService;
+import com.wiz.runtime.WorkspaceRuntimePaths;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -29,7 +33,8 @@ class WizMcpToolServiceTest {
 
     @Test
     void exposesPortedToolSet() {
-        WizMcpToolService service = new WizMcpToolService(tempDir, null);
+        WizMcpToolService service = new WizMcpToolService(
+                tempDir.resolve("workspace"), tempDir.resolve("state/tool-set.json"));
 
         assertEquals(55, service.toolDefinitions().size());
         assertTrue(service.toolDefinitions().stream().anyMatch(tool -> tool.get("name").equals("wiz_app_build")));
@@ -44,7 +49,7 @@ class WizMcpToolServiceTest {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
         new ProjectService(new PathService(workspace)).createApp(null, null);
-        WizMcpToolService service = new WizMcpToolService(workspace, null);
+        WizMcpToolService service = new WizMcpToolService(workspace, tempDir.resolve("state/workspace-tools.json"));
 
         Map<String, Object> status = toolData(service.callTool("wiz_workspace_status", Map.of()));
         assertEquals("com.wiz.app", status.get("javaPackageRoot"));
@@ -109,6 +114,7 @@ class WizMcpToolServiceTest {
         Map<String, Object> deletedPackage = toolData(service.callTool("wiz_package_delete", Map.of("packageName", "blog")));
         assertTrue(Boolean.TRUE.equals(deletedPackage.get("success")));
         assertTrue(!Files.exists(workspace.resolve("src/portal/blog")));
+        assertFalse(Files.exists(workspace.resolve(".wiz")));
     }
 
     @Test
@@ -116,10 +122,52 @@ class WizMcpToolServiceTest {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
         new ProjectService(new PathService(workspace)).createApp(null, null);
-        WizMcpToolService service = new WizMcpToolService(workspace, null);
+        WizMcpToolService service = new WizMcpToolService(workspace, tempDir.resolve("state/path-rejection.json"));
 
         assertThrows(IllegalArgumentException.class,
                 () -> service.callTool("wiz_app_read_file", Map.of("relativePath", "../config/application.yml")));
+    }
+
+    @Test
+    void rejectsExplicitStateInsideWorkspaceWithoutCreatingDirectory() throws Exception {
+        Path workspace = tempDir.resolve("state-policy-workspace");
+        new WorkspaceService().createWorkspace(workspace);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> new WizMcpToolService(workspace, workspace.resolve("state/mcp-state.json")));
+
+        assertTrue(exception.getMessage().contains("must be outside the workspace"));
+        assertFalse(Files.exists(workspace.resolve("state")));
+    }
+
+    @Test
+    void persistsDefaultStateOutsideWorkspaceWithPrivatePermissions() throws Exception {
+        Path workspace = tempDir.resolve("default-state-workspace");
+        new WorkspaceService().createWorkspace(workspace);
+        new ProjectService(new PathService(workspace)).createApp(null, null);
+        Path state = WorkspaceRuntimePaths.mcpState(workspace);
+        try {
+            WizMcpToolService service = new WizMcpToolService(workspace, null);
+
+            service.callTool("wiz_workspace_status", Map.of());
+
+            assertTrue(Files.isRegularFile(state));
+            assertTrue(Files.readString(state).contains(workspace.toAbsolutePath().normalize().toString()));
+            assertFalse(state.startsWith(workspace));
+            assertFalse(Files.exists(workspace.resolve(".wiz")));
+            if (Files.getFileStore(state).supportsFileAttributeView("posix")) {
+                assertEquals(Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE),
+                        Files.getPosixFilePermissions(state));
+            }
+        } finally {
+            if (Files.exists(state.getParent())) {
+                try (var paths = Files.walk(state.getParent())) {
+                    for (Path item : paths.sorted(Comparator.reverseOrder()).toList()) {
+                        Files.deleteIfExists(item);
+                    }
+                }
+            }
+        }
     }
 
     @SuppressWarnings("unchecked")

@@ -17,6 +17,7 @@ import com.wiz.dispatch.AppApiDispatcher;
 import com.wiz.runtime.PathService;
 import com.wiz.runtime.ProjectContext;
 import com.wiz.runtime.ProjectRegistry;
+import com.wiz.runtime.ProjectRuntimeCache;
 import com.wiz.runtime.SafePath;
 import com.wiz.runtime.WizRequest;
 import com.wiz.runtime.WizRuntime;
@@ -104,12 +105,15 @@ class SecurityRegressionTest {
         new WorkspaceService().createWorkspace(workspace);
         ProjectContext project = new ProjectService(new PathService(workspace)).createApp(null, null);
         new ProjectBuildService().build(project, true, "bundle");
-        AppApiDispatcher dispatcher = new AppApiDispatcher(new WizRuntime(new ProjectRegistry(new PathService(workspace))));
-        ClassLoader original = Thread.currentThread().getContextClassLoader();
+        WizRuntime runtime = new WizRuntime(new ProjectRegistry(new PathService(workspace)));
+        try (ProjectRuntimeCache ignored = runtime.runtimeCache()) {
+            AppApiDispatcher dispatcher = new AppApiDispatcher(runtime);
+            ClassLoader original = Thread.currentThread().getContextClassLoader();
 
-        dispatcher.dispatch(WizRequest.builder().method("POST").build(), "page.dashboard", "overview", "");
+            dispatcher.dispatch(WizRequest.builder().method("POST").build(), "page.dashboard", "overview", "");
 
-        assertSame(original, Thread.currentThread().getContextClassLoader());
+            assertSame(original, Thread.currentThread().getContextClassLoader());
+        }
     }
 
     private void createSymbolicLinkOrSkip(Path link, Path target) throws IOException {

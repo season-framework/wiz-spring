@@ -42,10 +42,10 @@ build/
   target/dependency/
   target/app-api.jar
   target/frontend/
-  .wiz/source/
+  target/work/source/
 ```
 
-`build/src/main/java`, `build/src/main/resources`, `build/target/**`가 공개 build 산출물이다. `build/.wiz/source`는 WIZ app/portal/Angular source를 평탄화한 내부 staging 경로이며 직접 수정하지 않는다.
+`build/src/main/java`, `build/src/main/resources`와 `build/target/classes`, `dependency`, `app-api.jar`, `frontend`가 공개 build 산출물이다. `build/target/work/source`는 WIZ app/portal/Angular source를 평탄화한 일시적 staging 경로이며 clean build에서 재생성되므로 직접 수정하지 않는다. build lock/runtime snapshot과 MCP 상태는 workspace 밖의 운영체제 runtime/state 경로를 사용하고 npm은 기본 사용자 cache를 사용하므로 프로젝트 내부에 별도 숨김 framework 디렉터리를 만들지 않는다.
 
 ## App
 

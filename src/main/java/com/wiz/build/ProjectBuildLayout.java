@@ -10,7 +10,7 @@ public final class ProjectBuildLayout {
     }
 
     public static Path stagedSourceRoot(ProjectContext project) {
-        return project.buildRoot().resolve(".wiz/source");
+        return targetRoot(project).resolve("work/source");
     }
 
     public static Path stagedAppRoot(ProjectContext project) {
@@ -69,15 +69,23 @@ public final class ProjectBuildLayout {
         return targetRoot(project).resolve(".dependency-next");
     }
 
-    public static Path compilerClasspathRoot(ProjectContext project) {
-        return targetRoot(project).resolve("compiler-classpath");
-    }
-
     public static Path frontendOutputRoot(ProjectContext project) {
         return targetRoot(project).resolve("frontend");
     }
 
+    public static Path frontendDependencyFingerprint(ProjectContext project) {
+        return targetRoot(project).resolve("frontend-dependencies.sha256");
+    }
+
+    public static Path bundleStagingRoot(ProjectContext project) {
+        return targetRoot(project).resolve("work/bundle-next");
+    }
+
+    public static Path bundlePreviousRoot(ProjectContext project) {
+        return targetRoot(project).resolve("work/bundle-previous");
+    }
+
     public static Path cyclonedxBom(ProjectContext project) {
-        return targetRoot(project).resolve(SupplyChainManifestService.CYCLONEDX_BOM_FILE);
+        return project.bundleRoot().resolve(SupplyChainManifestService.CYCLONEDX_BOM_FILE);
     }
 }

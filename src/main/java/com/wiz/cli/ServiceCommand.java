@@ -4,7 +4,10 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.UserPrincipal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -14,6 +17,7 @@ import java.util.concurrent.Callable;
 import java.util.stream.Stream;
 
 import com.wiz.WizSpringApplication;
+import com.wiz.runtime.WorkspaceRuntimePaths;
 
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
@@ -35,7 +39,7 @@ public class ServiceCommand implements Callable<Integer> {
 
     private static final Path DEFAULT_SYSTEMD_DIR = Path.of("/etc/systemd/system");
     private static final Path DEFAULT_BIN_DIR = Path.of("/usr/local/bin");
-    private static final Path DEFAULT_LOG_DIR = Path.of("/var/log/wiz");
+    private static final Path DEFAULT_LOG_DIR = Path.of("/var/log");
 
     @Spec
     private CommandSpec spec;
@@ -91,6 +95,18 @@ public class ServiceCommand implements Callable<Integer> {
         @Option(names = "--log", description = "Log file path.")
         private Path log;
 
+        @Option(names = "--user", description = "Operating-system user for the service. Defaults to the workspace owner.")
+        private String user;
+
+        @Option(names = "--runtime-dir", description = "External WIZ runtime/lock directory. Defaults to WIZ_SPRING_RUNTIME_DIR when set.")
+        private Path runtimeDir;
+
+        @Option(names = "--cache-dir", description = "External WIZ runtime snapshot cache directory. Defaults to WIZ_SPRING_CACHE_DIR when set.")
+        private Path cacheDir;
+
+        @Option(names = "--state-dir", description = "External WIZ state directory. Defaults to WIZ_SPRING_STATE_DIR when set.")
+        private Path stateDir;
+
         @Option(names = "--dry-run", description = "Print generated files without writing them.")
         private boolean dryRun;
 
@@ -107,17 +123,28 @@ public class ServiceCommand implements Callable<Integer> {
         public Integer call() throws Exception {
             ensureLinux();
             String serviceName = serviceName(name);
-            String shortName = shortServiceName(serviceName);
             String commandName = shellCommand(command);
             Path rootPath = WorkspaceRootResolver.resolve(root, "service install");
-            Path logPath = log == null ? logDir.resolve(shortName) : log.toAbsolutePath().normalize();
+            requireSingleLine("Workspace root", rootPath.toString());
+            Path normalizedLogDir = logDir.toAbsolutePath().normalize();
+            Path logPath = log == null
+                    ? defaultLogPath(normalizedLogDir, serviceName)
+                    : log.toAbsolutePath().normalize();
             Path commandPath = binDir.resolve(serviceName);
             Path servicePath = systemdDir.resolve(serviceName + ".service");
             requireSystemdExecutablePath(commandPath);
             requireSingleLine("Service definition path", servicePath.toString());
+            String serviceUser = serviceUser(user, rootPath);
+            boolean managedLogDirectory = log == null && normalizedLogDir.equals(DEFAULT_LOG_DIR);
+            if (!managedLogDirectory) {
+                validateCustomLog(logPath, serviceUser);
+            }
+            Map<String, Path> serviceEnvironment = serviceEnvironment(
+                    rootPath, runtimeDir, cacheDir, stateDir, serviceUser);
             ServiceRunArgs parsed = parseRunArgs(runArgs);
             String script = script(serviceName, commandName, rootPath, parsed.port(), parsed.bundle(), logPath);
-            String unit = unit(serviceName, commandPath);
+            String unit = unit(serviceName, commandPath, serviceUser,
+                    managedLogDirectory ? serviceName : null, serviceEnvironment);
             if (dryRun) {
                 var out = spec.commandLine().getOut();
                 out.println(commandPath);
@@ -128,7 +155,6 @@ public class ServiceCommand implements Callable<Integer> {
             }
             Files.createDirectories(commandPath.getParent());
             Files.createDirectories(servicePath.getParent());
-            Files.createDirectories(logPath.getParent());
             Files.writeString(commandPath, script, StandardCharsets.UTF_8);
             commandPath.toFile().setExecutable(true, false);
             Files.writeString(servicePath, unit, StandardCharsets.UTF_8);
@@ -223,9 +249,8 @@ public class ServiceCommand implements Callable<Integer> {
                 throw new IllegalArgumentException("Journal line count must be between 1 and 10000");
             }
             String normalized = serviceName(name);
-            String shortName = shortServiceName(normalized);
             String applicationLog = metadata(binDir.resolve(normalized))
-                    .getOrDefault("log", logDir.resolve(shortName).toString());
+                    .getOrDefault("log", defaultLogPath(logDir, normalized).toString());
             var out = spec.commandLine().getOut();
             out.println("Service: " + normalized);
             out.println("Application log: " + applicationLog);
@@ -322,6 +347,10 @@ public class ServiceCommand implements Callable<Integer> {
         if (!normalized.matches("wiz\\.[a-z0-9._-]+")) {
             throw new IllegalArgumentException("Invalid service name: " + name);
         }
+        String shortName = shortServiceName(normalized);
+        if (".".equals(shortName) || "..".equals(shortName)) {
+            throw new IllegalArgumentException("Invalid service name: " + name);
+        }
         return normalized;
     }
 
@@ -376,7 +405,7 @@ public class ServiceCommand implements Callable<Integer> {
                 + "export PS1=${PS1:-wiz-service}\n"
                 + "shopt -s expand_aliases\n"
                 + "cd " + shell(rootValue) + "\n"
-                + "if ! type " + shell(safeCommand) + " >/dev/null 2>&1 && [ -r /root/.bashrc ]; then source /root/.bashrc; fi\n"
+                + "if ! type " + shell(safeCommand) + " >/dev/null 2>&1 && [ -n \"${HOME:-}\" ] && [ -r \"${HOME}/.bashrc\" ]; then source \"${HOME}/.bashrc\"; fi\n"
                 + "type " + shell(safeCommand) + " >/dev/null 2>&1 || { echo " + shell(safeCommand + " command not found; install it on PATH or use service install --command /absolute/path") + " >&2; exit 127; }\n"
                 + "exec " + safeCommand + " run"
                 + (port == null ? "" : " --port " + port)
@@ -385,8 +414,10 @@ public class ServiceCommand implements Callable<Integer> {
                 + "\n";
     }
 
-    private static String unit(String serviceName, Path commandPath) {
+    private static String unit(String serviceName, Path commandPath, String user, String managedLogDirectory,
+            Map<String, Path> serviceEnvironment) {
         String safeServiceName = requireSingleLine("Service name", serviceName);
+        String safeUser = systemdUser(user);
         String execStart = requireSystemdExecutablePath(commandPath);
         return "[Unit]\n"
                 + "Description=" + safeServiceName + "\n"
@@ -394,7 +425,13 @@ public class ServiceCommand implements Callable<Integer> {
                 + "After=network-online.target\n\n"
                 + "[Service]\n"
                 + "Type=simple\n"
+                + "User=" + safeUser + "\n"
+                + (managedLogDirectory != null
+                        ? "LogsDirectory=" + requireSingleLine("Managed log directory", managedLogDirectory)
+                                + "\nLogsDirectoryMode=0750\n"
+                        : "")
                 + "Environment=\"PATH=/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin\"\n"
+                + systemdEnvironment(serviceEnvironment)
                 + "ExecStart=" + execStart + "\n"
                 + "Restart=on-failure\n"
                 + "RestartSec=5s\n"
@@ -403,6 +440,115 @@ public class ServiceCommand implements Callable<Integer> {
                 + "UMask=0027\n\n"
                 + "[Install]\n"
                 + "WantedBy=multi-user.target\n";
+    }
+
+    private static String serviceUser(String configured, Path workspaceRoot) throws IOException {
+        String selected = configured == null || configured.isBlank()
+                ? Files.getOwner(workspaceRoot).getName()
+                : configured.trim();
+        return systemdUser(selected);
+    }
+
+    private static String systemdUser(String user) {
+        String value = requireSingleLine("Service user", user).trim();
+        if (!value.matches("(?:[A-Za-z_][A-Za-z0-9_.-]*|[0-9]+)")) {
+            throw new IllegalArgumentException("Service user is not a supported systemd identity: " + user);
+        }
+        return value;
+    }
+
+    private static void validateCustomLog(Path logPath, String serviceUser) throws IOException {
+        Path parent = logPath == null ? null : logPath.getParent();
+        if (parent == null || !Files.isDirectory(parent, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IllegalArgumentException("Custom log parent must already exist as a real directory: " + parent);
+        }
+        UserPrincipal expected = parent.getFileSystem().getUserPrincipalLookupService()
+                .lookupPrincipalByName(serviceUser);
+        requireOwnedWritablePath(parent, expected, "Custom log directory", true, false);
+        if (Files.exists(logPath, LinkOption.NOFOLLOW_LINKS)) {
+            if (!Files.isRegularFile(logPath, LinkOption.NOFOLLOW_LINKS)) {
+                throw new IllegalArgumentException("Custom log path must be a regular file: " + logPath);
+            }
+            requireOwnedWritablePath(logPath, expected, "Custom log file", false, false);
+        }
+    }
+
+    private static void requireOwnedWritablePath(Path path, UserPrincipal expected, String label,
+            boolean directory, boolean readable) throws IOException {
+        UserPrincipal actual = Files.getOwner(path, LinkOption.NOFOLLOW_LINKS);
+        if (!expected.equals(actual)) {
+            throw new IllegalArgumentException(label + " must be owned by the service user "
+                    + expected.getName() + ": " + path);
+        }
+        if (Files.getFileStore(path).supportsFileAttributeView("posix")) {
+            var permissions = Files.getPosixFilePermissions(path, LinkOption.NOFOLLOW_LINKS);
+            boolean writable = permissions.contains(PosixFilePermission.OWNER_WRITE)
+                    && (!directory || permissions.contains(PosixFilePermission.OWNER_EXECUTE))
+                    && (!readable || permissions.contains(PosixFilePermission.OWNER_READ));
+            if (!writable) {
+                throw new IllegalArgumentException(label + " must be owner-writable"
+                        + (readable ? ", readable" : "")
+                        + (directory ? " and searchable" : "") + ": " + path);
+            }
+        }
+    }
+
+    private static Map<String, Path> serviceEnvironment(Path workspaceRoot, Path runtimeDir, Path cacheDir,
+            Path stateDir, String serviceUser) throws IOException {
+        LinkedHashMap<String, Path> values = new LinkedHashMap<>();
+        putExternalDirectory(values, WorkspaceRuntimePaths.RUNTIME_DIRECTORY_ENV,
+                runtimeDir, workspaceRoot, serviceUser);
+        putExternalDirectory(values, WorkspaceRuntimePaths.CACHE_DIRECTORY_ENV,
+                cacheDir, workspaceRoot, serviceUser);
+        putExternalDirectory(values, WorkspaceRuntimePaths.STATE_DIRECTORY_ENV,
+                stateDir, workspaceRoot, serviceUser);
+        return values;
+    }
+
+    private static void putExternalDirectory(Map<String, Path> values, String environmentName, Path configured,
+            Path workspaceRoot, String serviceUser) throws IOException {
+        Path selected = configured;
+        if (selected == null) {
+            String inherited = System.getenv(environmentName);
+            if (inherited != null && !inherited.isBlank()) {
+                selected = Path.of(inherited.trim());
+            }
+        }
+        if (selected == null) {
+            return;
+        }
+        if (!selected.isAbsolute()) {
+            throw new IllegalArgumentException(environmentName + " must be an absolute directory: " + selected);
+        }
+        Path normalized = selected.normalize();
+        WorkspaceRuntimePaths.requireOutsideWorkspace(workspaceRoot, normalized);
+        if (!Files.isDirectory(normalized, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IllegalArgumentException(environmentName
+                    + " must already exist as a real directory owned by the service user: " + normalized);
+        }
+        UserPrincipal expected = normalized.getFileSystem().getUserPrincipalLookupService()
+                .lookupPrincipalByName(serviceUser);
+        requireOwnedWritablePath(normalized, expected, environmentName + " directory", true, true);
+        values.put(environmentName, normalized);
+    }
+
+    private static Path defaultLogPath(Path logRoot, String serviceName) {
+        return logRoot.resolve(serviceName).resolve("application.log");
+    }
+
+    private static String systemdEnvironment(Map<String, Path> values) {
+        if (values == null || values.isEmpty()) {
+            return "";
+        }
+        StringBuilder lines = new StringBuilder();
+        values.forEach((name, path) -> {
+            String value = requireSingleLine("Service environment " + name, path.toString())
+                    .replace("\\", "\\\\")
+                    .replace("\"", "\\\"")
+                    .replace("%", "%%");
+            lines.append("Environment=\"").append(name).append('=').append(value).append("\"\n");
+        });
+        return lines.toString();
     }
 
     private static int runSystemctl(String... args) throws IOException, InterruptedException {
@@ -482,7 +628,7 @@ public class ServiceCommand implements Callable<Integer> {
         Map<String, String> metadata = metadata(binary);
         String root = metadata.getOrDefault("root", "-");
         String port = displayPort(metadata.getOrDefault("port", "config"), root);
-        String log = metadata.getOrDefault("log", logDir.resolve(name).toString());
+        String log = metadata.getOrDefault("log", defaultLogPath(logDir, serviceName).toString());
         return new ServiceDescriptor(name, servicePath, binary, root, port, log);
     }
 

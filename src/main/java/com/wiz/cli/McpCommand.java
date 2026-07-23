@@ -18,7 +18,7 @@ public class McpCommand implements Callable<Integer> {
     @Option(names = "--root", description = "WIZ Spring workspace root. Defaults to WIZ_WORKSPACE or auto-detecting from the current directory.")
     private Path root;
 
-    @Option(names = "--state", description = "Path to the WIZ Spring MCP state file. Defaults to <workspace>/.wiz/mcp-state.json.")
+    @Option(names = "--state", description = "External path to the WIZ Spring MCP state file. Must remain outside the workspace; defaults to per-workspace user state.")
     private Path state;
 
     @Override

@@ -3,9 +3,14 @@ package com.wiz.runtime;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +43,9 @@ public class BuildMarkerService {
         marker.put("buildFinishedAt", finishedAt.toString());
         marker.put("frontendMode", frontendMode);
         marker.put("bundleArtifactMtime", bundleArtifactMtime(project.bundleRoot()));
+        marker.put("runtimeDigest", Map.of(
+                "algorithm", "SHA-256",
+                "value", runtimeDigest(project, dependencySummary)));
         if (dependencySummary != null) {
             marker.put("dependencyManifest", dependencySummary.manifestPath());
             marker.put("dependencyDigest", Map.of(
@@ -92,6 +100,78 @@ public class BuildMarkerService {
                     .max()
                     .orElse(0L);
         }
+    }
+
+    private String runtimeDigest(ProjectContext project, DependencySummary dependencySummary) throws IOException {
+        MessageDigest digest = sha256();
+        update(digest, "wiz-runtime-input-v1");
+        update(digest, project.packageRoot());
+        update(digest, WizSpringVersion.current());
+        if (dependencySummary == null) {
+            update(digest, "dependency:none");
+        } else {
+            update(digest, dependencySummary.digestAlgorithm());
+            update(digest, dependencySummary.digest());
+            update(digest, Integer.toString(dependencySummary.dependencyCount()));
+        }
+        addPath(digest, project.bundleRoot(), project.bundleRoot().resolve("app-api.jar"), path -> true);
+        addPath(digest, project.bundleRoot(), project.bundleRoot().resolve("classes"), path -> true);
+        addPath(digest, project.bundleRoot(), project.bundleRoot().resolve("config"), path -> true);
+        addPath(digest, project.bundleRoot(), project.bundleRoot().resolve("src/app"),
+                path -> path.getFileName().toString().equals("app.json"));
+        addPath(digest, project.bundleRoot(), project.bundleRoot().resolve("src/route"),
+                path -> path.getFileName().toString().equals("app.json"));
+        return HexFormat.of().formatHex(digest.digest());
+    }
+
+    private void addPath(
+            MessageDigest digest,
+            Path relativeRoot,
+            Path input,
+            java.util.function.Predicate<Path> include) throws IOException {
+        update(digest, relativeRoot.relativize(input).toString().replace('\\', '/'));
+        if (Files.isRegularFile(input, LinkOption.NOFOLLOW_LINKS)) {
+            addFile(digest, relativeRoot, input);
+            return;
+        }
+        if (!Files.isDirectory(input, LinkOption.NOFOLLOW_LINKS)) {
+            update(digest, "missing");
+            return;
+        }
+        try (Stream<Path> paths = Files.walk(input)) {
+            for (Path file : paths
+                    .filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
+                    .filter(include)
+                    .sorted(Comparator.comparing(path -> relativeRoot.relativize(path).toString()))
+                    .toList()) {
+                addFile(digest, relativeRoot, file);
+            }
+        }
+    }
+
+    private void addFile(MessageDigest digest, Path relativeRoot, Path file) throws IOException {
+        update(digest, relativeRoot.relativize(file).toString().replace('\\', '/'));
+        try (var input = Files.newInputStream(file)) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = input.read(buffer)) >= 0) {
+                digest.update(buffer, 0, read);
+            }
+        }
+        digest.update((byte) 0);
+    }
+
+    private MessageDigest sha256() {
+        try {
+            return MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is not available", exception);
+        }
+    }
+
+    private void update(MessageDigest digest, String value) {
+        digest.update(String.valueOf(value).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        digest.update((byte) 0);
     }
 
     private long modifiedTime(Path path) {

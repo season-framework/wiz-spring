@@ -38,56 +38,116 @@ class ProjectRuntimeCacheTest {
     Path tempDir;
 
     @Test
+    void buildAndRuntimeDoNotCreateWizDirectoriesInsideWorkspace() throws Exception {
+        ProjectContext project = projectWithApi("no-hidden-workspace-state");
+
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            cache.get(project);
+
+            assertTrue(Files.isRegularFile(WorkspaceRuntimePaths.buildLock(project.root())));
+            assertTrue(Files.isDirectory(WorkspaceRuntimePaths.runtimeSnapshots(project.root())));
+            assertNoWizDirectories(project.root());
+        }
+    }
+
+    @Test
+    void removesAbandonedSnapshotsAcrossWorkspaceHashes() throws Exception {
+        Path abandonedRoot = tempDir.resolve("abandoned-workspace");
+        Files.createDirectories(abandonedRoot);
+        Path abandonedSnapshots = WorkspaceRuntimePaths.runtimeSnapshots(abandonedRoot);
+        Path abandonedWorkspace = abandonedSnapshots.getParent().getParent();
+        Path abandonedSnapshot = abandonedSnapshots
+                .resolve(Long.MAX_VALUE + "-0")
+                .resolve("snapshot/config");
+        WorkspaceRuntimePaths.ensurePrivateDirectory(abandonedSnapshot);
+        Files.writeString(abandonedSnapshot.resolve("application.yml"), "secret: test\n");
+
+        try {
+            ProjectRuntimeCache.cleanupAbandonedRuntimeSnapshots();
+
+            assertTrue(Files.notExists(abandonedWorkspace));
+        } finally {
+            if (Files.exists(abandonedWorkspace)) {
+                try (var paths = Files.walk(abandonedWorkspace)) {
+                    for (Path item : paths.sorted(java.util.Comparator.reverseOrder()).toList()) {
+                        Files.deleteIfExists(item);
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
     void reusesRuntimeAndApiMethodWithinSameBuildMarker() throws Exception {
         ProjectContext project = projectWithApi("one");
-        ProjectRuntimeCache cache = new ProjectRuntimeCache();
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            ProjectRuntimeCache.CachedProjectRuntime firstRuntime = cache.get(project);
+            ProjectRuntimeCache.CachedProjectRuntime secondRuntime = cache.get(project);
+            var firstHandler = firstRuntime.apiHandler(ProjectJavaNaming.appApiHandlerClass(project, "page.dashboard"), "version").orElseThrow();
+            var secondHandler = secondRuntime.apiHandler(ProjectJavaNaming.appApiHandlerClass(project, "page.dashboard"), "version").orElseThrow();
 
-        ProjectRuntimeCache.CachedProjectRuntime firstRuntime = cache.get(project);
-        ProjectRuntimeCache.CachedProjectRuntime secondRuntime = cache.get(project);
-        var firstHandler = firstRuntime.apiHandler(ProjectJavaNaming.appApiHandlerClass(project, "page.dashboard"), "version").orElseThrow();
-        var secondHandler = secondRuntime.apiHandler(ProjectJavaNaming.appApiHandlerClass(project, "page.dashboard"), "version").orElseThrow();
-
-        assertSame(firstRuntime, secondRuntime);
-        assertSame(firstHandler, secondHandler);
+            assertSame(firstRuntime, secondRuntime);
+            assertSame(firstHandler, secondHandler);
+        }
     }
 
     @Test
     void invalidatesProjectRuntimeAndClosesClassLoaderWhenBuildMarkerChanges() throws Exception {
         ProjectContext project = projectWithApi("one");
         AtomicInteger closeCount = new AtomicInteger();
-        ProjectRuntimeCache cache = new ProjectRuntimeCache(new ObjectMapper(), "test", (urls, parent) -> countingClassLoader(urls, parent, closeCount));
-
-        ProjectRuntimeCache.CachedProjectRuntime firstRuntime = cache.get(project);
         AtomicInteger hookCount = new AtomicInteger();
-        firstRuntime.onClose(hookCount::incrementAndGet);
-        Files.writeString(project.appRoot().resolve("page.dashboard/api.java"), versionApi("two"));
-        BuildResult rebuild = new ProjectBuildService().build(project, true, "bundle");
-        assertTrue(rebuild.success(), rebuild.message());
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache(new ObjectMapper(), "test",
+                (urls, parent) -> countingClassLoader(urls, parent, closeCount))) {
+            ProjectRuntimeCache.CachedProjectRuntime firstRuntime = cache.get(project);
+            firstRuntime.onClose(hookCount::incrementAndGet);
+            Files.writeString(project.appRoot().resolve("page.dashboard/api.java"), versionApi("two"));
+            BuildResult rebuild = new ProjectBuildService().build(project, true, "bundle");
+            assertTrue(rebuild.success(), rebuild.message());
 
-        ProjectRuntimeCache.CachedProjectRuntime secondRuntime = cache.get(project);
+            ProjectRuntimeCache.CachedProjectRuntime secondRuntime = cache.get(project);
 
-        assertNotSame(firstRuntime, secondRuntime);
-        assertEquals(1, closeCount.get());
-        assertEquals(1, hookCount.get());
-        cache.close();
+            assertNotSame(firstRuntime, secondRuntime);
+            assertEquals(1, closeCount.get());
+            assertEquals(1, hookCount.get());
+        }
         assertEquals(2, closeCount.get());
         assertEquals(1, hookCount.get());
     }
 
     @Test
+    void reusesProjectRuntimeWhenOnlyFrontendInputsChange() throws Exception {
+        ProjectContext project = projectWithApi("frontend-only");
+        AtomicInteger closeCount = new AtomicInteger();
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache(new ObjectMapper(), "test",
+                (urls, parent) -> countingClassLoader(urls, parent, closeCount))) {
+            ProjectRuntimeCache.CachedProjectRuntime firstRuntime = cache.get(project);
+            Path view = project.appRoot().resolve("page.dashboard/view.pug");
+            Files.writeString(view, Files.readString(view) + "\nspan frontend-only-change\n");
+
+            BuildResult rebuild = new ProjectBuildService().build(project, false, "bundle");
+            assertTrue(rebuild.success(), rebuild.message());
+            ProjectRuntimeCache.CachedProjectRuntime secondRuntime = cache.get(project);
+
+            assertSame(firstRuntime, secondRuntime);
+            assertEquals(0, closeCount.get());
+        }
+        assertEquals(1, closeCount.get());
+    }
+
+    @Test
     void keepsLastCompletedMarkerRuntimeWhileBundleMarkerIsTemporarilyMissing() throws Exception {
         ProjectContext project = projectWithApi("one");
-        ProjectRuntimeCache cache = new ProjectRuntimeCache();
-        ProjectRuntimeCache.CachedProjectRuntime completed = cache.get(project);
-        Path marker = project.bundleRoot().resolve(BuildMarkerService.MARKER_FILE);
-        Path savedMarker = project.bundleRoot().resolve("saved-build-marker.json");
-        Files.move(marker, savedMarker);
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            ProjectRuntimeCache.CachedProjectRuntime completed = cache.get(project);
+            Path marker = project.bundleRoot().resolve(BuildMarkerService.MARKER_FILE);
+            Path savedMarker = project.bundleRoot().resolve("saved-build-marker.json");
+            Files.move(marker, savedMarker);
 
-        try {
-            assertSame(completed, cache.get(project));
-        } finally {
-            Files.move(savedMarker, marker);
-            cache.close();
+            try {
+                assertSame(completed, cache.get(project));
+            } finally {
+                Files.move(savedMarker, marker);
+            }
         }
     }
 
@@ -120,40 +180,41 @@ class ProjectRuntimeCacheTest {
         ExecutorService executor = Executors.newSingleThreadExecutor();
         String completedMarker = null;
         FileTime completedMarkerTime = null;
-        try {
-            ProjectRuntimeCache.CachedProjectRuntime firstRuntime = cache.get(project);
-            Files.writeString(project.appRoot().resolve("page.dashboard/api.java"), versionApi("two"));
-            BuildResult rebuild = new ProjectBuildService().build(project, true, "bundle");
-            assertTrue(rebuild.success(), rebuild.message());
-            completedMarker = Files.readString(marker);
-            completedMarkerTime = Files.getLastModifiedTime(marker);
+        try (cache) {
+            try {
+                ProjectRuntimeCache.CachedProjectRuntime firstRuntime = cache.get(project);
+                Files.writeString(project.appRoot().resolve("page.dashboard/api.java"), versionApi("two"));
+                BuildResult rebuild = new ProjectBuildService().build(project, true, "bundle");
+                assertTrue(rebuild.success(), rebuild.message());
+                completedMarker = Files.readString(marker);
+                completedMarkerTime = Files.getLastModifiedTime(marker);
 
-            Future<ProjectRuntimeCache.CachedProjectRuntime> loading = executor.submit(() -> cache.get(project));
-            assertTrue(snapshotReady.await(10, TimeUnit.SECONDS));
-            Files.delete(marker);
-            markerRemoved.countDown();
+                Future<ProjectRuntimeCache.CachedProjectRuntime> loading = executor.submit(() -> cache.get(project));
+                assertTrue(snapshotReady.await(10, TimeUnit.SECONDS));
+                Files.delete(marker);
+                markerRemoved.countDown();
 
-            ProjectRuntimeCache.CachedProjectRuntime duringReplacement = loading.get(10, TimeUnit.SECONDS);
-            assertSame(firstRuntime, duringReplacement);
-            assertEquals("one", invokeVersion(project, duringReplacement));
-            assertEquals(1, closeCount.get());
-            assertFalse(Files.exists(discardedSnapshotEntry.get()));
+                ProjectRuntimeCache.CachedProjectRuntime duringReplacement = loading.get(10, TimeUnit.SECONDS);
+                assertSame(firstRuntime, duringReplacement);
+                assertEquals("one", invokeVersion(project, duringReplacement));
+                assertEquals(1, closeCount.get());
+                assertFalse(Files.exists(discardedSnapshotEntry.get()));
 
-            Files.writeString(marker, completedMarker);
-            Files.setLastModifiedTime(marker, completedMarkerTime);
-            ProjectRuntimeCache.CachedProjectRuntime replacement = cache.get(project);
-
-            assertNotSame(firstRuntime, replacement);
-            assertEquals("two", invokeVersion(project, replacement));
-            assertEquals(2, closeCount.get());
-        } finally {
-            markerRemoved.countDown();
-            executor.shutdownNow();
-            if (completedMarker != null && Files.notExists(marker)) {
                 Files.writeString(marker, completedMarker);
                 Files.setLastModifiedTime(marker, completedMarkerTime);
+                ProjectRuntimeCache.CachedProjectRuntime replacement = cache.get(project);
+
+                assertNotSame(firstRuntime, replacement);
+                assertEquals("two", invokeVersion(project, replacement));
+                assertEquals(2, closeCount.get());
+            } finally {
+                markerRemoved.countDown();
+                executor.shutdownNow();
+                if (completedMarker != null && Files.notExists(marker)) {
+                    Files.writeString(marker, completedMarker);
+                    Files.setLastModifiedTime(marker, completedMarkerTime);
+                }
             }
-            cache.close();
         }
     }
 
@@ -162,31 +223,31 @@ class ProjectRuntimeCacheTest {
         ProjectContext project = projectWithApi("one");
         AtomicInteger closeCount = new AtomicInteger();
         AtomicInteger hookCount = new AtomicInteger();
-        ProjectRuntimeCache cache = new ProjectRuntimeCache(new ObjectMapper(), "test", (urls, parent) -> countingClassLoader(urls, parent, closeCount));
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache(new ObjectMapper(), "test",
+                (urls, parent) -> countingClassLoader(urls, parent, closeCount));
+                ProjectRuntimeCache.RuntimeLease firstLease = cache.acquire(project)) {
+            ProjectRuntimeCache.CachedProjectRuntime firstRuntime = firstLease.runtime();
+            Path firstSnapshotEntry = Path.of(((URLClassLoader) firstRuntime.classLoader()).getURLs()[0].toURI());
+            firstRuntime.onClose(hookCount::incrementAndGet);
+            Files.writeString(project.appRoot().resolve("page.dashboard/api.java"), versionApi("two"));
+            BuildResult rebuild = new ProjectBuildService().build(project, true, "bundle");
+            assertTrue(rebuild.success(), rebuild.message());
 
-        ProjectRuntimeCache.RuntimeLease firstLease = cache.acquire(project);
-        ProjectRuntimeCache.CachedProjectRuntime firstRuntime = firstLease.runtime();
-        Path firstSnapshotEntry = Path.of(((URLClassLoader) firstRuntime.classLoader()).getURLs()[0].toURI());
-        firstRuntime.onClose(hookCount::incrementAndGet);
-        Files.writeString(project.appRoot().resolve("page.dashboard/api.java"), versionApi("two"));
-        BuildResult rebuild = new ProjectBuildService().build(project, true, "bundle");
-        assertTrue(rebuild.success(), rebuild.message());
+            try (ProjectRuntimeCache.RuntimeLease secondLease = cache.acquire(project)) {
+                ProjectRuntimeCache.CachedProjectRuntime secondRuntime = secondLease.runtime();
 
-        ProjectRuntimeCache.RuntimeLease secondLease = cache.acquire(project);
-        ProjectRuntimeCache.CachedProjectRuntime secondRuntime = secondLease.runtime();
+                assertNotSame(firstRuntime, secondRuntime);
+                assertEquals(0, closeCount.get());
+                assertEquals(0, hookCount.get());
+                assertTrue(Files.exists(firstSnapshotEntry));
+                assertEquals("one", invokeVersion(project, firstRuntime));
 
-        assertNotSame(firstRuntime, secondRuntime);
-        assertEquals(0, closeCount.get());
-        assertEquals(0, hookCount.get());
-        assertTrue(Files.exists(firstSnapshotEntry));
-        assertEquals("one", invokeVersion(project, firstRuntime));
-
-        firstLease.close();
-        assertEquals(1, closeCount.get());
-        assertEquals(1, hookCount.get());
-        assertTrue(Files.notExists(firstSnapshotEntry));
-        secondLease.close();
-        cache.close();
+                firstLease.close();
+                assertEquals(1, closeCount.get());
+                assertEquals(1, hookCount.get());
+                assertTrue(Files.notExists(firstSnapshotEntry));
+            }
+        }
         assertEquals(2, closeCount.get());
     }
 
@@ -194,12 +255,11 @@ class ProjectRuntimeCacheTest {
     void usesStableRuntimeClassLoaderParentInsteadOfCallingThreadContextLoader() throws Exception {
         ProjectContext project = projectWithApi("one");
         AtomicReference<ClassLoader> observedParent = new AtomicReference<>();
-        ProjectRuntimeCache cache = new ProjectRuntimeCache(new ObjectMapper(), "test", (urls, parent) -> {
+        ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache(new ObjectMapper(), "test", (urls, parent) -> {
             observedParent.set(parent);
             return new URLClassLoader(urls, parent);
-        });
-        ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
-        try (URLClassLoader transientRequestLoader = new URLClassLoader(new URL[0], previousLoader)) {
+        }); URLClassLoader transientRequestLoader = new URLClassLoader(new URL[0], previousLoader)) {
             Thread.currentThread().setContextClassLoader(transientRequestLoader);
 
             cache.get(project);
@@ -208,73 +268,74 @@ class ProjectRuntimeCacheTest {
             assertSame(ProjectRuntimeCache.class.getClassLoader(), observedParent.get());
         } finally {
             Thread.currentThread().setContextClassLoader(previousLoader);
-            cache.close();
         }
     }
 
     @Test
     void cleanupFailureDoesNotBlockReplacementRuntime() throws Exception {
         ProjectContext project = projectWithApi("one");
-        ProjectRuntimeCache cache = new ProjectRuntimeCache();
-        ProjectRuntimeCache.CachedProjectRuntime firstRuntime = cache.get(project);
-        firstRuntime.onClose(() -> {
-            throw new IOException("simulated cleanup failure");
-        });
-        Files.writeString(project.appRoot().resolve("page.dashboard/api.java"), versionApi("two"));
-        BuildResult rebuild = new ProjectBuildService().build(project, true, "bundle");
-        assertTrue(rebuild.success(), rebuild.message());
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache()) {
+            ProjectRuntimeCache.CachedProjectRuntime firstRuntime = cache.get(project);
+            firstRuntime.onClose(() -> {
+                throw new IOException("simulated cleanup failure");
+            });
+            Files.writeString(project.appRoot().resolve("page.dashboard/api.java"), versionApi("two"));
+            BuildResult rebuild = new ProjectBuildService().build(project, true, "bundle");
+            assertTrue(rebuild.success(), rebuild.message());
 
-        ProjectRuntimeCache.CachedProjectRuntime replacement = assertDoesNotThrow(() -> cache.get(project));
+            ProjectRuntimeCache.CachedProjectRuntime replacement = assertDoesNotThrow(() -> cache.get(project));
 
-        assertNotSame(firstRuntime, replacement);
-        assertEquals("two", invokeVersion(project, replacement));
-        cache.close();
+            assertNotSame(firstRuntime, replacement);
+            assertEquals("two", invokeVersion(project, replacement));
+        }
     }
 
     @Test
     void defaultProfileUsesBuildMarkerWithoutWalkingCompiledArtifacts() throws Exception {
         ProjectContext project = projectWithApi("one");
-        ProjectRuntimeCache cache = new ProjectRuntimeCache(new ObjectMapper(), "test", URLClassLoader::new);
-        Path marker = project.bundleRoot().resolve(BuildMarkerService.MARKER_FILE);
-        String markerContents = Files.readString(marker);
-        FileTime markerTime = Files.getLastModifiedTime(marker);
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache(new ObjectMapper(), "test", URLClassLoader::new)) {
+            Path marker = project.bundleRoot().resolve(BuildMarkerService.MARKER_FILE);
+            String markerContents = Files.readString(marker);
+            FileTime markerTime = Files.getLastModifiedTime(marker);
 
-        ProjectRuntimeCache.CachedProjectRuntime firstRuntime = cache.get(project);
-        assertEquals("one", invokeVersion(project, firstRuntime));
+            ProjectRuntimeCache.CachedProjectRuntime firstRuntime = cache.get(project);
+            assertEquals("one", invokeVersion(project, firstRuntime));
 
-        Files.writeString(project.appRoot().resolve("page.dashboard/api.java"), versionApi("two"));
-        BuildResult rebuild = new ProjectBuildService().build(project, true, "bundle");
-        assertTrue(rebuild.success(), rebuild.message());
-        Files.writeString(marker, markerContents);
-        Files.setLastModifiedTime(marker, markerTime);
+            Files.writeString(project.appRoot().resolve("page.dashboard/api.java"), versionApi("two"));
+            BuildResult rebuild = new ProjectBuildService().build(project, true, "bundle");
+            assertTrue(rebuild.success(), rebuild.message());
+            Files.writeString(marker, markerContents);
+            Files.setLastModifiedTime(marker, markerTime);
 
-        ProjectRuntimeCache.CachedProjectRuntime secondRuntime = cache.get(project);
+            ProjectRuntimeCache.CachedProjectRuntime secondRuntime = cache.get(project);
 
-        assertSame(firstRuntime, secondRuntime);
-        assertEquals("one", invokeVersion(project, secondRuntime));
+            assertSame(firstRuntime, secondRuntime);
+            assertEquals("one", invokeVersion(project, secondRuntime));
+        }
     }
 
     @Test
     void productionProfileUsesBuildMarkerWithoutWalkingCompiledArtifacts() throws Exception {
         ProjectContext project = projectWithApi("one");
-        ProjectRuntimeCache cache = new ProjectRuntimeCache(new ObjectMapper(), "prod", URLClassLoader::new);
-        Path marker = project.bundleRoot().resolve(BuildMarkerService.MARKER_FILE);
-        String markerContents = Files.readString(marker);
-        FileTime markerTime = Files.getLastModifiedTime(marker);
+        try (ProjectRuntimeCache cache = new ProjectRuntimeCache(new ObjectMapper(), "prod", URLClassLoader::new)) {
+            Path marker = project.bundleRoot().resolve(BuildMarkerService.MARKER_FILE);
+            String markerContents = Files.readString(marker);
+            FileTime markerTime = Files.getLastModifiedTime(marker);
 
-        ProjectRuntimeCache.CachedProjectRuntime firstRuntime = cache.get(project);
-        assertEquals("one", invokeVersion(project, firstRuntime));
+            ProjectRuntimeCache.CachedProjectRuntime firstRuntime = cache.get(project);
+            assertEquals("one", invokeVersion(project, firstRuntime));
 
-        Files.writeString(project.appRoot().resolve("page.dashboard/api.java"), versionApi("two"));
-        BuildResult rebuild = new ProjectBuildService().build(project, true, "bundle");
-        assertTrue(rebuild.success(), rebuild.message());
-        Files.writeString(marker, markerContents);
-        Files.setLastModifiedTime(marker, markerTime);
+            Files.writeString(project.appRoot().resolve("page.dashboard/api.java"), versionApi("two"));
+            BuildResult rebuild = new ProjectBuildService().build(project, true, "bundle");
+            assertTrue(rebuild.success(), rebuild.message());
+            Files.writeString(marker, markerContents);
+            Files.setLastModifiedTime(marker, markerTime);
 
-        ProjectRuntimeCache.CachedProjectRuntime secondRuntime = cache.get(project);
+            ProjectRuntimeCache.CachedProjectRuntime secondRuntime = cache.get(project);
 
-        assertSame(firstRuntime, secondRuntime);
-        assertEquals("one", invokeVersion(project, secondRuntime));
+            assertSame(firstRuntime, secondRuntime);
+            assertEquals("one", invokeVersion(project, secondRuntime));
+        }
     }
 
     private ProjectContext projectWithApi(String version) throws Exception {
@@ -313,5 +374,15 @@ class ProjectRuntimeCacheTest {
                 super.close();
             }
         };
+    }
+
+    private void assertNoWizDirectories(Path workspace) throws Exception {
+        try (var paths = Files.walk(workspace)) {
+            var hiddenDirectories = paths
+                    .filter(Files::isDirectory)
+                    .filter(path -> path.getFileName() != null && path.getFileName().toString().equals(".wiz"))
+                    .toList();
+            assertTrue(hiddenDirectories.isEmpty(), "Unexpected .wiz directories: " + hiddenDirectories);
+        }
     }
 }

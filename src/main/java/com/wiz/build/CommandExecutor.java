@@ -44,7 +44,7 @@ public class CommandExecutor {
         ProcessBuilder builder = new ProcessBuilder(resolvedArgv);
         builder.directory(normalizedCwd.toFile());
         builder.redirectErrorStream(true);
-        configureEnvironment(builder.environment(), normalizedRoot);
+        configureEnvironment(builder.environment());
 
         long started = System.nanoTime();
         Process process = builder.start();
@@ -122,7 +122,7 @@ public class CommandExecutor {
         return Optional.empty();
     }
 
-    private void configureEnvironment(Map<String, String> environment, Path workspaceRoot) throws IOException {
+    private void configureEnvironment(Map<String, String> environment) {
         String path = System.getenv("PATH");
         String home = System.getenv("HOME");
         String javaHome = System.getenv("JAVA_HOME");
@@ -140,9 +140,6 @@ public class CommandExecutor {
         if (mavenOpts != null && !mavenOpts.isBlank()) {
             environment.put("MAVEN_OPTS", mavenOpts);
         }
-        Path npmCache = workspaceRoot.resolve(".wiz/npm-cache");
-        Files.createDirectories(npmCache);
-        environment.put("npm_config_cache", npmCache.toString());
         environment.put("CI", "true");
         environment.put("NO_COLOR", "1");
     }

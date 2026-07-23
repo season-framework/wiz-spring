@@ -2,11 +2,14 @@ package com.wiz.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.wiz.runtime.PathService;
 import com.wiz.runtime.ProjectContext;
@@ -107,6 +110,8 @@ class ProjectServiceTest {
         Files.createDirectories(source.resolve("devlog/2026-07-15"));
         Files.writeString(source.resolve("devlog.md"), "historical devlog\n");
         Files.writeString(source.resolve("devlog/2026-07-15/001-history.md"), "historical detail\n");
+        Files.createDirectories(source.resolve("src/.wizard"));
+        Files.writeString(source.resolve("src/.wizard/kept.txt"), "not a framework directory\n");
         new WorkspaceService().createWorkspace(workspace);
 
         ProjectService service = new ProjectService(new PathService(workspace));
@@ -122,6 +127,52 @@ class ProjectServiceTest {
         assertEquals("historical devlog\n", Files.readString(project.root().resolve("devlog.md")));
         assertEquals("historical detail\n",
                 Files.readString(project.root().resolve("devlog/2026-07-15/001-history.md")));
+        assertTrue(Files.isRegularFile(project.sourceRoot().resolve(".wizard/kept.txt")));
+    }
+
+    @Test
+    void clonesOutsideWorkspaceAndCleansTemporaryDirectoryAfterSuccess() throws Exception {
+        Path workspace = tempDir.resolve("workspace");
+        new WorkspaceService().createWorkspace(workspace);
+        AtomicReference<Path> cloneTarget = new AtomicReference<>();
+        ProjectService service = new ProjectService(new PathService(workspace), (uri, target) -> {
+            cloneTarget.set(target);
+            assertFalse(target.startsWith(workspace));
+            assertTrue(target.getFileName().toString().startsWith("wiz-clone-"));
+            assertFalse(target.getFileName().toString().startsWith("."));
+            Files.createDirectories(target.resolve("src/app/page.remote"));
+            Files.writeString(target.resolve("src/app/page.remote/app.json"), "{}\n");
+            Files.createDirectories(target.resolve(".git/objects"));
+            Files.writeString(target.resolve(".git/objects/ignored.txt"), "git metadata\n");
+        });
+
+        ProjectContext project = service.createApp("https://example.test/project.git", null);
+
+        assertTrue(Files.isRegularFile(project.appRoot().resolve("page.remote/app.json")));
+        assertFalse(Files.exists(project.root().resolve(".git")));
+        assertNotNull(cloneTarget.get());
+        assertFalse(Files.exists(cloneTarget.get()));
+    }
+
+    @Test
+    void cleansTemporaryCloneDirectoryAfterFailure() throws Exception {
+        Path workspace = tempDir.resolve("workspace");
+        new WorkspaceService().createWorkspace(workspace);
+        AtomicReference<Path> cloneTarget = new AtomicReference<>();
+        ProjectService service = new ProjectService(new PathService(workspace), (uri, target) -> {
+            cloneTarget.set(target);
+            Files.writeString(target.resolve("partial-clone.txt"), "partial\n");
+            throw new IOException("simulated clone failure");
+        });
+
+        assertThrows(IOException.class,
+                () -> service.createApp("https://example.test/project.git", null));
+
+        assertNotNull(cloneTarget.get());
+        assertFalse(Files.exists(cloneTarget.get()));
+        try (var siblings = Files.list(tempDir)) {
+            assertFalse(siblings.anyMatch(path -> path.getFileName().toString().startsWith("wiz-clone-")));
+        }
     }
 
     @Test
@@ -135,4 +186,5 @@ class ProjectServiceTest {
         assertThrows(IllegalArgumentException.class, () -> service.createApp(null, null));
         assertThrows(IllegalArgumentException.class, () -> service.createApp("https://example.test/repo.git", tempDir));
     }
+
 }

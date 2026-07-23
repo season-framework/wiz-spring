@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import com.wiz.runtime.PathService;
+import com.wiz.runtime.WorkspaceRuntimePaths;
 
 public final class CodexWorkspaceService {
 
@@ -90,13 +91,14 @@ public final class CodexWorkspaceService {
     }
 
     private String configToml(Path workspaceRoot, Path jar) {
+        Path mcpState = WorkspaceRuntimePaths.mcpState(workspaceRoot);
         return """
                 approval_policy = "on-failure"
                 sandbox_mode = "danger-full-access"
 
                 [sandbox_workspace_write]
                 network_access = true
-                writable_roots = [%s, "/tmp"]
+                writable_roots = [%s, %s, "/tmp"]
 
                 [mcp_servers."wiz-spring"]
                 command = "java"
@@ -147,9 +149,10 @@ public final class CodexWorkspaceService {
                 trust_level = "trusted"
                 """.formatted(
                 toml(workspaceRoot.toString()),
+                toml(mcpState.getParent().toString()),
                 toml(jar.toString()),
                 toml(workspaceRoot.toString()),
-                toml(workspaceRoot.resolve(".wiz/mcp-state.json").toString()),
+                toml(mcpState.toString()),
                 toml(workspaceRoot.toString()),
                 toml(workspaceRoot.toString()));
     }

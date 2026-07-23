@@ -30,14 +30,17 @@ final class PugBuildService {
         if (pugFiles.isEmpty()) {
             return new CommandResult("frontend-pug", List.of("node"), angularRoot, 0, 0, false, false, "No Pug templates to compile");
         }
-        Path script = angularRoot.resolve(".wiz/pug-build.mjs");
-        Files.createDirectories(script.getParent());
-        Files.writeString(script, pugBuildScript());
-        ArrayList<String> argv = new ArrayList<>();
-        argv.add("node");
-        argv.add(script.toString());
-        pugFiles.stream().map(Path::toString).forEach(argv::add);
-        return commandExecutor.run("frontend-pug", project.root(), angularRoot, argv, PUG_TIMEOUT, OUTPUT_CAP_BYTES, logger);
+        Path script = Files.createTempFile(angularRoot, "wiz-pug-build-", ".mjs");
+        try {
+            Files.writeString(script, pugBuildScript());
+            ArrayList<String> argv = new ArrayList<>();
+            argv.add("node");
+            argv.add(script.toString());
+            pugFiles.stream().map(Path::toString).forEach(argv::add);
+            return commandExecutor.run("frontend-pug", project.root(), angularRoot, argv, PUG_TIMEOUT, OUTPUT_CAP_BYTES, logger);
+        } finally {
+            Files.deleteIfExists(script);
+        }
     }
 
     private List<Path> pugFiles(Path root) throws IOException {
