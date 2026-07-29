@@ -20,5 +20,6 @@
 | [`0.2.5`](0.2.5.md) | tagged | repeatable package-root changes with automatic clean rebuild |
 | [`0.2.6`](0.2.6.md) | tagged | automatic Codex setup on create, embedded instructions, and guided shell completion |
 | [`0.2.7`](0.2.7.md) | tagged | bounded run logging, safe runtime reload, strict CLI preflight, deterministic deployment, OpenAPI/Swagger UI |
+| [`0.2.8`](0.2.8.md) | tagged | password-only root SSH access and Angular development dependency security updates |
 
 릴리즈를 실제로 배포할 때는 `pom.xml`의 `<version>`과 Git tag, GitHub/GitLab release note가 이 로그와 일치해야 한다.

@@ -48,7 +48,7 @@ git clone https://github.com/season-framework/wiz-spring.git
 cd wiz-spring
 ./mvnw clean package
 
-export WIZ_RUNTIME_JAR="$PWD/target/wiz-spring-0.2.7.jar"
+export WIZ_RUNTIME_JAR="$PWD/target/wiz-spring-0.2.8.jar"
 alias wiz-spring='java -jar "$WIZ_RUNTIME_JAR"'
 
 wiz-spring --version
@@ -62,7 +62,7 @@ wiz-spring --version
 아래 설정을 `~/.bashrc` 또는 `~/.zshrc`에 추가합니다. JAR 경로는 `pwd`로 확인한 실제 절대 경로로 바꾸세요.
 
 ```bash
-export WIZ_RUNTIME_JAR="/absolute/path/to/wiz-spring/target/wiz-spring-0.2.7.jar"
+export WIZ_RUNTIME_JAR="/absolute/path/to/wiz-spring/target/wiz-spring-0.2.8.jar"
 alias wiz-spring='java -jar "$WIZ_RUNTIME_JAR"'
 ```
 
@@ -274,7 +274,15 @@ workspace를 host에 유지하려면 bind 이미지를 사용합니다.
 # 기본 data 위치: ./.wiz-data-bind/app
 ```
 
-`IMAGE`, `VERSION`, `PLATFORM`으로 build를, `CONTAINER_NAME`, `HOST_HTTP_PORT`, `HOST_SSH_PORT`, `DATA_ROOT`로 실행 환경을 조정할 수 있습니다. SSH는 공개키 인증만 허용합니다.
+`IMAGE`, `VERSION`, `PLATFORM`으로 build를, `CONTAINER_NAME`, `HOST_HTTP_PORT`, `HOST_SSH_PORT`, `DATA_ROOT`로 실행 환경을 조정할 수 있습니다. SSH는 root 계정의 비밀번호 인증만 허용합니다.
+
+```bash
+SSH_PASSWORD='change-me' ./run.sh
+
+ssh root@127.0.0.1 -p 2223
+```
+
+이미지에는 기본 root 비밀번호가 없습니다. 비밀번호 인증을 사용할 때는 컨테이너를 처음 실행할 때 `SSH_PASSWORD`를 반드시 지정합니다.
 
 ## Production checklist
 

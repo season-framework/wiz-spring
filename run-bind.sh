@@ -32,11 +32,12 @@ args=(
     --name "$CONTAINER_NAME"
 )
 
-if [[ -n "${SSH_PUBLIC_KEY:-}" ]]; then
-    args+=(--env "SSH_PUBLIC_KEY=$SSH_PUBLIC_KEY")
+if [[ -n "${SSH_PASSWORD:-}" ]]; then
+    args+=(--env SSH_PASSWORD)
 fi
 
 container_id="$(docker run "${args[@]}" "$IMAGE:$VERSION")"
 printf 'Started %s (%s)\n' "$CONTAINER_NAME" "$container_id"
 printf 'HTTP: http://127.0.0.1:%s\n' "$HOST_HTTP_PORT"
+printf 'SSH: ssh root@127.0.0.1 -p %s\n' "$HOST_SSH_PORT"
 printf 'Data: %s\n' "$DATA_ROOT"

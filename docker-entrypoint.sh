@@ -11,10 +11,13 @@ start_sshd() {
             mkdir -p /run/sshd
             ssh-keygen -A
 
-            if [[ -n "${SSH_PUBLIC_KEY:-}" ]]; then
-                install -d -m 0700 /root/.ssh
-                printf '%s\n' "$SSH_PUBLIC_KEY" > /root/.ssh/authorized_keys
-                chmod 0600 /root/.ssh/authorized_keys
+            if [[ -n "${SSH_PASSWORD:-}" ]]; then
+                if [[ "$SSH_PASSWORD" == *:* || "$SSH_PASSWORD" == *$'\n'* ]]; then
+                    printf 'SSH_PASSWORD must not contain a colon or newline\n' >&2
+                    exit 1
+                fi
+                printf 'root:%s\n' "$SSH_PASSWORD" | chpasswd
+                unset SSH_PASSWORD
             fi
 
             /usr/sbin/sshd
