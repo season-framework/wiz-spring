@@ -23,6 +23,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import javax.tools.DiagnosticCollector;
@@ -47,6 +49,8 @@ import tools.jackson.databind.ObjectMapper;
 public class ProjectBuildService {
 
     private static final List<String> SUPPORTED_PHASES = List.of("reconstruct", "compile", "bundle");
+    private static final Pattern JAVA_PACKAGE_DECLARATION = Pattern.compile(
+            "(?m)^\\s*package\\s+[A-Za-z_$][A-Za-z0-9_$]*(?:\\.[A-Za-z_$][A-Za-z0-9_$]*)*\\s*;");
     private static final ConcurrentHashMap<Path, BuildLockEntry> LOCKS = new ConcurrentHashMap<>();
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final AngularBuildService angularBuildService;
@@ -547,7 +551,7 @@ public class ProjectBuildService {
                 + "    <modelVersion>4.0.0</modelVersion>\n"
                 + "    <groupId>" + project.packageRoot() + "</groupId>\n"
                 + "    <artifactId>wiz-generated-app</artifactId>\n"
-                + "    <version>0.2.8</version>\n"
+                + "    <version>0.2.9</version>\n"
                 + "    <properties>\n"
                 + "        <java.version>21</java.version>\n"
                 + "    </properties>\n"
@@ -829,11 +833,13 @@ public class ProjectBuildService {
 
     private String javaSource(ProjectContext project, String handlerClass, String source) {
         String rewritten = ProjectJavaNaming.modernizeProjectPackages(project, source);
-        if (rewritten.stripLeading().startsWith("package ")) {
-            return rewritten;
-        }
         int classStart = handlerClass.lastIndexOf('.');
-        return "package " + handlerClass.substring(0, classStart) + ";\n\n" + rewritten;
+        String packageDeclaration = "package " + handlerClass.substring(0, classStart) + ";";
+        Matcher declaration = JAVA_PACKAGE_DECLARATION.matcher(rewritten);
+        if (declaration.find()) {
+            return declaration.replaceFirst(Matcher.quoteReplacement(packageDeclaration));
+        }
+        return packageDeclaration + "\n\n" + rewritten;
     }
 
     private void packageProjectJar(ProjectContext project, Path classesRoot) throws IOException {

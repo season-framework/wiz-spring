@@ -48,7 +48,7 @@ git clone https://github.com/season-framework/wiz-spring.git
 cd wiz-spring
 ./mvnw clean package
 
-export WIZ_RUNTIME_JAR="$PWD/target/wiz-spring-0.2.8.jar"
+export WIZ_RUNTIME_JAR="$PWD/target/wiz-spring-0.2.9.jar"
 alias wiz-spring='java -jar "$WIZ_RUNTIME_JAR"'
 
 wiz-spring --version
@@ -62,7 +62,7 @@ wiz-spring --version
 아래 설정을 `~/.bashrc` 또는 `~/.zshrc`에 추가합니다. JAR 경로는 `pwd`로 확인한 실제 절대 경로로 바꾸세요.
 
 ```bash
-export WIZ_RUNTIME_JAR="/absolute/path/to/wiz-spring/target/wiz-spring-0.2.8.jar"
+export WIZ_RUNTIME_JAR="/absolute/path/to/wiz-spring/target/wiz-spring-0.2.9.jar"
 alias wiz-spring='java -jar "$WIZ_RUNTIME_JAR"'
 ```
 
@@ -88,6 +88,8 @@ wiz-spring create ../hello-wiz \
 ```
 
 기본 sample workspace를 만들고 clean build까지 실행합니다. 기존 소스를 가져올 때는 `--path <directory>` 또는 `--uri <git-url>`을, 생성만 할 때는 `--skip-build`를 사용하세요.
+
+`--uri` clone은 현재 터미널의 stdin/stdout/stderr를 그대로 사용하므로 private repository의 Git username, password/PAT, SSH host 확인 프롬프트에 응답할 수 있습니다. credential을 URI에 포함하지 말고 Git prompt 또는 credential helper를 사용하세요. 가져온 WIZ Java source의 기존 package root는 설정과 `package`/`import` 선언에서 추론해 `--package` 값으로 변경하며, `pom.xml`과 handler metadata의 같은 참조도 함께 맞춥니다.
 
 ### 3. 실행
 
@@ -280,9 +282,12 @@ workspace를 host에 유지하려면 bind 이미지를 사용합니다.
 SSH_PASSWORD='change-me' ./run.sh
 
 ssh root@127.0.0.1 -p 2223
+java -version
+echo "$JAVA_HOME"
+wiz-spring --version
 ```
 
-이미지에는 기본 root 비밀번호가 없습니다. 비밀번호 인증을 사용할 때는 컨테이너를 처음 실행할 때 `SSH_PASSWORD`를 반드시 지정합니다.
+runtime과 bind 이미지 모두 JDK 21을 포함하며, SSH 로그인 셸에서도 `JAVA_HOME`과 Java `PATH`를 유지합니다. `build.sh`는 이미지를 만든 직후 일반 컨테이너 셸과 로그인 셸에서 Java 21 이상 및 `wiz-spring` 버전을 확인합니다. 이미지에는 기본 root 비밀번호가 없습니다. 비밀번호 인증을 사용할 때는 컨테이너를 처음 실행할 때 `SSH_PASSWORD`를 반드시 지정합니다.
 
 ## Production checklist
 

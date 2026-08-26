@@ -13,7 +13,7 @@ WIZ Spring은 기존 WIZ 프로젝트 구조를 유지하되 서버 런타임을
 cd /root/workspace/wiz-java/wiz-spring
 ./mvnw clean package
 
-jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.2.8.jar
+jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.2.9.jar
 workspace=/tmp/wiz-spring-demo
 
 rm -rf "$workspace"

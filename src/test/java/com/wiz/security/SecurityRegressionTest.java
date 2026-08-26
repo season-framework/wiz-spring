@@ -86,6 +86,7 @@ class SecurityRegressionTest {
         assertThrows(IllegalArgumentException.class, () -> GitUriPolicy.validate("/tmp/project.git"));
         assertThrows(IllegalArgumentException.class, () -> GitUriPolicy.validate("--upload-pack=/tmp/hook"));
         assertThrows(IllegalArgumentException.class, () -> GitUriPolicy.validate("https://github.com/example/project.git?token=secret"));
+        assertThrows(IllegalArgumentException.class, () -> GitUriPolicy.validate("https://user:token@github.com/example/project.git"));
     }
 
     @Test

@@ -15,7 +15,6 @@ import java.util.stream.Stream;
 import com.wiz.runtime.PathService;
 import com.wiz.runtime.ProjectContext;
 import com.wiz.security.GitUriPolicy;
-import com.wiz.security.SecretMasker;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -69,16 +68,22 @@ public class ProjectService {
         Files.createDirectories(project.root());
 
         boolean defaultApp = false;
+        boolean importedApp = false;
         if (uri != null && !uri.isBlank()) {
             cloneProject(uri, project.root());
+            importedApp = true;
         } else if (sourcePath != null) {
             importSource(sourcePath.toAbsolutePath().normalize(), project.root());
+            importedApp = true;
         } else {
             createDefaultApp(project);
             initializeDevlog(project);
             defaultApp = true;
         }
 
+        if (importedApp) {
+            new WorkspacePackageService().normalizeImportedPackageReferences(paths, javaPackageRoot);
+        }
         ensureAppDirectories(project);
         ensureApplicationConfigGitPolicy(project);
         if (defaultApp) {
@@ -219,7 +224,7 @@ public class ProjectService {
                 + "    <modelVersion>4.0.0</modelVersion>\n"
                 + "    <groupId>" + project.packageRoot() + "</groupId>\n"
                 + "    <artifactId>wiz-app</artifactId>\n"
-                + "    <version>0.2.8</version>\n"
+                + "    <version>0.2.9</version>\n"
                 + "    <properties>\n"
                 + "        <java.version>21</java.version>\n"
                 + "    </properties>\n"
@@ -310,15 +315,18 @@ public class ProjectService {
     }
 
     private static void runGitClone(String uri, Path cloneTarget) throws IOException, InterruptedException {
-        Process process = new ProcessBuilder("git", "clone", uri, cloneTarget.toString())
-                .redirectErrorStream(true)
-                .start();
-        String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        Process process = gitCloneProcessBuilder(uri, cloneTarget).start();
         int exitCode = process.waitFor();
         if (exitCode != 0) {
-            throw new IllegalStateException("git clone failed with exit code " + exitCode
-                    + System.lineSeparator() + SecretMasker.mask(output));
+            throw new IllegalStateException("git clone failed with exit code " + exitCode);
         }
+    }
+
+    static ProcessBuilder gitCloneProcessBuilder(String uri, Path cloneTarget) {
+        ProcessBuilder builder = new ProcessBuilder("git", "clone", "--", uri, cloneTarget.toString())
+                .inheritIO();
+        builder.environment().put("GIT_TERMINAL_PROMPT", "1");
+        return builder;
     }
 
     private void copyDirectory(Path source, Path target) throws IOException {

@@ -6,8 +6,12 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -21,6 +25,25 @@ public class WorkspacePackageService {
 
     private static final Set<String> REWRITABLE_EXTENSIONS = Set.of(
             ".java", ".json", ".properties", ".xml", ".yaml", ".yml");
+    private static final String JAVA_NAME = "[A-Za-z_$][A-Za-z0-9_$]*";
+    private static final String JAVA_QUALIFIED_NAME = JAVA_NAME + "(?:\\." + JAVA_NAME + ")*";
+    private static final Pattern JAVA_PACKAGE_OR_IMPORT = Pattern.compile(
+            "(?m)^\\s*(package|import)\\s+(?:static\\s+)?(" + JAVA_QUALIFIED_NAME + ")");
+    private static final Pattern YAML_PACKAGE_ROOT = Pattern.compile(
+            "(?m)^\\s*package(?:-root|Root)\\s*:\\s*['\\\"]?(" + JAVA_QUALIFIED_NAME + ")");
+    private static final Pattern PROPERTIES_PACKAGE_ROOT = Pattern.compile(
+            "(?m)^\\s*wiz\\.java\\.package(?:-root|Root)\\s*=\\s*(" + JAVA_QUALIFIED_NAME + ")");
+    private static final List<Pattern> STRONG_WIZ_PACKAGE_PATTERNS = List.of(
+            Pattern.compile("^(.+?)\\.module\\." + JAVA_NAME
+                    + "\\.(?:application\\.(?:model|service)|domain\\.entity|infrastructure\\.orm|security)(?:\\.|$)"),
+            Pattern.compile("^(.+?)\\.portal\\." + JAVA_NAME
+                    + "\\.model(?:\\.(?:struct|db|orm|security))?(?:\\.|$)"),
+            Pattern.compile("^(.+?)\\.(?:web\\.(?:api|route)|realtime\\.socket|application\\.(?:model|service)"
+                    + "|domain\\.entity|infrastructure\\.orm|security\\.(?:guard|auth|session))(?:\\.|$)"),
+            Pattern.compile("^(.+?)\\.model\\.(?:struct|db|orm|security)(?:\\.|$)"));
+    private static final List<Pattern> DECLARED_WIZ_PACKAGE_PATTERNS = List.of(
+            Pattern.compile("^(.+?)\\.(?:api|socket|route|controller|auth|session)(?:\\.|$)"),
+            Pattern.compile("^(.+?)\\.model(?:\\.|$)"));
 
     public PackageSelection selectForBuild(PathService paths, String requestedPackageRoot) throws IOException {
         String currentPackageRoot = paths.packageRoot();
@@ -38,9 +61,122 @@ public class WorkspacePackageService {
         return new PackageSelection(paths.workspaceContext(selectedPackageRoot), true);
     }
 
+    /**
+     * Rebase package references copied from another WIZ workspace to the package
+     * selected by {@code create --package}. Imported application config is often
+     * gitignored, so Java declarations and imports are also used to discover the
+     * previous package root.
+     */
+    public boolean normalizeImportedPackageReferences(PathService paths, String selectedPackageRoot) throws IOException {
+        String targetPackageRoot = paths.validatePackageRoot(selectedPackageRoot);
+        Optional<String> importedPackageRoot = configuredImportedPackageRoot(paths, targetPackageRoot);
+        if (importedPackageRoot.isEmpty()) {
+            importedPackageRoot = inferredImportedPackageRoot(paths, targetPackageRoot);
+        }
+        if (importedPackageRoot.isEmpty()) {
+            return false;
+        }
+        rewritePackageReferences(paths, importedPackageRoot.get(), targetPackageRoot);
+        return true;
+    }
+
+    private Optional<String> configuredImportedPackageRoot(PathService paths, String targetPackageRoot) throws IOException {
+        Map<String, Integer> candidates = new LinkedHashMap<>();
+        Path configRoot = paths.configRoot();
+        if (!Files.isDirectory(configRoot, LinkOption.NOFOLLOW_LINKS)) {
+            return Optional.empty();
+        }
+        try (Stream<Path> files = Files.walk(configRoot)) {
+            for (Path file : files.filter(this::isRewritableFile).toList()) {
+                String source = Files.readString(file, StandardCharsets.UTF_8);
+                collectPackageRoots(source, YAML_PACKAGE_ROOT, candidates, targetPackageRoot);
+                collectPackageRoots(source, PROPERTIES_PACKAGE_ROOT, candidates, targetPackageRoot);
+            }
+        }
+        return preferredPackageRoot(candidates);
+    }
+
+    private Optional<String> inferredImportedPackageRoot(PathService paths, String targetPackageRoot) throws IOException {
+        Map<String, Integer> candidates = new LinkedHashMap<>();
+        Path sourceRoot = paths.root().resolve("src");
+        if (!Files.isDirectory(sourceRoot, LinkOption.NOFOLLOW_LINKS)) {
+            return Optional.empty();
+        }
+        try (Stream<Path> files = Files.walk(sourceRoot)) {
+            for (Path file : files
+                    .filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
+                    .filter(path -> path.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".java"))
+                    .toList()) {
+                Matcher references = JAVA_PACKAGE_OR_IMPORT.matcher(Files.readString(file, StandardCharsets.UTF_8));
+                while (references.find()) {
+                    boolean declaration = references.group(1).equals("package");
+                    inferredPackageRoot(references.group(2), declaration)
+                            .filter(candidate -> !candidate.equals(targetPackageRoot))
+                            .ifPresent(candidate -> candidates.merge(candidate, 1, Integer::sum));
+                }
+            }
+        }
+        return preferredPackageRoot(candidates);
+    }
+
+    private void collectPackageRoots(
+            String source,
+            Pattern pattern,
+            Map<String, Integer> candidates,
+            String targetPackageRoot) {
+        Matcher matcher = pattern.matcher(source);
+        while (matcher.find()) {
+            String candidate = matcher.group(1);
+            if (validPackageRoot(candidate) && !candidate.equals(targetPackageRoot)) {
+                candidates.merge(candidate, 1, Integer::sum);
+            }
+        }
+    }
+
+    private Optional<String> inferredPackageRoot(String qualifiedName, boolean declaration) {
+        for (Pattern pattern : STRONG_WIZ_PACKAGE_PATTERNS) {
+            Matcher matcher = pattern.matcher(qualifiedName);
+            if (matcher.find() && validPackageRoot(matcher.group(1))) {
+                return Optional.of(matcher.group(1));
+            }
+        }
+        if (declaration) {
+            for (Pattern pattern : DECLARED_WIZ_PACKAGE_PATTERNS) {
+                Matcher matcher = pattern.matcher(qualifiedName);
+                if (matcher.find() && validPackageRoot(matcher.group(1))) {
+                    return Optional.of(matcher.group(1));
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    private Optional<String> preferredPackageRoot(Map<String, Integer> candidates) {
+        return candidates.entrySet().stream()
+                .max(Comparator.<Map.Entry<String, Integer>>comparingInt(Map.Entry::getValue)
+                        .thenComparingInt(entry -> entry.getKey().length())
+                        .thenComparing(Map.Entry::getKey))
+                .map(Map.Entry::getKey);
+    }
+
+    private boolean validPackageRoot(String value) {
+        return value != null
+                && value.matches(JAVA_QUALIFIED_NAME)
+                && !value.equals("java")
+                && !value.startsWith("java.");
+    }
+
     private void rewritePackageReferences(PathService paths, String currentPackageRoot, String selectedPackageRoot) throws IOException {
-        Pattern reference = Pattern.compile(
-                "(?<![A-Za-z0-9_$])" + Pattern.quote(currentPackageRoot) + "(?![A-Za-z0-9_$])");
+        String selectedSuffix = selectedPackageRoot.startsWith(currentPackageRoot + ".")
+                ? selectedPackageRoot.substring(currentPackageRoot.length())
+                : null;
+        String selectedReferenceGuard = selectedSuffix == null
+                ? ""
+                : "(?!" + Pattern.quote(selectedSuffix) + "(?![A-Za-z0-9_$]))";
+        Pattern reference = Pattern.compile("(?<![A-Za-z0-9_$])"
+                + Pattern.quote(currentPackageRoot)
+                + selectedReferenceGuard
+                + "(?![A-Za-z0-9_$])");
         rewriteFile(paths.root().resolve("pom.xml"), reference, selectedPackageRoot);
         rewriteDirectory(paths.configRoot(), reference, selectedPackageRoot);
         rewriteDirectory(paths.root().resolve("src"), reference, selectedPackageRoot);

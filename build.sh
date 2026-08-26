@@ -30,12 +30,21 @@ for name in INSTALL_CODEX CODEX_VERSION WIZ_PACKAGE_ROOT NODE_IMAGE MAVEN_IMAGE;
     fi
 done
 
+verify_image() {
+    local image="$1"
+    bash "$SCRIPT_DIR/scripts/verify-docker-image.sh" "$image" "$VERSION"
+}
+
 build_runtime() {
-    docker build "${build_args[@]}" --target runtime -t "$IMAGE:$VERSION" "$SCRIPT_DIR"
+    local image="$IMAGE:$VERSION"
+    docker build "${build_args[@]}" --target runtime -t "$image" "$SCRIPT_DIR"
+    verify_image "$image"
 }
 
 build_bind() {
-    docker build "${build_args[@]}" --target runtime-bind -t "$IMAGE:$VERSION-bind" "$SCRIPT_DIR"
+    local image="$IMAGE:$VERSION-bind"
+    docker build "${build_args[@]}" --target runtime-bind -t "$image" "$SCRIPT_DIR"
+    verify_image "$image"
 }
 
 case "$BUILD_TARGET" in

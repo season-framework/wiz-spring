@@ -97,13 +97,13 @@ workspace/
 `wiz-spring create`는 기본 template, `--path`, `--uri` 모두 `.codex` MCP 설정과 내장 `.github` 인스트럭션을 자동으로 설치한다. 별도 `codex` 하위 명령은 사용하지 않는다.
 
 ```bash
-java -jar target/wiz-spring-0.2.8.jar --help
-java -jar target/wiz-spring-0.2.8.jar create <workspace> --package com.example.demo
-java -jar target/wiz-spring-0.2.8.jar build --root <workspace> --clean
-java -jar target/wiz-spring-0.2.8.jar build --root <workspace> --package com.example.renamed
-java -jar target/wiz-spring-0.2.8.jar jar --root <workspace> --output /tmp/demo.jar
-java -jar target/wiz-spring-0.2.8.jar run --root <workspace> --port 3000
-source <(java -jar target/wiz-spring-0.2.8.jar completion bash)
+java -jar target/wiz-spring-0.2.9.jar --help
+java -jar target/wiz-spring-0.2.9.jar create <workspace> --package com.example.demo
+java -jar target/wiz-spring-0.2.9.jar build --root <workspace> --clean
+java -jar target/wiz-spring-0.2.9.jar build --root <workspace> --package com.example.renamed
+java -jar target/wiz-spring-0.2.9.jar jar --root <workspace> --output /tmp/demo.jar
+java -jar target/wiz-spring-0.2.9.jar run --root <workspace> --port 3000
+source <(java -jar target/wiz-spring-0.2.9.jar completion bash)
 ```
 
 ## 검증
@@ -119,7 +119,7 @@ WIZ Spring은 기존 WIZ 프로젝트 구조를 유지하되 서버 런타임을
 cd /root/workspace/wiz-java/wiz-spring
 ./mvnw clean package
 
-jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.2.8.jar
+jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.2.9.jar
 workspace=/tmp/wiz-spring-demo
 
 rm -rf "$workspace"

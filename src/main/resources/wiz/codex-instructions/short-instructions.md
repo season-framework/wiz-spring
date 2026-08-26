@@ -26,11 +26,11 @@
 cd /root/workspace/wiz-java/wiz-spring
 ./mvnw clean package
 
-java -jar target/wiz-spring-0.2.8.jar create <workspace> --package com.example.demo --skip-build
-java -jar target/wiz-spring-0.2.8.jar build --root <workspace> --clean
-java -jar target/wiz-spring-0.2.8.jar build --root <workspace> --package com.example.renamed
-java -jar target/wiz-spring-0.2.8.jar run --root <workspace> --port 3000
-source <(java -jar target/wiz-spring-0.2.8.jar completion bash)
+java -jar target/wiz-spring-0.2.9.jar create <workspace> --package com.example.demo --skip-build
+java -jar target/wiz-spring-0.2.9.jar build --root <workspace> --clean
+java -jar target/wiz-spring-0.2.9.jar build --root <workspace> --package com.example.renamed
+java -jar target/wiz-spring-0.2.9.jar run --root <workspace> --port 3000
+source <(java -jar target/wiz-spring-0.2.9.jar completion bash)
 ```
 
 `build --package`는 첫 build 전용이 아니다. 언제든 package 설정과 source/pom 참조를 변경하며 package가 달라지면 clean build가 자동 적용된다.

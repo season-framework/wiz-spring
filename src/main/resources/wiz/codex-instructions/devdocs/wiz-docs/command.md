@@ -42,6 +42,8 @@ java -jar "$jar" mcp --root <workspace>
 
 `create`는 기본 template, `--path`, `--uri` 모두 source 준비 후 `.codex` MCP 설정과 내장 `.github` 인스트럭션을 자동으로 설치한다. 별도 `codex` 하위 명령은 사용하지 않는다. import source의 관리 대상 파일은 현재 내장본으로 갱신하고 `.github/custom/` 같은 비관리 파일은 보존한다.
 
+`--uri`는 Git process의 터미널 입출력을 상속하므로 private repository의 username, password/PAT 또는 SSH 확인 prompt에 응답할 수 있다. HTTP(S) URI에 credential을 직접 넣는 방식은 허용하지 않으며 Git prompt나 credential helper를 사용한다. `--path`/`--uri`로 가져온 WIZ source의 package/import, handler metadata, config, `pom.xml`에 남은 기존 Java package root는 `--package` 값으로 자동 변경한다.
+
 ## Shell completion
 
 `completion`은 현재 CLI command, subcommand와 option을 반영한 source용 script를 출력한다.

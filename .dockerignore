@@ -3,6 +3,8 @@
 .vscode
 .DS_Store
 target
+**/node_modules
+**/.angular
 *.iml
 *.log
 release-log

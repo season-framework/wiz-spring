@@ -6,7 +6,7 @@ Spring WIZ API는 HTTP endpoint와 Servlet session cookie로 테스트한다. �
 ## 서버 실행
 
 ```bash
-jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.2.8.jar
+jar=/root/workspace/wiz-java/wiz-spring/target/wiz-spring-0.2.9.jar
 workspace=/tmp/wiz-spring-demo
 
 java -jar "$jar" run --root "$workspace" --port 3000

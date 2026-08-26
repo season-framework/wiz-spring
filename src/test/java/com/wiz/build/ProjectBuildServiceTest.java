@@ -288,6 +288,30 @@ class ProjectBuildServiceTest {
     }
 
     @Test
+    void replacesExplicitPackageDeclarationAfterLeadingComments() throws Exception {
+        ProjectContext project = emptyProject("explicit-package-workspace");
+        Path app = project.appRoot().resolve("page.explicit");
+        Files.createDirectories(app);
+        Files.writeString(app.resolve("app.json"), "{}\n");
+        Files.writeString(app.resolve("api.java"), """
+                /* Existing repositories commonly include a license before package. */
+                package legacy.mismatched.api;
+
+                public final class PageExplicitApi {}
+                """);
+
+        BuildResult result = new ProjectBuildService().build(project, true, "compile");
+
+        assertTrue(result.success(), result.message());
+        Path generated = ProjectBuildLayout.generatedJavaSourceRoot(project)
+                .resolve("com/wiz/app/web/api/PageExplicitApi.java");
+        String generatedSource = Files.readString(generated);
+        assertTrue(generatedSource.contains("package com.wiz.app.web.api;"));
+        assertFalse(generatedSource.contains("package legacy.mismatched.api;"));
+        assertEquals(1, generatedSource.lines().filter(line -> line.startsWith("package ")).count());
+    }
+
+    @Test
     void normalBuildRecreatesGeneratedApiFromHandlerNamedAppJavaFile() throws Exception {
         Path workspace = tempDir.resolve("handler-named-workspace");
         new WorkspaceService().createWorkspace(workspace);

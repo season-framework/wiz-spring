@@ -24,7 +24,7 @@ RUN ./mvnw --batch-mode --no-transfer-progress -DskipTests clean package && \
 FROM --platform=${DOCKER_PLATFORM} ${MAVEN_IMAGE} AS runtime-tools
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG WIZ_VERSION=0.2.8
+ARG WIZ_VERSION=0.2.9
 ARG WIZ_PACKAGE_ROOT=com.wiz.app
 ARG INSTALL_CODEX=true
 ARG CODEX_VERSION=latest
@@ -96,6 +96,27 @@ RUN chmod +x /usr/local/bin/wiz-spring /docker-entrypoint.sh /docker-entrypoint-
         false) ;; \
         *) printf 'INSTALL_CODEX must be true or false\n' >&2; exit 1 ;; \
     esac
+
+ENV JAVA_HOME=/opt/java/openjdk \
+    PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+COPY java-env.sh /etc/profile.d/wiz-java.sh
+
+RUN chmod 0644 /etc/profile.d/wiz-java.sh && \
+    sed -i -e '/^JAVA_HOME=/d' -e '/^PATH=/d' /etc/environment && \
+    printf '%s\n' \
+        "JAVA_HOME=\"$JAVA_HOME\"" \
+        "PATH=\"$PATH\"" \
+        >> /etc/environment && \
+    test -x "$JAVA_HOME/bin/java" && \
+    test -x "$JAVA_HOME/bin/javac" && \
+    java_specification_version="$(java -XshowSettings:properties -version 2>&1 \
+        | sed -n 's/^[[:space:]]*java\.specification\.version = //p' \
+        | head -n 1)" && \
+    java_major_version="${java_specification_version%%.*}" && \
+    test -n "$java_major_version" && \
+    test "$java_major_version" -ge 21 && \
+    test "$(wiz-spring --version)" = "wiz-spring $WIZ_VERSION"
 
 EXPOSE 22 3000
 

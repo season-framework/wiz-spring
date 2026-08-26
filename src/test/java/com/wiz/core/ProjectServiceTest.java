@@ -11,6 +11,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.wiz.build.BuildResult;
+import com.wiz.build.ProjectBuildService;
 import com.wiz.runtime.PathService;
 import com.wiz.runtime.ProjectContext;
 
@@ -131,6 +133,58 @@ class ProjectServiceTest {
     }
 
     @Test
+    void rebasesImportedJavaPackagesAndReferencesToSelectedPackage() throws Exception {
+        Path workspace = tempDir.resolve("rebased-local-workspace");
+        Path source = tempDir.resolve("rebased-local-source");
+        Files.createDirectories(source.resolve("src/app/page.imported"));
+        Files.createDirectories(source.resolve("src/model"));
+        Files.createDirectories(source.resolve("config"));
+        Files.writeString(source.resolve("config/application.example.yml"), """
+                wiz:
+                  java:
+                    package-root: io.legacy.application
+                """);
+        Files.writeString(source.resolve("pom.xml"), """
+                <project>
+                  <groupId>io.legacy.application</groupId>
+                </project>
+                """);
+        Files.writeString(source.resolve("src/app/page.imported/app.json"), """
+                {"api":{"handler":"io.legacy.application.web.api.PageImportedApi"}}
+                """);
+        Files.writeString(source.resolve("src/app/page.imported/api.java"), """
+                /* package declarations can follow a license comment. */
+                package io.legacy.application.web.api;
+
+                import io.legacy.application.application.model.Struct;
+
+                public final class PageImportedApi {
+                    private final Struct value = new Struct();
+                }
+                """);
+        Files.writeString(source.resolve("src/model/Struct.java"), """
+                package io.legacy.application.application.model;
+
+                public final class Struct {}
+                """);
+        new WorkspaceService().createWorkspace(workspace, "com.example.selected");
+
+        ProjectContext project = new ProjectService(new PathService(workspace))
+                .createApp("com.example.selected", null, source);
+
+        assertFalse(Files.readString(project.appRoot().resolve("page.imported/api.java"))
+                .contains("io.legacy.application"));
+        assertTrue(Files.readString(project.appRoot().resolve("page.imported/api.java"))
+                .contains("import com.example.selected.application.model.Struct;"));
+        assertTrue(Files.readString(project.appRoot().resolve("page.imported/app.json"))
+                .contains("com.example.selected.web.api.PageImportedApi"));
+        assertTrue(Files.readString(project.root().resolve("pom.xml"))
+                .contains("<groupId>com.example.selected</groupId>"));
+        assertTrue(Files.readString(project.configRoot().resolve("application.example.yml"))
+                .contains("package-root: com.example.selected"));
+    }
+
+    @Test
     void clonesOutsideWorkspaceAndCleansTemporaryDirectoryAfterSuccess() throws Exception {
         Path workspace = tempDir.resolve("workspace");
         new WorkspaceService().createWorkspace(workspace);
@@ -152,6 +206,59 @@ class ProjectServiceTest {
         assertFalse(Files.exists(project.root().resolve(".git")));
         assertNotNull(cloneTarget.get());
         assertFalse(Files.exists(cloneTarget.get()));
+    }
+
+    @Test
+    void clonedJavaPackagesAreInferredRebasedAndBuildableWithoutCommittedConfig() throws Exception {
+        Path workspace = tempDir.resolve("rebased-clone-workspace");
+        new WorkspaceService().createWorkspace(workspace, "com.example.cloned");
+        ProjectService service = new ProjectService(new PathService(workspace), (uri, target) -> {
+            Files.createDirectories(target.resolve("src/app/page.remote"));
+            Files.createDirectories(target.resolve("src/model"));
+            Files.writeString(target.resolve("src/app/page.remote/app.json"), "{}\n");
+            Files.writeString(target.resolve("src/app/page.remote/api.java"), """
+                    package dev.private_repo.web.api;
+
+                    import dev.private_repo.application.model.RemoteValue;
+
+                    public final class PageRemoteApi {
+                        private final RemoteValue value = new RemoteValue();
+                    }
+                    """);
+            Files.writeString(target.resolve("src/model/RemoteValue.java"), """
+                    package dev.private_repo.application.model;
+
+                    public final class RemoteValue {}
+                    """);
+        });
+
+        ProjectContext project = service.createApp(
+                "com.example.cloned", "https://example.test/private.git", null);
+        BuildResult result = new ProjectBuildService().build(project, true, "compile");
+
+        assertTrue(result.success(), result.message());
+        assertTrue(Files.readString(project.appRoot().resolve("page.remote/api.java"))
+                .contains("package com.example.cloned.web.api;"));
+        assertTrue(Files.readString(project.appRoot().resolve("page.remote/api.java"))
+                .contains("import com.example.cloned.application.model.RemoteValue;"));
+        assertTrue(Files.exists(project.buildRoot()
+                .resolve("target/classes/com/example/cloned/web/api/PageRemoteApi.class")));
+    }
+
+    @Test
+    void gitCloneInheritsTerminalIoForCredentialPrompts() {
+        Path target = tempDir.resolve("clone-target");
+
+        ProcessBuilder builder = ProjectService.gitCloneProcessBuilder(
+                "https://example.test/private.git", target);
+
+        assertEquals(
+                java.util.List.of("git", "clone", "--", "https://example.test/private.git", target.toString()),
+                builder.command());
+        assertEquals(ProcessBuilder.Redirect.INHERIT, builder.redirectInput());
+        assertEquals(ProcessBuilder.Redirect.INHERIT, builder.redirectOutput());
+        assertEquals(ProcessBuilder.Redirect.INHERIT, builder.redirectError());
+        assertEquals("1", builder.environment().get("GIT_TERMINAL_PROMPT"));
     }
 
     @Test

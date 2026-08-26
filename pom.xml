@@ -10,7 +10,7 @@
 	</parent>
 	<groupId>com.wiz</groupId>
 	<artifactId>wiz-spring</artifactId>
-	<version>0.2.8</version>
+	<version>0.2.9</version>
 	<name>wiz-spring</name>
 	<description>WIZ Spring runtime</description>
 	<url/>
@@ -83,6 +83,31 @@
 	</dependencies>
 
 	<build>
+		<resources>
+			<resource>
+				<directory>${basedir}/src/main/resources</directory>
+				<filtering>true</filtering>
+				<includes>
+					<include>**/application*.yml</include>
+					<include>**/application*.yaml</include>
+					<include>**/application*.properties</include>
+				</includes>
+				<excludes>
+					<exclude>**/node_modules/**</exclude>
+					<exclude>**/.angular/**</exclude>
+				</excludes>
+			</resource>
+			<resource>
+				<directory>${basedir}/src/main/resources</directory>
+				<excludes>
+					<exclude>**/application*.yml</exclude>
+					<exclude>**/application*.yaml</exclude>
+					<exclude>**/application*.properties</exclude>
+					<exclude>**/node_modules/**</exclude>
+					<exclude>**/.angular/**</exclude>
+				</excludes>
+			</resource>
+		</resources>
 		<plugins>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>

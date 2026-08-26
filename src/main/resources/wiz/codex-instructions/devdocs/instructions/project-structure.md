@@ -63,7 +63,9 @@ src/app/page.dashboard/
 
 ## Java package rewrite
 
-package 선언이 없는 source는 build 중 `wiz.java.package-root` 기준 package로 재작성된다.
+source의 package 선언은 유무와 관계없이 build 중 source 위치와 handler metadata에 해당하는 `wiz.java.package-root` 기준 package로 재작성된다. 파일 앞에 license 주석이 있고 그 뒤에 package 선언이 있어도 기존 선언을 교체하며 중복 package 선언을 만들지 않는다.
+
+`create --path`와 `create --uri`는 가져온 설정 및 Java `package`/`import`에서 기존 WIZ package root를 추론한다. 추론된 root는 `--package` 값으로 바꾸고 Java source뿐 아니라 `pom.xml`, config, JSON handler metadata의 같은 참조도 함께 변경한다.
 
 `wiz-spring build --package <package>`는 build 이력과 관계없이 package root 설정과 source/pom 참조를 변경한 뒤 clean build한다. WIZ source가 source of truth이고 generated Spring tree는 다시 생성되므로 첫 build 이후에도 사용할 수 있다.
 

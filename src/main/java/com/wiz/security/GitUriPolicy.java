@@ -40,6 +40,10 @@ public final class GitUriPolicy {
         if (parsed.getHost() == null || parsed.getHost().isBlank()) {
             throw new IllegalArgumentException("Git URI host is required");
         }
+        if ((scheme.equals("https") || scheme.equals("http")) && parsed.getRawUserInfo() != null) {
+            throw new IllegalArgumentException(
+                    "Git URI must not contain embedded credentials; enter them at the git prompt instead");
+        }
         if (parsed.getRawQuery() != null || parsed.getRawFragment() != null) {
             throw new IllegalArgumentException("Git URI query and fragment are not allowed");
         }
