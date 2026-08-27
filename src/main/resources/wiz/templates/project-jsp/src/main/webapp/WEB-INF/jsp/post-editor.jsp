@@ -1,0 +1,7 @@
+<%@ page contentType="text/html;charset=UTF-8" language="java" %>
+<%@ include file="fragments/head.jspf" %>
+<%@ include file="fragments/shell-start.jspf" %>
+<section class="page-heading"><div><a class="back-link" href="${pageContext.request.contextPath}/posts">← 게시물 목록</a><h1 id="editor-title">게시물</h1><p id="editor-description">콘텐츠와 공개 상태를 관리합니다.</p></div><button class="danger-button" id="delete-post" type="button" hidden>게시물 삭제</button></section>
+<section class="panel editor-panel"><form id="post-editor" class="form-stack"><label>제목<input name="title" maxlength="200" required placeholder="게시물 제목"></label><div class="form-grid two"><label>카테고리<input name="category" maxlength="60" list="category-list" placeholder="공지"></label><datalist id="category-list"></datalist><label>상태<select name="status"><option value="draft">초안</option><option value="published">공개</option><option value="archived">보관</option></select></label></div><label>내용<textarea name="content" rows="14" maxlength="10000" placeholder="내용을 입력하세요."></textarea></label><div class="editor-meta" id="editor-meta">저장 후 목록과 Dashboard에 반영됩니다.</div><div class="form-actions"><p class="form-error" id="editor-error" hidden></p><a class="secondary-button" href="${pageContext.request.contextPath}/posts">취소</a><button class="primary-button" type="submit">저장</button></div></form></section>
+<script type="module" src="${pageContext.request.contextPath}/assets/js/pages/post-editor.js"></script>
+<%@ include file="fragments/shell-end.jspf" %>

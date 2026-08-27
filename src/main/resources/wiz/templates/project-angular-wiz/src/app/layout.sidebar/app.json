@@ -1,0 +1,12 @@
+{
+  "mode": "layout",
+  "id": "layout.sidebar",
+  "title": "Sidebar layout",
+  "viewuri": "",
+  "ng.build": {
+    "name": "LayoutSidebarComponent"
+  },
+  "ng": {
+    "selector": "wiz-layout-sidebar"
+  }
+}

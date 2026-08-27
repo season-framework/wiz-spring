@@ -1,0 +1,32 @@
+map $uri $wiz_cache_control {
+    default "no-cache, must-revalidate";
+    "~*(?:^|/)[^/]+[-.][A-Za-z0-9_-]{8,}\.(?:css|js|mjs|png|jpg|jpeg|gif|svg|ico|woff2?)$" "public, max-age=604800, immutable";
+}
+
+server {
+    listen 80;
+    server_name _;
+
+    location = /assets {
+        return 308 /assets/;
+    }
+
+    location ^~ /assets/ {
+        alias /usr/share/nginx/html/;
+        add_header Cache-Control $wiz_cache_control always;
+    }
+
+    location / {
+        proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 1h;
+    }
+}

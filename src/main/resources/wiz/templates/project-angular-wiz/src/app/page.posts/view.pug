@@ -1,0 +1,64 @@
+section.page
+  header.page-heading
+    div
+      span.kicker CONTENT STUDIO
+      h1 Posts
+      p.muted 검색, 필터, 페이지네이션, 작성과 수정을 한 화면에서 확인합니다.
+    button.primary-button(type="button", (click)="newPost()") + New post
+
+  p.form-error(*ngIf="error()") {{ error() }}
+
+  div.posts-layout
+    article.panel
+      div.panel-heading.filters
+        label.search-field
+          span.sr-only Search posts
+          input(type="search", [ngModel]="text()", (ngModelChange)="text.set($event)", [ngModelOptions]="{standalone: true}", (keyup.enter)="search()", placeholder="Search title or content")
+        label.select-field
+          span.sr-only Category
+          select([ngModel]="category()", (ngModelChange)="category.set($event); search()", [ngModelOptions]="{standalone: true}")
+            option(value="") All categories
+            option(*ngFor="let item of categories()", [value]="item") {{ item }}
+        button.secondary-button(type="button", (click)="search()") Search
+      div.post-list
+        button.post-row(type="button", *ngFor="let post of pageData().items", (click)="edit(post)", [class.selected]="editingId() === post.id")
+          span.post-copy
+            span.post-meta {{ post.category }} · {{ format(post.updatedAt) }}
+            strong {{ post.title }}
+            small {{ post.summary }}
+          span.post-side
+            span.badge([attr.data-status]="post.status") {{ post.status }}
+            small {{ post.authorName }}
+        div.empty-state(*ngIf="pageData().items.length === 0") No posts match this filter.
+      footer.pagination
+        button.secondary-button(type="button", (click)="previous()", [disabled]="pageData().page <= 1") ← Previous
+        span Page {{ pageData().page }} of {{ pageData().totalPages || 1 }} · {{ pageData().total }} posts
+        button.secondary-button(type="button", (click)="next()", [disabled]="pageData().page >= pageData().totalPages") Next →
+
+    aside.panel.editor-panel
+      div.panel-heading
+        div
+          span.kicker {{ editingId() ? 'EDIT POST' : 'NEW POST' }}
+          h2 {{ editingId() ? 'Update content' : 'Create an update' }}
+        button.danger-link(type="button", *ngIf="editingId()", (click)="remove()") Delete
+      form.editor-form((submit)="save(); $event.preventDefault()")
+        label.field
+          span Title
+          input(name="title", [(ngModel)]="form.title", required, placeholder="What changed?")
+        div.form-grid-two
+          label.field
+            span Category
+            input(name="category", [(ngModel)]="form.category", placeholder="Engineering")
+          label.field
+            span Status
+            select(name="status", [(ngModel)]="form.status")
+              option(value="draft") Draft
+              option(value="published") Published
+              option(value="archived") Archived
+        label.field
+          span Content
+          textarea(name="content", [(ngModel)]="form.content", rows="12", placeholder="Write the full update…")
+        div.form-actions
+          button.secondary-button(type="button", (click)="newPost()") Reset
+          button.primary-button(type="submit", [disabled]="saving()")
+            | {{ saving() ? 'Saving…' : (editingId() ? 'Save changes' : 'Publish post') }}

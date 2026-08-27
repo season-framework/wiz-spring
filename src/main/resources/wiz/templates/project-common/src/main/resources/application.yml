@@ -1,0 +1,48 @@
+spring:
+  application:
+    name: __WIZ_ARTIFACT_ID__
+  profiles:
+    default: dev
+  __WIZ_SAMPLE_SPRING_CONFIGURATION__
+  mvc:
+    async:
+      request-timeout: 30m
+  web:
+    resources:
+      static-locations:
+        - file:./public/
+        - file:./target/generated-resources/frontend/
+        - classpath:/static/
+
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    session:
+      timeout: 30m
+      cookie:
+        http-only: true
+        same-site: lax
+
+app:
+  api:
+    prefix: ${APP_API_PREFIX:/api}
+    versioning:
+      mode: ${APP_API_VERSIONING_MODE:none}
+      default-version: ${APP_API_DEFAULT_VERSION:}
+      supported-versions: []
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true

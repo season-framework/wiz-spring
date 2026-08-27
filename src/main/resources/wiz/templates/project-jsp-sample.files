@@ -1,0 +1,27 @@
+# Fresh-create sample files are listed here. Imported projects never receive them.
+src/main/java/__WIZ_PACKAGE_PATH__/web/HomeController.java
+src/main/webapp/WEB-INF/jsp/access.jsp
+src/main/webapp/WEB-INF/jsp/chat.jsp
+src/main/webapp/WEB-INF/jsp/dashboard.jsp
+src/main/webapp/WEB-INF/jsp/fragments/head.jspf
+src/main/webapp/WEB-INF/jsp/fragments/shell-end.jspf
+src/main/webapp/WEB-INF/jsp/fragments/shell-start.jspf
+src/main/webapp/WEB-INF/jsp/fragments/sidebar.jspf
+src/main/webapp/WEB-INF/jsp/members.jsp
+src/main/webapp/WEB-INF/jsp/post-editor.jsp
+src/main/webapp/WEB-INF/jsp/posts.jsp
+src/main/webapp/WEB-INF/jsp/profile.jsp
+src/main/webapp/assets/js/api.js
+src/main/webapp/assets/js/pages/access.js
+src/main/webapp/assets/js/pages/chat.js
+src/main/webapp/assets/js/pages/dashboard.js
+src/main/webapp/assets/js/pages/members.js
+src/main/webapp/assets/js/pages/post-editor.js
+src/main/webapp/assets/js/pages/posts.js
+src/main/webapp/assets/js/pages/profile.js
+src/main/webapp/assets/js/shell.js
+src/main/webapp/assets/js/ui.js
+src/main/webapp/assets/styles.css
+src/test/frontend/api.test.mjs
+src/test/java/__WIZ_PACKAGE_PATH__/api/ApiPathIntegrationTest.java
+src/test/java/__WIZ_PACKAGE_PATH__/web/HomeControllerTest.java

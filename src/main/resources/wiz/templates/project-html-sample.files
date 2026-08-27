@@ -1,0 +1,16 @@
+# Fresh-create sample files are listed here. Imported projects never receive them.
+frontend/index.html
+frontend/app.js
+frontend/lib/api.js
+frontend/lib/router.js
+frontend/lib/store.js
+frontend/lib/ui.js
+frontend/styles.css
+frontend/views/access.js
+frontend/views/chat.js
+frontend/views/dashboard.js
+frontend/views/members.js
+frontend/views/posts.js
+frontend/views/profile.js
+src/test/frontend/api.test.mjs
+src/test/frontend/router.test.mjs

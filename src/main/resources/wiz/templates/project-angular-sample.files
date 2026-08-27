@@ -1,0 +1,17 @@
+# Fresh-create sample files are listed here. Imported projects never receive them.
+frontend/src/index.html
+frontend/src/main.ts
+frontend/src/styles.css
+frontend/src/app/app.component.ts
+frontend/src/app/app.routes.ts
+frontend/src/app/api.service.ts
+frontend/src/app/auth.guard.ts
+frontend/src/app/models.ts
+frontend/src/app/session.service.ts
+frontend/src/app/layout/app-shell.component.ts
+frontend/src/app/pages/login-page.component.ts
+frontend/src/app/pages/dashboard-page.component.ts
+frontend/src/app/pages/members-page.component.ts
+frontend/src/app/pages/posts-page.component.ts
+frontend/src/app/pages/profile-page.component.ts
+frontend/src/app/pages/chat-page.component.ts

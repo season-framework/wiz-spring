@@ -1,0 +1,14 @@
+{
+  "mode": "page",
+  "id": "page.chat",
+  "title": "Team chat",
+  "namespace": "chat",
+  "viewuri": "/chat",
+  "layout": "layout.sidebar",
+  "ng.build": {
+    "name": "PageChatComponent"
+  },
+  "ng": {
+    "selector": "wiz-page-chat"
+  }
+}

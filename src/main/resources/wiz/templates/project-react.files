@@ -1,0 +1,9 @@
+package.json
+package-lock.json
+pom.xml
+vite.config.js
+docs/ai/frontend.md
+src/main/java/__WIZ_PACKAGE_PATH__/web/SpaWebConfiguration.java
+src/test/java/__WIZ_PACKAGE_PATH__/web/SpaFallbackIntegrationTest.java
+src/test/resources/static/index.html
+src/test/resources/static/spa-test.js

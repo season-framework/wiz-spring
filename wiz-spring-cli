@@ -1,29 +1,32 @@
 #!/usr/bin/env sh
 set -eu
 
-runtime_jar="${WIZ_RUNTIME_JAR:-/opt/wiz-spring/wiz-spring.jar}"
+generator_jar="${WIZ_SPRING_JAR:-/opt/wiz-spring/wiz-spring.jar}"
 
-if [ ! -e "$runtime_jar" ]; then
-    printf 'WIZ Spring runtime jar not found: %s\n' "$runtime_jar" >&2
-    printf 'Build it with ./mvnw clean package or set WIZ_RUNTIME_JAR to the packaged executable jar.\n' >&2
-    exit 1
-fi
-if [ ! -f "$runtime_jar" ]; then
-    printf 'WIZ Spring runtime jar is not a regular file: %s\n' "$runtime_jar" >&2
-    exit 1
-fi
-if [ ! -r "$runtime_jar" ]; then
-    printf 'WIZ Spring runtime jar is not readable: %s\n' "$runtime_jar" >&2
-    exit 1
-fi
-if [ ! -s "$runtime_jar" ]; then
-    printf 'WIZ Spring runtime jar is empty: %s\n' "$runtime_jar" >&2
-    printf 'Rebuild it with ./mvnw clean package and retry.\n' >&2
+if [ ! -f "$generator_jar" ] || [ ! -r "$generator_jar" ] || [ ! -s "$generator_jar" ]; then
+    printf 'WIZ Spring generator jar is missing or unreadable: %s\n' "$generator_jar" >&2
+    printf 'Build it with ./mvnw clean package or set WIZ_SPRING_JAR.\n' >&2
     exit 1
 fi
 if ! command -v java >/dev/null 2>&1; then
-    printf 'Java was not found on PATH. WIZ Spring requires Java 21 or newer.\n' >&2
+    printf 'Java was not found on PATH. WIZ Spring requires JDK 21 or newer.\n' >&2
     exit 1
 fi
 
-exec java -jar "$runtime_jar" "$@"
+java_version=$(java -version 2>&1 | sed -n '1s/.*version "\([^"]*\)".*/\1/p')
+java_major=${java_version%%.*}
+if [ "$java_major" = "1" ]; then
+    java_remainder=${java_version#*.}
+    java_major=${java_remainder%%.*}
+fi
+case "$java_major" in
+    ''|*[!0-9]*)
+        printf 'Could not determine the Java version. WIZ Spring requires JDK 21 or newer.\n' >&2
+        exit 1
+        ;;
+esac
+if [ "$java_major" -lt 21 ]; then
+    printf 'Java %s is too old. WIZ Spring requires JDK 21 or newer.\n' "$java_version" >&2
+    exit 1
+fi
+exec java -jar "$generator_jar" "$@"

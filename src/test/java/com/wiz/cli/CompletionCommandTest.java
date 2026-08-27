@@ -43,12 +43,12 @@ class CompletionCommandTest {
         assertTrue(bash.contains("\\0338"));
         assertTrue(bash.contains("\u001B[1m"));
         assertTrue(bash.contains("\u001B[33m"));
-        assertTrue(bash.contains("Create a WIZ Spring workspace with automatic .codex"));
-        assertTrue(bash.contains("--runtime-jar=<runtimeJar>"));
+        assertTrue(bash.contains("Create a standalone Spring project from a frontend template."));
+        assertTrue(bash.contains("--template=TEMPLATE"));
         assertFalse(bash.contains("Usage: wiz-spring codex"));
         assertTrue(bash.contains("Usage: wiz-spring create"));
         assertTrue(bash.contains("Usage: wiz-spring service logs"));
-        assertTrue(bash.contains("Base Java package for generated source"));
+        assertTrue(bash.contains("Base Java package, for example"));
         assertTrue(bash.contains("Generate a shell completion script for Bash or Zsh."));
 
         String zsh = completionScript("zsh");

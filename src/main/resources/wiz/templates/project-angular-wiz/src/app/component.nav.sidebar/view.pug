@@ -1,0 +1,34 @@
+aside.sidebar
+  a.brand(routerLink="/dashboard")
+    span.brand-mark W
+    span
+      strong __WIZ_PROJECT_NAME__
+      small Spring workspace
+
+  nav.navigation(aria-label="Workspace")
+    a(routerLink="/dashboard", routerLinkActive="active")
+      span.icon ◫
+      span Dashboard
+    a(routerLink="/posts", routerLinkActive="active")
+      span.icon ◩
+      span Posts
+    a(routerLink="/members", routerLinkActive="active")
+      span.icon ◉
+      span Members
+    a(routerLink="/chat", routerLinkActive="active")
+      span.icon ◌
+      span Team chat
+    a(routerLink="/profile", routerLinkActive="active")
+      span.icon ◎
+      span My profile
+
+  div.sidebar-footer
+    div.user-card(*ngIf="user() as current")
+      span.avatar {{ current.name?.charAt(0) || '?' }}
+      span.user-copy
+        strong {{ current.name }}
+        small {{ current.email }}
+    div.sidebar-actions
+      button.icon-button(type="button", (click)="toggleTheme()", [attr.aria-label]="dark() ? '라이트 모드' : '다크 모드'")
+        | {{ dark() ? '☀' : '☾' }}
+      button.text-button(type="button", (click)="logout()") Logout

@@ -1,0 +1,14 @@
+{
+  "mode": "page",
+  "id": "page.members",
+  "title": "Members",
+  "namespace": "members",
+  "viewuri": "/members",
+  "layout": "layout.sidebar",
+  "ng.build": {
+    "name": "PageMembersComponent"
+  },
+  "ng": {
+    "selector": "wiz-page-members"
+  }
+}

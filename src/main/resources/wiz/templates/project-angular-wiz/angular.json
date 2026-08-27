@@ -1,0 +1,55 @@
+{
+  "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
+  "version": 1,
+  "cli": {
+    "analytics": false
+  },
+  "newProjectRoot": "projects",
+  "projects": {
+    "__WIZ_ARTIFACT_ID__": {
+      "projectType": "application",
+      "root": "",
+      "sourceRoot": "target/wiz-angular/src",
+      "prefix": "app",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "outputPath": {
+              "base": "target/generated-resources/frontend",
+              "browser": ""
+            },
+            "deleteOutputPath": true,
+            "index": "target/wiz-angular/src/index.html",
+            "browser": "target/wiz-angular/src/main.ts",
+            "tsConfig": "target/wiz-angular/tsconfig.app.json",
+            "inlineStyleLanguage": "scss",
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "target/wiz-angular/src/assets",
+                "output": "assets"
+              }
+            ],
+            "styles": [
+              "target/wiz-angular/src/styles.scss"
+            ],
+            "aot": true
+          },
+          "configurations": {
+            "production": {
+              "outputHashing": "all"
+            },
+            "development": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true,
+              "namedChunks": true
+            }
+          },
+          "defaultConfiguration": "production"
+        }
+      }
+    }
+  }
+}

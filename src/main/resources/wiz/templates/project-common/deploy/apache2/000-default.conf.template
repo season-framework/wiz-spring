@@ -1,0 +1,45 @@
+ServerName localhost
+DocumentRoot "/usr/local/apache2/htdocs"
+
+<Directory "/usr/local/apache2/htdocs">
+    Options FollowSymLinks
+    AllowOverride None
+    Require all granted
+    RewriteEngine On
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_URI} !/[^/]+\.[^/]+$ [NC]
+    RewriteRule ^ /index.html [L]
+</Directory>
+
+<Files "index.html">
+    Header always set Cache-Control "no-cache, must-revalidate"
+</Files>
+<FilesMatch "\.(?:css|js|mjs|png|jpg|jpeg|gif|svg|ico|woff2?)$">
+    Header always set Cache-Control "no-cache, must-revalidate"
+</FilesMatch>
+<FilesMatch "[-.][A-Za-z0-9_-]{8,}\.(?:css|js|mjs|png|jpg|jpeg|gif|svg|ico|woff2?)$">
+    Header always set Cache-Control "public, max-age=604800, immutable"
+</FilesMatch>
+
+ProxyPreserveHost On
+# The slash on both sides makes this a literal child-path mapping. The exact
+# prefix is handled below with a string equality expression, so /api.foo never
+# acts like the regular expression /api.foo and /api.foobar is not captured.
+ProxyPass "${API_PREFIX}/" "http://${BACKEND_HOST}:${BACKEND_PORT}${API_PREFIX}/" flushpackets=on timeout=3600
+ProxyPassReverse "${API_PREFIX}/" "http://${BACKEND_HOST}:${BACKEND_PORT}${API_PREFIX}/"
+ProxyPassReverse "${API_PREFIX}" "http://${BACKEND_HOST}:${BACKEND_PORT}${API_PREFIX}"
+ProxyPass "/app-config.json" "http://${BACKEND_HOST}:${BACKEND_PORT}/app-config.json"
+ProxyPassReverse "/app-config.json" "http://${BACKEND_HOST}:${BACKEND_PORT}/app-config.json"
+ProxyPass "/v3/api-docs" "http://${BACKEND_HOST}:${BACKEND_PORT}/v3/api-docs"
+ProxyPassReverse "/v3/api-docs" "http://${BACKEND_HOST}:${BACKEND_PORT}/v3/api-docs"
+ProxyPass "/swagger-ui" "http://${BACKEND_HOST}:${BACKEND_PORT}/swagger-ui"
+ProxyPassReverse "/swagger-ui" "http://${BACKEND_HOST}:${BACKEND_PORT}/swagger-ui"
+ProxyPass "/actuator" "http://${BACKEND_HOST}:${BACKEND_PORT}/actuator"
+ProxyPassReverse "/actuator" "http://${BACKEND_HOST}:${BACKEND_PORT}/actuator"
+
+RewriteEngine On
+RewriteCond %{HTTP:Upgrade} =websocket [NC]
+RewriteRule ^/(.*)$ ws://${BACKEND_HOST}:${BACKEND_PORT}/$1 [P,L]
+RewriteCond expr "%{REQUEST_URI} == '${API_PREFIX}'"
+RewriteRule ^/(.*)$ http://${BACKEND_HOST}:${BACKEND_PORT}/$1 [P,L,NE]

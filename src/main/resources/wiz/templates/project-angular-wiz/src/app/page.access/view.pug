@@ -1,0 +1,31 @@
+section.access-page
+  div.access-visual
+    div.visual-copy
+      span.kicker WIZ · SPRING · STANDARD
+      h1 Build the workspace your team can understand.
+      p 프론트엔드 구조는 읽기 쉽게, 백엔드는 표준 Spring으로. 생성 직후부터 로그인, CRUD, 실시간 이벤트까지 확인할 수 있습니다.
+      ul.feature-list
+        li 중앙 API prefix와 OpenAPI
+        li 세션 인증과 역할 기반 샘플
+        li Posts · Members · Profile · SSE Chat
+  div.access-panel
+    form.login-card((submit)="login(); $event.preventDefault()")
+      div.login-heading
+        span.brand-mark W
+        div
+          span.kicker WELCOME BACK
+          h2 __WIZ_PROJECT_NAME__
+      p.muted 데모 관리자 계정으로 워크스페이스를 둘러보세요.
+      div.demo-account
+        span Demo account
+        button(type="button", (click)="useDemo()") admin@example.com · admin1234
+      label.field
+        span Email
+        input(type="email", name="email", [(ngModel)]="form.email", autocomplete="email", required)
+      label.field
+        span Password
+        input(type="password", name="password", [(ngModel)]="form.password", autocomplete="current-password", required)
+      p.form-error(*ngIf="error()") {{ error() }}
+      button.primary-button.full(type="submit", [disabled]="loading()")
+        | {{ loading() ? 'Signing in…' : 'Enter workspace' }}
+      p.login-note Sample data is stored in the local data directory and survives restarts.

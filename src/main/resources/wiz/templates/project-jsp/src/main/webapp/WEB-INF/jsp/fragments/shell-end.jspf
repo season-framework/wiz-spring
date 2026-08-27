@@ -1,0 +1,7 @@
+        </main>
+    </div>
+</div>
+<div class="toast-region" id="toast-region" aria-live="polite"></div>
+<script type="module" src="${pageContext.request.contextPath}/assets/js/shell.js"></script>
+</body>
+</html>

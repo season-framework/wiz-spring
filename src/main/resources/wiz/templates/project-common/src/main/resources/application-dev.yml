@@ -1,0 +1,3 @@
+logging:
+  level:
+    __WIZ_PACKAGE_ROOT__: DEBUG

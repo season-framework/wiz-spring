@@ -1,0 +1,66 @@
+map $uri $wiz_cache_control {
+    default "no-cache, must-revalidate";
+    "~*(?:^|/)[^/]+[-.][A-Za-z0-9_-]{8,}\.(?:css|js|mjs|png|jpg|jpeg|gif|svg|ico|woff2?)$" "public, max-age=604800, immutable";
+}
+
+server {
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location = /app-config.json {
+        proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT};
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Keep the configured prefix literal. An exact block plus a trailing-slash
+    # prefix block provides a path-segment boundary without interpolating the
+    # prefix into a regular expression (for example, the dot in /api.foo).
+    location = "${API_PREFIX}" {
+        proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 1h;
+    }
+
+    location ^~ "${API_PREFIX}/" {
+        proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 1h;
+    }
+
+    location ~ ^/(?:v3/api-docs(?:\.yaml)?|swagger-ui(?:\.html)?|actuator)(?:/|$) {
+        proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT};
+        proxy_set_header Host $host;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location = /index.html {
+        add_header Cache-Control "no-cache, must-revalidate" always;
+    }
+
+    location ~* \.(?:css|js|mjs|png|jpg|jpeg|gif|svg|ico|woff2?)$ {
+        add_header Cache-Control $wiz_cache_control always;
+        try_files $uri =404;
+    }
+}

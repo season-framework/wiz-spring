@@ -1,0 +1,9 @@
+<div class="app-shell">
+    <%@ include file="sidebar.jspf" %>
+    <div class="workspace">
+        <header class="mobile-header">
+            <button class="icon-button" id="sidebar-toggle" type="button" aria-label="메뉴 열기">☰</button>
+            <strong><spring:escapeBody htmlEscape="true">${projectName}</spring:escapeBody></strong>
+            <button class="icon-button" id="mobile-theme-toggle" type="button" aria-label="테마 전환">◐</button>
+        </header>
+        <main class="page">

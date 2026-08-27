@@ -1,0 +1,12 @@
+{
+  "mode": "component",
+  "id": "component.nav.sidebar",
+  "title": "Workspace navigation",
+  "namespace": "navigation",
+  "ng.build": {
+    "name": "NavigationSidebarComponent"
+  },
+  "ng": {
+    "selector": "wiz-navigation-sidebar"
+  }
+}

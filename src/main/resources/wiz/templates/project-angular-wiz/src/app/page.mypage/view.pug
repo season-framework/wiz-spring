@@ -1,0 +1,46 @@
+section.page.narrow-page
+  header.page-heading
+    div
+      span.kicker ACCOUNT
+      h1 My profile
+      p.muted 프로필과 비밀번호 변경 API를 확인합니다.
+
+  p.form-error(*ngIf="error()") {{ error() }}
+  p.success-message(*ngIf="notice()") {{ notice() }}
+
+  article.panel(*ngIf="profile() as current")
+    div.profile-hero
+      span.profile-avatar {{ current.name.charAt(0) }}
+      div
+        h2 {{ current.name }}
+        p {{ current.email }}
+      span.badge([attr.data-role]="current.role") {{ current.role }}
+    form.profile-form((submit)="saveProfile(); $event.preventDefault()")
+      label.field
+        span Email
+        input([value]="current.email", disabled)
+      label.field
+        span Display name
+        input(name="name", [(ngModel)]="profileForm.name", required)
+      label.field
+        span Mobile
+        input(name="mobile", [(ngModel)]="profileForm.mobile", placeholder="010-0000-0000")
+      div.form-actions
+        button.primary-button(type="submit", [disabled]="saving()")
+          | {{ saving() ? 'Saving…' : 'Save profile' }}
+
+  article.panel
+    div.panel-heading
+      div
+        span.kicker SECURITY
+        h2 Change password
+    form.profile-form((submit)="changePassword(); $event.preventDefault()")
+      label.field
+        span Current password
+        input(type="password", name="currentPassword", [(ngModel)]="passwordForm.currentPassword", required)
+      label.field
+        span New password
+        input(type="password", name="newPassword", [(ngModel)]="passwordForm.newPassword", minlength="8", required)
+      div.form-actions
+        button.danger-button(type="submit", [disabled]="changingPassword()")
+          | {{ changingPassword() ? 'Changing…' : 'Change password' }}

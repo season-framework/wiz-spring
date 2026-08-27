@@ -1,114 +1,125 @@
 package com.wiz.cli;
 
-import java.io.File;
-import java.net.URISyntaxException;
-import java.nio.file.Files;
+import java.io.PrintWriter;
 import java.nio.file.Path;
+import java.util.Iterator;
+import java.util.Objects;
 import java.util.concurrent.Callable;
 
-import com.wiz.build.BuildLogger;
-import com.wiz.build.BuildResult;
-import com.wiz.build.ProjectBuildService;
-import com.wiz.core.CodexWorkspaceService;
-import com.wiz.core.ProjectService;
-import com.wiz.core.WorkspaceService;
-import com.wiz.runtime.PathService;
-import com.wiz.runtime.ProjectContext;
+import com.wiz.core.DevelopmentToolchain;
+import com.wiz.core.FrontendTemplate;
+import com.wiz.core.ProjectTemplateService;
 
 import picocli.CommandLine.Command;
+import picocli.CommandLine.ITypeConverter;
+import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Option;
+import picocli.CommandLine.ParameterException;
 import picocli.CommandLine.Parameters;
+import picocli.CommandLine.Spec;
 
 @Command(
         name = "create",
         mixinStandardHelpOptions = true,
-        description = "Create a WIZ Spring workspace with automatic .codex and bundled .github setup.")
+        description = "Create a standalone Spring project from a frontend template.")
 public class CreateCommand implements Callable<Integer> {
 
-    @Parameters(index = "0", paramLabel = "PATH", description = "Workspace path or name.")
+    private final ToolchainCheck toolchainCheck;
+
+    public CreateCommand() {
+        this(new DevelopmentToolchain()::verify);
+    }
+
+    CreateCommand(ToolchainCheck toolchainCheck) {
+        this.toolchainCheck = Objects.requireNonNull(toolchainCheck, "toolchainCheck");
+    }
+
+    @Parameters(index = "0", paramLabel = "PATH", description = "New project path or name.")
     private Path path;
 
-    @Option(names = "--package", required = true, description = "Base Java package for generated source, for example com.example.demo.")
+    @Option(names = "--package", required = true,
+            description = "Base Java package, for example com.example.demo.")
     private String packageRoot;
 
-    @Option(names = "--uri", description = "Git repository URI to import.")
+    @Option(
+            names = "--template",
+            defaultValue = "angular-wiz",
+            paramLabel = "TEMPLATE",
+            converter = FrontendTemplateConverter.class,
+            completionCandidates = FrontendTemplateCandidates.class,
+            description = "Frontend template: ${COMPLETION-CANDIDATES}. Default: ${DEFAULT-VALUE}.")
+    private FrontendTemplate template;
+
+    @Option(names = "--uri", description = "Git repository URI to import. Its backend must already use standard Spring source paths. Requires an explicit --template.")
     private String uri;
 
-    @Option(names = "--path", description = "Local source directory to import.")
+    @Option(names = "--path", description = "Local project directory to import. Its backend must already use standard Spring source paths. Requires an explicit --template.")
     private Path sourcePath;
 
-    @Option(names = "--skip-build", description = "Create sources without running the initial clean build.")
-    private boolean skipBuild;
-
-    @Option(names = "--runtime-jar", description = "wiz-spring executable jar for generated MCP settings. Defaults to WIZ_RUNTIME_JAR or the currently running jar.")
-    private Path runtimeJar;
+    @Spec
+    private CommandSpec spec;
 
     @Override
     public Integer call() throws Exception {
-        Path jar = runtimeJar();
-        WorkspaceService service = new WorkspaceService();
-        WorkspaceService.CreatedWorkspace workspace = service.createWorkspace(path, packageRoot);
-        ProjectContext context = new ProjectService(new PathService(workspace.root()))
-                .createApp(packageRoot, uri, sourcePath);
-        CodexWorkspaceService.SetupResult codex = new CodexWorkspaceService().setup(workspace.root(), jar);
-        System.out.println("Workspace created: " + workspace.root());
-        System.out.println("Java package: " + context.packageRoot());
-        System.out.println("Port: " + workspace.port());
-        System.out.println("Codex: .codex MCP settings and bundled .github instructions ready ("
-                + codex.changedFiles() + " files written, " + codex.managedFiles() + " managed).");
-        System.out.println("Config: application.yml is common, application-dev.yml is the run default, and application-prod.yml is the standalone jar default.");
-        System.out.println("Session: cookie-only, HttpOnly, SameSite=Lax; dev allows HTTP and prod requires HTTPS.");
-        System.out.println("Metadata: config/wiz.yml records the Java workspace format and wiz-spring version.");
-        System.out.println("Git: application.yml and application-<profile>.yml are ignored; commit config/application*.example.yml instead.");
-        if (!skipBuild) {
-            System.out.println("Running initial clean build...");
-            BuildResult result = new ProjectBuildService().build(context, true, "bundle", BuildLogger.console());
-            System.out.println(result.message());
-            System.out.println("Phases: " + String.join(",", result.phases()));
-            if (!result.success()) {
-                return result.exitCode();
-            }
+        boolean imported = sourcePath != null || uri != null;
+        if (imported && !spec.commandLine().getParseResult().hasMatchedOption("--template")) {
+            throw new ParameterException(
+                    spec.commandLine(),
+                    "--template must be specified explicitly when importing with --uri or --path");
         }
-        System.out.println("Run: wiz-spring run --root " + workspace.root() + " --port " + workspace.port());
+        DevelopmentToolchain.Report toolchain = toolchainCheck.verify();
+        ProjectTemplateService.GeneratedProject project = new ProjectTemplateService()
+                .create(path, packageRoot, template, uri, sourcePath);
+
+        PrintWriter output = spec.commandLine().getOut();
+        output.println("Project created: " + project.root());
+        output.println("Java package: " + project.packageRoot());
+        output.println("Frontend template: " + project.template().id());
+        output.println("Toolchain: " + toolchain.summary());
+        printNextCommands(output, project);
+        output.flush();
         return 0;
     }
 
-    private Path runtimeJar() {
-        if (runtimeJar != null) {
-            return requireRuntimeJar(runtimeJar, "--runtime-jar");
-        }
-
-        String configured = System.getenv("WIZ_RUNTIME_JAR");
-        if (configured != null && !configured.isBlank()) {
-            return requireRuntimeJar(Path.of(configured), "WIZ_RUNTIME_JAR");
-        }
-
-        String classPath = System.getProperty("java.class.path", "");
-        if (!classPath.isBlank() && !classPath.contains(File.pathSeparator)) {
-            Path candidate = Path.of(classPath).toAbsolutePath().normalize();
-            if (Files.isRegularFile(candidate)) {
-                return candidate;
+    private void printNextCommands(PrintWriter output, ProjectTemplateService.GeneratedProject project) {
+        output.println("Next:");
+        output.println("  cd " + project.root());
+        switch (project.template()) {
+            case ANGULAR_WIZ -> {
+                output.println(project.imported() ? "  npm install" : "  npm ci");
+                output.println("  npm run wizbuild");
+                output.println("  npm run dev");
+                output.println("  npm run bundle");
+            }
+            case ANGULAR, REACT, HTML, JSP -> {
+                output.println(project.imported() ? "  npm install" : "  npm ci");
+                output.println("  npm run build");
+                output.println("  npm run dev");
+                output.println("  npm run bundle");
             }
         }
-        try {
-            Path candidate = Path.of(CreateCommand.class.getProtectionDomain().getCodeSource().getLocation().toURI())
-                    .toAbsolutePath()
-                    .normalize();
-            if (Files.isRegularFile(candidate)) {
-                return candidate;
-            }
-        } catch (URISyntaxException exception) {
-            throw new IllegalStateException("Failed to resolve current wiz-spring runtime jar", exception);
-        }
-        throw new IllegalArgumentException(
-                "wiz-spring runtime jar could not be resolved; run the packaged jar or use --runtime-jar");
     }
 
-    private Path requireRuntimeJar(Path path, String source) {
-        Path jar = path.toAbsolutePath().normalize();
-        if (!Files.isRegularFile(jar)) {
-            throw new IllegalArgumentException("wiz-spring runtime jar from " + source + " not found: " + jar);
+    FrontendTemplate selectedTemplate() {
+        return template;
+    }
+
+    public static final class FrontendTemplateConverter implements ITypeConverter<FrontendTemplate> {
+        @Override
+        public FrontendTemplate convert(String value) {
+            return FrontendTemplate.fromId(value);
         }
-        return jar;
+    }
+
+    public static final class FrontendTemplateCandidates implements Iterable<String> {
+        @Override
+        public Iterator<String> iterator() {
+            return FrontendTemplate.ids().iterator();
+        }
+    }
+
+    @FunctionalInterface
+    interface ToolchainCheck {
+        DevelopmentToolchain.Report verify();
     }
 }

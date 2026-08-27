@@ -1,0 +1,37 @@
+{
+  "name": "__WIZ_ARTIFACT_ID__",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": "^22.22.3 || ^24.15.0 || ^26.0.0",
+    "npm": ">=10.0.0"
+  },
+  "wiz": {
+    "frontend": "angular",
+    "templateVersion": 1
+  },
+  "scripts": {
+    "frontend:build": "ng build",
+    "frontend:watch": "ng serve --proxy-config proxy.conf.cjs",
+    "backend:build": "node scripts/build-backend.mjs",
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/dev.mjs",
+    "bundle": "node scripts/bundle.mjs"
+  },
+  "dependencies": {
+    "@angular/common": "22.1.4",
+    "@angular/compiler": "22.1.4",
+    "@angular/core": "22.1.4",
+    "@angular/forms": "22.1.4",
+    "@angular/platform-browser": "22.1.4",
+    "@angular/router": "22.1.4",
+    "rxjs": "7.8.2",
+    "tslib": "2.8.1"
+  },
+  "devDependencies": {
+    "@angular/build": "22.1.6",
+    "@angular/cli": "22.1.6",
+    "@angular/compiler-cli": "22.1.4",
+    "typescript": "6.0.3"
+  }
+}

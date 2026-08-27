@@ -1,0 +1,51 @@
+section.page
+  header.page-heading
+    div
+      span.kicker LIVE WORKSPACE
+      h1 Good to see you, {{ userName() }}.
+      p.muted 표준 Spring API와 WIZ 화면 구조가 함께 동작하는 샘플입니다.
+    button.secondary-button(type="button", (click)="load()", [disabled]="loading()")
+      | {{ loading() ? 'Refreshing…' : '↻ Refresh data' }}
+
+  p.form-error(*ngIf="error()") {{ error() }}
+
+  div.stat-grid(*ngIf="dashboard() as data")
+    article.stat-card(*ngFor="let stat of data.stats", [attr.data-tone]="stat.tone")
+      div.stat-topline
+        span.stat-icon {{ stat.icon }}
+        span.trend([class.negative]="stat.change < 0")
+          | {{ stat.change >= 0 ? '+' : '' }}{{ stat.change }}%
+      p {{ stat.label }}
+      strong {{ stat.value }}
+
+  div.dashboard-grid(*ngIf="dashboard() as data")
+    article.panel.activity-panel
+      div.panel-heading
+        div
+          span.kicker ACTIVITY
+          h2 Recent publishing
+        a.text-link(routerLink="/posts") View all →
+      div.activity-list
+        a.activity-row(*ngFor="let item of data.recent", routerLink="/posts")
+          span.activity-mark {{ item.authorName.charAt(0) }}
+          span.activity-copy
+            strong {{ item.title }}
+            small {{ item.authorName }} · {{ format(item.createdAt) }}
+          span.badge([attr.data-status]="item.status") {{ item.status }}
+        div.empty-state(*ngIf="data.recent.length === 0") No recent posts yet.
+
+    aside.panel.quick-panel
+      div.panel-heading
+        div
+          span.kicker QUICK START
+          h2 Explore the sample
+      div.quick-links
+        a(routerLink="/members")
+          strong Invite a teammate
+          span Members API와 역할을 확인합니다.
+        a(routerLink="/posts")
+          strong Publish an update
+          span 검색·페이지네이션·CRUD를 실행합니다.
+        a(routerLink="/chat")
+          strong Open team chat
+          span Spring SSE 실시간 이벤트를 확인합니다.

@@ -1,0 +1,62 @@
+section.page
+  header.page-heading
+    div
+      span.kicker TEAM DIRECTORY
+      h1 Members
+      p.muted 초대, 역할, 세션 권한을 함께 확인하는 Spring CRUD 샘플입니다.
+    button.primary-button(type="button", (click)="inviteOpen.set(!inviteOpen())")
+      | {{ inviteOpen() ? 'Close form' : '+ Invite member' }}
+
+  p.form-error(*ngIf="error()") {{ error() }}
+  p.success-message(*ngIf="notice()") {{ notice() }}
+
+  form.panel.invite-panel(*ngIf="inviteOpen()", (submit)="invite(); $event.preventDefault()")
+    div.panel-heading
+      div
+        span.kicker NEW MEMBER
+        h2 Send a workspace invitation
+      span.badge Initial password · welcome1
+    div.form-grid
+      label.field
+        span Name
+        input(name="name", [(ngModel)]="form.name", placeholder="New teammate")
+      label.field
+        span Email
+        input(type="email", name="email", [(ngModel)]="form.email", placeholder="name@example.com", required)
+      label.field
+        span Role
+        select(name="role", [(ngModel)]="form.role")
+          option(value="viewer") Viewer
+          option(value="user") User
+          option(value="editor") Editor
+          option(value="admin") Admin
+    div.form-actions
+      button.secondary-button(type="button", (click)="inviteOpen.set(false)") Cancel
+      button.primary-button(type="submit", [disabled]="saving()")
+        | {{ saving() ? 'Inviting…' : 'Invite member' }}
+
+  article.panel
+    div.panel-heading
+      div
+        span.kicker PEOPLE
+        h2 {{ members().length }} workspace members
+      label.search-field
+        span.sr-only Search members
+        input(type="search", [ngModel]="query()", (ngModelChange)="query.set($event)", [ngModelOptions]="{standalone: true}", placeholder="Search name or email")
+    div.member-grid
+      article.member-card(*ngFor="let member of filteredMembers()")
+        div.member-main
+          span.avatar {{ member.name.charAt(0) }}
+          div.member-copy
+            strong {{ member.name }}
+            span {{ member.email }}
+          span.badge([attr.data-role]="member.role") {{ member.role }}
+        dl.member-meta
+          div
+            dt Mobile
+            dd {{ member.mobile || 'Not set' }}
+          div
+            dt Joined
+            dd {{ format(member.createdAt) }}
+        button.danger-link(type="button", *ngIf="member.email !== 'admin@example.com'", (click)="remove(member)") Remove member
+      div.empty-state(*ngIf="filteredMembers().length === 0") No members match your search.

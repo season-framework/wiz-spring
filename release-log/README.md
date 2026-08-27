@@ -22,5 +22,6 @@
 | [`0.2.7`](0.2.7.md) | tagged | bounded run logging, safe runtime reload, strict CLI preflight, deterministic deployment, OpenAPI/Swagger UI |
 | [`0.2.8`](0.2.8.md) | tagged | password-only root SSH access and Angular development dependency security updates |
 | [`0.2.9`](0.2.9.md) | tagged | interactive Git URI imports, package-root normalization, and Docker Java shell consistency |
+| [`1.0.0`](1.0.0.md) | tagged | clean-break project generator, standalone Spring backends, self-contained frontend builds, bundles, and systemd services |
 
 릴리즈를 실제로 배포할 때는 `pom.xml`의 `<version>`과 Git tag, GitHub/GitLab release note가 이 로그와 일치해야 한다.

@@ -1,0 +1,12 @@
+target/
+bundle/
+node_modules/
+dist/
+data/
+.angular/
+.idea/
+.vscode/
+*.iml
+*.log
+.env
+src/main/resources/application-local.yml

@@ -1,0 +1,12 @@
+<%@ taglib prefix="spring" uri="http://www.springframework.org/tags" %>
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <meta name="app-context-path" content="${pageContext.request.contextPath}">
+    <title><spring:escapeBody htmlEscape="true">${pageTitle}</spring:escapeBody> · <spring:escapeBody htmlEscape="true">${projectName}</spring:escapeBody></title>
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/assets/styles.css">
+</head>
+<body>

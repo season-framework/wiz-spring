@@ -1,0 +1,14 @@
+{
+  "mode": "page",
+  "id": "page.mypage",
+  "title": "My profile",
+  "namespace": "profile",
+  "viewuri": "/profile",
+  "layout": "layout.sidebar",
+  "ng.build": {
+    "name": "PageProfileComponent"
+  },
+  "ng": {
+    "selector": "wiz-page-profile"
+  }
+}

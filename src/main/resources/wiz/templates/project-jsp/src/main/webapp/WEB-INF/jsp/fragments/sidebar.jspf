@@ -1,0 +1,22 @@
+<div class="sidebar-backdrop" id="sidebar-backdrop" hidden></div>
+<aside class="sidebar" id="sidebar" aria-label="주 메뉴">
+    <a class="brand" href="${pageContext.request.contextPath}/dashboard">
+        <span class="brand-mark">W</span>
+        <span><strong><spring:escapeBody htmlEscape="true">${projectName}</spring:escapeBody></strong><small>Spring MVC + JSP</small></span>
+    </a>
+    <div class="account-card">
+        <span class="avatar"><spring:escapeBody htmlEscape="true">${sessionUser.name.substring(0, 1)}</spring:escapeBody></span>
+        <span class="account-copy"><strong><spring:escapeBody htmlEscape="true">${sessionUser.name}</spring:escapeBody></strong><small><spring:escapeBody htmlEscape="true">${sessionUser.email}</spring:escapeBody></small></span>
+    </div>
+    <nav class="nav-list">
+        <a class="${activeNavigation == 'dashboard' ? 'active' : ''}" href="${pageContext.request.contextPath}/dashboard"><span>◈</span>Dashboard</a>
+        <a class="${activeNavigation == 'posts' ? 'active' : ''}" href="${pageContext.request.contextPath}/posts"><span>▤</span>게시물</a>
+        <a class="${activeNavigation == 'members' ? 'active' : ''}" href="${pageContext.request.contextPath}/members"><span>◎</span>멤버</a>
+        <a class="${activeNavigation == 'chat' ? 'active' : ''}" href="${pageContext.request.contextPath}/chat"><span>◇</span>실시간 채팅</a>
+        <a class="${activeNavigation == 'profile' ? 'active' : ''}" href="${pageContext.request.contextPath}/profile"><span>⚙</span>내 프로필</a>
+    </nav>
+    <div class="sidebar-footer">
+        <button class="ghost-button" id="theme-toggle" type="button">◐ <span>테마 전환</span></button>
+        <button class="ghost-button danger-text" id="logout-button" type="button">→ <span>로그아웃</span></button>
+    </div>
+</aside>

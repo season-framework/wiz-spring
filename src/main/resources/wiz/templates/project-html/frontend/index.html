@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>__WIZ_PROJECT_NAME__</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="boot-screen" id="boot-screen" aria-live="polite">
+    <span class="spinner" aria-hidden="true"></span>
+    <p>애플리케이션을 준비하고 있습니다.</p>
+  </div>
+
+  <div class="app" id="app" hidden>
+    <div class="sidebar-backdrop" id="sidebar-backdrop" hidden></div>
+    <aside class="sidebar" id="sidebar" aria-label="주 메뉴">
+      <a class="brand" href="#/dashboard" aria-label="__WIZ_PROJECT_NAME__ 홈">
+        <span class="brand-mark">W</span>
+        <span>
+          <strong>__WIZ_PROJECT_NAME__</strong>
+          <small>WIZ Spring sample</small>
+        </span>
+      </a>
+
+      <div class="account-card">
+        <span class="avatar" id="account-avatar">?</span>
+        <span class="account-copy">
+          <strong id="account-name">Guest</strong>
+          <small id="account-email">로그인이 필요합니다</small>
+        </span>
+      </div>
+
+      <nav class="nav-list" id="primary-nav">
+        <a href="#/dashboard" data-route="dashboard"><span class="nav-icon">◈</span>Dashboard</a>
+        <a href="#/posts" data-route="posts"><span class="nav-icon">▤</span>게시물</a>
+        <a href="#/members" data-route="members"><span class="nav-icon">◎</span>멤버</a>
+        <a href="#/chat" data-route="chat"><span class="nav-icon">◇</span>실시간 채팅</a>
+        <a href="#/profile" data-route="profile"><span class="nav-icon">⚙</span>내 프로필</a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button class="ghost-button full-width" id="theme-toggle" type="button">
+          <span aria-hidden="true">◐</span><span>테마 전환</span>
+        </button>
+        <button class="ghost-button full-width danger-text" id="logout-button" type="button">
+          <span aria-hidden="true">→</span><span>로그아웃</span>
+        </button>
+      </div>
+    </aside>
+
+    <div class="workspace">
+      <header class="mobile-header">
+        <button class="icon-button" id="sidebar-toggle" type="button" aria-label="메뉴 열기">☰</button>
+        <strong>__WIZ_PROJECT_NAME__</strong>
+        <button class="icon-button" id="mobile-theme-toggle" type="button" aria-label="테마 전환">◐</button>
+      </header>
+      <main class="page" id="page" tabindex="-1"></main>
+    </div>
+  </div>
+
+  <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

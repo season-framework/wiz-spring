@@ -1,0 +1,14 @@
+{
+  "mode": "page",
+  "id": "page.access",
+  "title": "Sign in",
+  "namespace": "auth",
+  "viewuri": "/access",
+  "layout": "layout.empty",
+  "ng.build": {
+    "name": "PageAccessComponent"
+  },
+  "ng": {
+    "selector": "wiz-page-access"
+  }
+}

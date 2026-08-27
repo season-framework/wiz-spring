@@ -1,0 +1,23 @@
+{
+  "name": "__WIZ_ARTIFACT_ID__",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "^22.22.3 || ^24.15.0 || ^26.0.0",
+    "npm": ">=10.0.0"
+  },
+  "wiz": {
+    "frontend": "html",
+    "templateVersion": 1
+  },
+  "scripts": {
+    "frontend:build": "node scripts/static-build.mjs html",
+    "frontend:watch": "node scripts/static-watch.mjs html",
+    "frontend:test": "node --test src/test/frontend/*.test.mjs",
+    "backend:build": "node scripts/build-backend.mjs",
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/dev.mjs",
+    "bundle": "node scripts/bundle.mjs"
+  }
+}

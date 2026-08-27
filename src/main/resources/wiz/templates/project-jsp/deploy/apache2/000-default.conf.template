@@ -1,0 +1,25 @@
+ServerName localhost
+DocumentRoot "/usr/local/apache2/htdocs"
+
+Alias "/assets/" "/usr/local/apache2/htdocs/"
+<Directory "/usr/local/apache2/htdocs">
+    Options FollowSymLinks
+    AllowOverride None
+    Require all granted
+</Directory>
+
+<FilesMatch "\.(?:css|js|mjs|png|jpg|jpeg|gif|svg|ico|woff2?)$">
+    Header always set Cache-Control "no-cache, must-revalidate"
+</FilesMatch>
+<FilesMatch "[-.][A-Za-z0-9_-]{8,}\.(?:css|js|mjs|png|jpg|jpeg|gif|svg|ico|woff2?)$">
+    Header always set Cache-Control "public, max-age=604800, immutable"
+</FilesMatch>
+
+ProxyPreserveHost On
+ProxyPass "/assets/" "!"
+ProxyPass "/" "http://${BACKEND_HOST}:${BACKEND_PORT}/" flushpackets=on timeout=3600
+ProxyPassReverse "/" "http://${BACKEND_HOST}:${BACKEND_PORT}/"
+
+RewriteEngine On
+RewriteCond %{HTTP:Upgrade} =websocket [NC]
+RewriteRule ^/(.*)$ ws://${BACKEND_HOST}:${BACKEND_PORT}/$1 [P,L]

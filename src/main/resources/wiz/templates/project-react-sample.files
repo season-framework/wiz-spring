@@ -1,0 +1,14 @@
+# Fresh-create sample files are listed here. Imported projects never receive them.
+frontend/index.html
+frontend/src/main.jsx
+frontend/src/App.jsx
+frontend/src/styles.css
+frontend/src/api/client.js
+frontend/src/router.js
+frontend/src/layout/AppShell.jsx
+frontend/src/pages/LoginPage.jsx
+frontend/src/pages/DashboardPage.jsx
+frontend/src/pages/MembersPage.jsx
+frontend/src/pages/PostsPage.jsx
+frontend/src/pages/ProfilePage.jsx
+frontend/src/pages/ChatPage.jsx

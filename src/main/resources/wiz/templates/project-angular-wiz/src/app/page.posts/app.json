@@ -1,0 +1,14 @@
+{
+  "mode": "page",
+  "id": "page.posts",
+  "title": "Posts",
+  "namespace": "posts",
+  "viewuri": "/posts",
+  "layout": "layout.sidebar",
+  "ng.build": {
+    "name": "PagePostsComponent"
+  },
+  "ng": {
+    "selector": "wiz-page-posts"
+  }
+}

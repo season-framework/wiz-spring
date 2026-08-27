@@ -1,0 +1,12 @@
+{
+  "mode": "layout",
+  "id": "layout.empty",
+  "title": "Empty layout",
+  "viewuri": "",
+  "ng.build": {
+    "name": "LayoutEmptyComponent"
+  },
+  "ng": {
+    "selector": "wiz-layout-empty"
+  }
+}
