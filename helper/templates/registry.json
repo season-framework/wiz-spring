@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "default": "angular-wiz",
+  "templates": [
+    {
+      "id": "angular-wiz",
+      "base": "angular-wiz",
+      "description": "Angular with WIZ source layout"
+    },
+    {
+      "id": "angular",
+      "base": "angular",
+      "description": "Angular"
+    },
+    {
+      "id": "react",
+      "base": "react",
+      "description": "React"
+    },
+    {
+      "id": "html",
+      "base": "html",
+      "description": "Static HTML"
+    },
+    {
+      "id": "jsp",
+      "base": "jsp",
+      "description": "Spring MVC with JSP"
+    }
+  ]
+}

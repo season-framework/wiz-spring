@@ -64,6 +64,37 @@ jsp
 
 템플릿 설명은 `wiz-spring templates`로 확인할 수 있습니다.
 
+## Docker 프로젝트 helper
+
+[`helper/`](helper/README.md)는 `wiz-spring create`를 HTTP로 제공하는 선택적 Docker
+전용 컴포넌트입니다. 프로젝트 이름, Java package, template을 HTTP로 전달하면 생성된
+프로젝트를 ZIP으로 반환합니다. helper 소스와 template registry는 Maven의 `src/main`
+밖에 있으므로 `wiz-spring-1.0.0.jar`에 포함되지 않으며, helper container를 시작할 때
+generator JAR를 읽기 전용으로 mount합니다.
+
+```bash
+./mvnw clean package
+docker compose -f helper/docker-compose.yaml up -d --build --wait
+
+curl --fail-with-body http://127.0.0.1:8080/
+
+curl --fail-with-body \
+  -X POST \
+  'http://127.0.0.1:8080/api/v1/projects?projectName=dashboard&packageName=com.example.dashboard&template=angular-wiz' \
+  -o dashboard.zip
+```
+
+`GET /`는 registry 기본값과 각 template의 ID, base, 설명을 JSON으로 반환합니다.
+프로젝트 생성은 JSON, form, query string 입력을 지원하며 한 요청에서는 한 방식만
+사용해야 합니다. 세 방식의 예시는 [helper 안내서](helper/README.md)에 있습니다.
+
+Helper image에 노출되는 template은 빌드 시
+[`templates/registry.json`](helper/templates/registry.json)으로 결정합니다. 각 항목은
+다섯 built-in base 중 하나를 선택하고 필요하면 파일 제거와 overlay를 적용할 수
+있습니다. Registry에서 항목을 빼면 해당 image에서 template이 삭제됩니다. Custom
+image 예시, placeholder, 경로 안전 규칙은 [helper 안내서](helper/README.md)를
+참고하십시오.
+
 ## CLI 명령어
 
 1.0 CLI는 의도적으로 기능 범위를 작게 유지합니다. 빌드와 실행은 생성기가 아니라

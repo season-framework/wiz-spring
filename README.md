@@ -66,6 +66,38 @@ jsp
 
 Run `wiz-spring templates` to see the template descriptions.
 
+## Docker project helper
+
+[`helper/`](helper/README.md) provides an optional Docker-only HTTP wrapper around
+`wiz-spring create`. It accepts a project name, Java package, and template over HTTP
+and returns the generated project as a ZIP. The helper source and its template
+registry live outside Maven's `src/main` tree, so neither is included in
+`wiz-spring-1.0.0.jar`; the generator JAR is mounted read-only when the helper
+container starts.
+
+```bash
+./mvnw clean package
+docker compose -f helper/docker-compose.yaml up -d --build --wait
+
+curl --fail-with-body http://127.0.0.1:8080/
+
+curl --fail-with-body \
+  -X POST \
+  'http://127.0.0.1:8080/api/v1/projects?projectName=dashboard&packageName=com.example.dashboard&template=angular-wiz' \
+  -o dashboard.zip
+```
+
+`GET /` returns the registry default and each template's ID, base, and description.
+Project creation accepts JSON, form, or query-string input; use exactly one input
+format per request rather than mixing them. The [helper guide](helper/README.md)
+contains examples of all three formats.
+
+The helper image's build-time [`templates/registry.json`](helper/templates/registry.json)
+controls which templates are exposed. An entry can select one of the five built-in
+bases and optionally remove files or apply an overlay; omitting an entry removes that
+template from the image. See the [helper guide](helper/README.md) for custom-image
+examples, placeholder support, and path-safety rules.
+
 ## CLI commands
 
 The 1.0 CLI deliberately has a small surface. Building and running belong to each

@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "default": "company-react",
+  "templates": [
+    {
+      "id": "angular-wiz",
+      "base": "angular-wiz",
+      "description": "Angular with WIZ source layout"
+    },
+    {
+      "id": "angular",
+      "base": "angular",
+      "description": "Angular"
+    },
+    {
+      "id": "react",
+      "base": "react",
+      "description": "React"
+    },
+    {
+      "id": "html",
+      "base": "html",
+      "description": "Static HTML"
+    },
+    {
+      "id": "company-react",
+      "base": "react",
+      "description": "Company React starter",
+      "remove": [
+        "README.md"
+      ],
+      "overlay": "examples/company-react/overlay"
+    }
+  ]
+}
