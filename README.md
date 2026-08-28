@@ -1,295 +1,108 @@
-[English](README.md) | [한국어](README.ko.md)
-
 <div align="center">
 
 # WIZ Spring
 
-**Create a standard Spring backend with the frontend structure that fits the project.**
+**Generate a standard Spring Boot backend with the frontend structure your project needs.**
 
-Java 21 · Spring Boot 4 · Angular WIZ · Angular · React · HTML · JSP
+[![Release 1.0.0](https://img.shields.io/badge/release-1.0.0-2563eb)](release-log/1.0.0.md)
+[![Java 21+](https://img.shields.io/badge/Java-21%2B-e76f00)](pom.xml)
+[![MIT License](https://img.shields.io/badge/license-MIT-16a34a)](LICENSE)
+
+[English](README.md) · [한국어](README.ko.md)
 
 </div>
 
-`wiz-spring` 1.0.0 is a project generator and an optional systemd service manager. A
-generated project builds, watches, runs, and bundles itself with Maven and the scripts
-committed into the project. The generator JAR is needed only to create a project or to
-manage its service; it is not part of the build or application runtime.
+WIZ Spring is a project generator and optional systemd service manager for Spring Boot
+4 with Angular WIZ, Angular, React, HTML, or JSP. The generator JAR is needed only for
+project creation or service administration; the generated project owns its Maven,
+frontend, watch, build, bundle, and runtime workflows.
 
-No `.wiz` directory or private WIZ NPM build package is created.
+> [!IMPORTANT]
+> WIZ Spring 1.0 is a clean break from 0.2.x, including 0.2.8. It does not migrate a
+> legacy workspace in place. Read the [1.0 compatibility guide](docs/compatibility.md)
+> before moving an existing application.
 
-## Compatibility boundary with 0.2.x
+## Why WIZ Spring
 
-> **Important:** 1.0.0 is a clean break, not an in-place upgrade from the 0.2.x
-> line, including 0.2.8.
+- **Standard backend** — Java stays under `src/main/java` and builds directly with
+  Maven; there is no WIZ backend transformation or runtime dispatcher.
+- **Five frontend choices** — use a conventional frontend or keep the Angular WIZ
+  layout designed for fast human and AI editing.
+- **Standalone projects** — after `create`, builds need neither the generator JAR nor
+  an external WIZ NPM package. No `.wiz` directory is created.
+- **One delivery workflow** — every template provides watch, integrated build, bundle,
+  Docker Compose, Nginx/Apache2, and optional systemd service support.
 
-WIZ Spring 1.0.0 does not automatically detect, convert, or migrate a 0.2.8
-workspace's WIZ backend transformation model, runtime configuration, build or bundle
-artifacts, or existing systemd units. Keep the matching 0.2.8 runtime and tooling for
-an existing project, or create a new 1.0 project and port the code manually into the
-standard Spring and selected frontend layouts. Do not use the 1.0
-`create`/import/`service` commands as a direct upgrade path for a 0.2.8 workspace or
-bundle.
+## Quick start
 
-## Build the generator
-
-```bash
-./mvnw clean package
-alias wiz-spring='java -jar /absolute/path/to/wiz-spring/target/wiz-spring-1.0.0.jar'
-```
-
-## Create a project
-
-Angular WIZ is the default template.
-
-`create` verifies the complete local build toolchain before writing any project files:
-JDK 21 or newer, Node.js `^22.22.3 || ^24.15.0 || ^26.0.0`, and npm 10 or newer.
-Node.js releases outside the generated Angular toolchain's supported major and patch
-ranges are rejected even when their numeric version is newer.
-
-```bash
-wiz-spring create ../dashboard --package com.example.dashboard
-
-wiz-spring create ../site \
-  --package com.example.site \
-  --template react
-```
-
-Available templates:
-
-```text
-angular-wiz (default)
-angular
-react
-html
-jsp
-```
-
-Run `wiz-spring templates` to see the template descriptions.
-
-## Docker project helper
-
-[`helper/`](helper/README.md) provides an optional Docker-only HTTP wrapper around
-`wiz-spring create`. It accepts a project name, Java package, and template over HTTP
-and returns the generated project as a ZIP. The helper source and its template
-registry live outside Maven's `src/main` tree, so neither is included in
-`wiz-spring-1.0.0.jar`; the generator JAR is mounted read-only when the helper
-container starts.
+Requirements: full JDK 21+, Node.js `^22.22.3 || ^24.15.0 || ^26.0.0`, and npm 10+.
 
 ```bash
 ./mvnw clean package
-docker compose -f helper/docker-compose.yaml up -d --build --wait
 
-curl --fail-with-body http://127.0.0.1:8080/
+java -jar target/wiz-spring-1.0.0.jar create ../dashboard \
+  --package com.example.dashboard
 
-curl --fail-with-body \
-  -X POST \
-  'http://127.0.0.1:8080/api/v1/projects?projectName=dashboard&packageName=com.example.dashboard&template=angular-wiz' \
-  -o dashboard.zip
-```
-
-`GET /` returns the registry default and each template's ID, base, and description.
-Project creation accepts JSON, form, or query-string input; use exactly one input
-format per request rather than mixing them. The [helper guide](helper/README.md)
-contains examples of all three formats.
-
-The helper image's build-time [`templates/registry.json`](helper/templates/registry.json)
-controls which templates are exposed. An entry can select one of the five built-in
-bases and optionally remove files or apply an overlay; omitting an entry removes that
-template from the image. See the [helper guide](helper/README.md) for custom-image
-examples, placeholder support, and path-safety rules.
-
-## CLI commands
-
-The 1.0 CLI deliberately has a small surface. Building and running belong to each
-generated project rather than to the generator.
-
-| Command | Description |
-| --- | --- |
-| `create <path> --package <package> [--template <template>]` | Create a standalone Spring project. |
-| `templates` | List available frontend templates. |
-| `service <subcommand>` | Install and manage a generated bundle as a systemd service. |
-| `completion <bash\|zsh>` | Print a shell completion script. |
-
-Use the CLI itself for the complete option list:
-
-```bash
-wiz-spring --help
-wiz-spring create --help
-wiz-spring service --help
-```
-
-Enable completion in the current shell with one of these commands:
-
-```bash
-# Bash
-source <(wiz-spring completion bash)
-
-# Zsh
-source <(wiz-spring completion zsh)
-```
-
-## Generated-project commands
-
-```bash
+cd ../dashboard
 npm ci
-npm run frontend:build
-npm run backend:build       # equivalent to Maven clean package
-npm run build               # backend + frontend
-npm run dev                 # Spring + backend compile watcher + frontend watcher
-npm run bundle
+npm run dev
 ```
 
-Angular WIZ also exposes explicit frontend commands:
+`angular-wiz` is the default template. Add `--template react` or another template ID
+to select a different frontend. The target directory name is normalized into a
+lowercase Maven/npm artifact ID, so project names can contain `-`; Java package
+segments cannot because they must be valid Java identifiers.
+
+## Templates
+
+| ID | Best fit |
+| --- | --- |
+| `angular-wiz` | Angular with the embedded WIZ source layout and compiler; default |
+| `angular` | Standard Angular application |
+| `react` | React application built with Vite |
+| `html` | Static HTML, CSS, and JavaScript |
+| `jsp` | Server-rendered Spring MVC/JSP application |
+
+Run `java -jar target/wiz-spring-1.0.0.jar templates` for the built-in descriptions.
+
+## Generated workflow
 
 ```bash
-npm run wizbuild
-npm run wizwatch
+npm run dev       # Spring + backend compile watcher + frontend watcher
+npm run build     # clean backend and frontend build
+npm run bundle    # deployable artifact, proxy configs, Compose, checksums
 ```
 
-The WIZ compiler is committed as `scripts/wizbuild.mjs` and `scripts/wiz/*.mjs`.
-After a Git clone it needs only the lockfile dependencies; no `wiz-spring` JAR and no
-external WIZ build package are involved.
+Every template also exposes `frontend:build` and `backend:build`. Angular WIZ adds
+`wizbuild` and `wizwatch`; its compiler is committed into the generated project.
 
-The committed Maven Wrapper builds the backend directly:
+## CLI
 
-```bash
-./mvnw clean package
-```
+| Command | Purpose |
+| --- | --- |
+| `create` | Create a new project or import compatible 1.0 source. |
+| `templates` | List frontend templates. |
+| `service` | Install and manage a generated bundle with systemd. |
+| `completion` | Generate Bash or Zsh completion. |
 
-## Backend and API paths
+Use `<command> --help` for the complete options.
 
-Generated backend code is ordinary Maven/Spring source under `src/main/java`. There is
-no source relocation, runtime Java compilation, reflective app dispatcher, or
-frontend-metadata-based API generation.
+## HTTP project helper
 
-Controllers omit the global prefix:
+The optional [Docker project helper](helper/README.md) exposes project generation over
+HTTP and returns a ZIP. Its build-time registry can add, customize, or remove templates
+without packaging the helper into `wiz-spring-1.0.0.jar`.
 
-```java
-@ApiController("/dashboard")
-public class DashboardController {
-    @GetMapping
-    public DashboardResponse dashboard() { /* ... */ }
-}
-```
+## Documentation
 
-The generated Spring MVC configuration applies the prefix centrally:
-
-```yaml
-app:
-  api:
-    prefix: ${APP_API_PREFIX:/api}
-```
-
-This maps the example to `/api/dashboard`. Setting `APP_API_PREFIX=/api/v2` maps it to
-`/api/v2/dashboard` without editing the controller. Optional Spring path versioning is
-configured under `app.api.versioning` for simultaneous versions and requires a
-`default-version`. The frontend reads the resolved client prefix from
-`/app-config.json` at runtime.
-
-### Fresh-project sample
-
-A newly generated project is a usable reference application rather than a one-endpoint
-placeholder. Its standard Spring backend includes session login with BCrypt, five seeded
-members, post search and CRUD, profile/password changes, dashboard statistics, persisted
-H2 data, chat history, and an SSE chat stream. Every frontend template exposes the same
-responsive login, dashboard, members, posts, profile, chat, and light/dark-theme flow.
-
-```text
-admin@example.com / admin1234
-```
-
-The sample source and its tests are injected only for a fresh project. `--uri` and
-`--path` imports receive the selected build/API-prefix infrastructure without having
-demo controllers or screens mixed into existing application source.
-
-Imports must already use the selected 1.0 frontend layout: `src/app/` for Angular WIZ,
-`frontend/src/{index.html,main.ts,styles.css}` for Angular, `frontend/index.html` plus
-`frontend/src/` for React, `frontend/index.html` for HTML, or
-`src/main/webapp/WEB-INF/jsp/` for JSP. A mismatch fails before the target is published;
-the generator does not guess or relocate legacy layouts.
-In particular, `--path` and `--uri` imports are not migration commands for 0.2.8
-projects.
-
-## Frontend identification
-
-Generated `package.json` contains `wiz.frontend`. Tools use that explicit value first,
-then fall back to standard project evidence such as `angular.json`, React dependencies,
-or `src/main/webapp/WEB-INF` for JSP. A metadata/layout mismatch fails instead of
-silently selecting another builder.
-
-Angular WIZ retains the source layout designed for human and AI editing:
-
-```text
-src/app/
-src/portal/
-src/route/
-src/angular/
-```
-
-Only frontend files live there. Java belongs under `src/main/java`.
-
-## Bundle and containers
-
-`npm run bundle` performs a clean backend/frontend build and publishes an atomic bundle:
-
-```text
-bundle/
-├── app/application.jar     # application.war for JSP
-├── public/
-├── config/
-├── deploy/
-│   ├── nginx/
-│   ├── apache2/
-│   └── docker/
-├── docker-compose.yaml
-├── manifest.json
-└── SHA256SUMS
-```
-
-Run one proxy profile:
-
-```bash
-docker compose --profile nginx up -d
-docker compose --profile apache2 up -d
-```
-
-JSP uses an executable WAR because Spring Boot does not support JSP in an executable
-JAR. The other templates generate an executable JAR and an independent frontend tree.
-
-## systemd service
-
-```bash
-wiz-spring service install dashboard \
-  --bundle /srv/dashboard/bundle \
-  --user dashboard
-```
-
-The installed unit executes the bundle artifact directly and is enabled with systemd.
-It continues to start after reboot even if the generator JAR is no longer installed.
-The default Spring profiles are `prod,bundle`, service output goes to journald, and
-`--profiles` can override the active profile list. For safety, a root-owned bundle
-requires either a non-root `--user` or the explicit `--allow-root` acknowledgement.
-`list`, `status`, `logs`, `start`, `stop`, `restart`, and `uninstall` are available.
-
-## AI instructions
-
-Every generated project receives the common instruction set and exactly one frontend
-instruction file. These are the authoritative source and generated-project locations:
-
-| Scope | Generator source | Generated project |
-| --- | --- | --- |
-| Root project contract | [`project-common/AGENTS.md`](src/main/resources/wiz/templates/project-common/AGENTS.md) | `AGENTS.md` |
-| Copilot entry point | [`project-common/.github/copilot-instructions.md`](src/main/resources/wiz/templates/project-common/.github/copilot-instructions.md) | `.github/copilot-instructions.md` |
-| Spring backend | [`project-common/docs/ai/backend-spring.md`](src/main/resources/wiz/templates/project-common/docs/ai/backend-spring.md) | `docs/ai/backend-spring.md` |
-| Build and deployment | [`project-common/docs/ai/deployment.md`](src/main/resources/wiz/templates/project-common/docs/ai/deployment.md) | `docs/ai/deployment.md` |
-| Angular WIZ frontend | [`project-angular-wiz/docs/ai/frontend.md`](src/main/resources/wiz/templates/project-angular-wiz/docs/ai/frontend.md) | `docs/ai/frontend.md` |
-| Angular frontend | [`project-angular/docs/ai/frontend.md`](src/main/resources/wiz/templates/project-angular/docs/ai/frontend.md) | `docs/ai/frontend.md` |
-| React frontend | [`project-react/docs/ai/frontend.md`](src/main/resources/wiz/templates/project-react/docs/ai/frontend.md) | `docs/ai/frontend.md` |
-| HTML frontend | [`project-html/docs/ai/frontend.md`](src/main/resources/wiz/templates/project-html/docs/ai/frontend.md) | `docs/ai/frontend.md` |
-| JSP frontend | [`project-jsp/docs/ai/frontend.md`](src/main/resources/wiz/templates/project-jsp/docs/ai/frontend.md) | `docs/ai/frontend.md` |
-
-The chosen frontend overlay supplies `docs/ai/frontend.md`; the other frontend guides
-are not copied. No project-local MCP runtime is configured.
+| Guide | Contents |
+| --- | --- |
+| [Project generation](docs/project-generation.md) | Requirements, templates, imports, sample application, and CLI |
+| [Build and deployment](docs/build-and-deployment.md) | Project scripts, API prefixes, bundles, Compose, and systemd |
+| [1.0 compatibility](docs/compatibility.md) | The supported transition from 0.2.x |
+| [AI instructions](docs/ai-instructions.md) | Common and template-specific instruction sources |
+| [HTTP helper](helper/README.md) | API usage, custom registries, and container operations |
+| [Release notes](release-log/README.md) | Version history |
 
 ## Development
 
@@ -297,10 +110,8 @@ are not copied. No project-local MCP runtime is configured.
 ./mvnw test
 ```
 
-The generator tests create each template in a temporary directory. Before a release,
-also smoke-test the generated Maven project, selected frontend build, and bundle
-validation.
+Tests generate every frontend template in disposable directories. Helper-specific
+checks are documented in the [helper operations guide](helper/docs/operations.md).
 
-## License
-
-WIZ Spring is licensed under the [MIT License](LICENSE).
+Bugs and feature requests are tracked in [GitHub Issues](https://github.com/season-framework/wiz-spring/issues).
+WIZ Spring is available under the [MIT License](LICENSE).
