@@ -21,7 +21,7 @@ Build the generator from source:
 
 ```bash
 ./mvnw clean package
-alias wiz-spring='java -jar /absolute/path/to/wiz-spring/target/wiz-spring-1.1.0.jar'
+alias wiz-spring='java -jar /absolute/path/to/wiz-spring/target/wiz-spring-1.1.1.jar'
 ```
 
 ## CLI

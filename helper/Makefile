@@ -1,5 +1,5 @@
 GO ?= go
-WIZ_SPRING_JAR ?= ../target/wiz-spring-1.1.0.jar
+WIZ_SPRING_JAR ?= ../target/wiz-spring-1.1.1.jar
 
 .PHONY: check-jar verify-jar-boundary fmt test test-container build run e2e e2e-custom e2e-custom-server docker-build docker-up docker-down
 

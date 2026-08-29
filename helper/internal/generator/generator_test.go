@@ -159,7 +159,7 @@ func fakeJava(t *testing.T, workspace string, slow bool) string {
 	}
 	script := "#!/bin/sh\n" +
 		"for value in \"$@\"; do\n" +
-		"  if [ \"$value\" = \"--version\" ]; then echo 'normal JVM notice' >&2; echo 'wiz-spring 1.1.0'; exit 0; fi\n" +
+		"  if [ \"$value\" = \"--version\" ]; then echo 'normal JVM notice' >&2; echo 'wiz-spring 1.1.1'; exit 0; fi\n" +
 		"done\n" +
 		sleep +
 		"previous=''\n" +

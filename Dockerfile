@@ -3,7 +3,7 @@
 ARG MAVEN_IMAGE=maven:3.9.15-eclipse-temurin-25-noble
 ARG JAVA_IMAGE=eclipse-temurin:25-jdk-noble
 ARG NODE_IMAGE=node:24.20.0-bookworm-slim
-ARG WIZ_VERSION=1.1.0
+ARG WIZ_VERSION=1.1.1
 
 FROM ${NODE_IMAGE} AS node-toolchain
 

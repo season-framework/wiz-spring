@@ -182,7 +182,7 @@ func loadSettings() (settings, error) {
 	return settings{
 		address:           environment("WIZ_HELPER_ADDR", "127.0.0.1:8080"),
 		javaBinary:        environment("WIZ_HELPER_JAVA_BIN", "java"),
-		jarPath:           environment("WIZ_SPRING_JAR", "../target/wiz-spring-1.1.0.jar"),
+		jarPath:           environment("WIZ_SPRING_JAR", "../target/wiz-spring-1.1.1.jar"),
 		jarSHA256:         strings.TrimSpace(os.Getenv("WIZ_SPRING_SHA256")),
 		workDirectory:     strings.TrimSpace(os.Getenv("WIZ_HELPER_WORK_DIR")),
 		maxConcurrent:     maxConcurrent,

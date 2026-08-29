@@ -6,7 +6,7 @@
 
     <groupId>com.wiz</groupId>
     <artifactId>wiz-spring</artifactId>
-    <version>1.1.0</version>
+    <version>1.1.1</version>
     <name>wiz-spring</name>
     <description>Standalone Spring project generator and systemd service manager</description>
 

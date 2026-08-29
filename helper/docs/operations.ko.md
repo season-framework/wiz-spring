@@ -12,7 +12,7 @@ binary, full JDK 25, Node.js `24.20.0`, npm, immutable template bundle 하나를
 client
   │
   ▼
-HTTP 검증 ── 동시성 gate ── wiz-spring 1.1.0 JAR
+HTTP 검증 ── 동시성 gate ── wiz-spring 1.1.1 JAR
                                       │
                                       ▼
                                base 프로젝트 생성
@@ -26,7 +26,7 @@ HTTP 검증 ── 동시성 gate ── wiz-spring 1.1.0 JAR
 
 Generator JAR는 의도적으로 helper 이미지에 넣지 않으며 helper source와 asset은
 배포되는 WIZ Spring JAR에 넣지 않습니다. Compose는
-`target/wiz-spring-1.1.0.jar`를 읽기 전용으로
+`target/wiz-spring-1.1.1.jar`를 읽기 전용으로
 `/opt/wiz-source/wiz-spring.jar`에 mount합니다. 시작할 때 entrypoint가 container
 tmpfs로 복사한 뒤 UID/GID `10001`로 서비스를 실행합니다.
 
@@ -61,7 +61,7 @@ docker compose -f helper/docker-compose.yaml down
 ```bash
 docker build \
   -f helper/Dockerfile \
-  -t wiz-spring-helper:1.1.0 \
+  -t wiz-spring-helper:1.1.1 \
   helper
 ```
 
@@ -98,7 +98,7 @@ Go 서비스를 직접 개발할 때도 다음 변수를 사용할 수 있습니
 | 변수 | Process 기본값 | 설명 |
 | --- | --- | --- |
 | `WIZ_HELPER_ADDR` | `127.0.0.1:8080` | Listen address, image/Compose는 `0.0.0.0:8080` 사용 |
-| `WIZ_SPRING_JAR` | `../target/wiz-spring-1.1.0.jar` | Go process가 사용하는 generator 경로 |
+| `WIZ_SPRING_JAR` | `../target/wiz-spring-1.1.1.jar` | Go process가 사용하는 generator 경로 |
 | `WIZ_SPRING_SOURCE_JAR` | `/opt/wiz-source/wiz-spring.jar` | Container entrypoint의 읽기 전용 source mount |
 | `WIZ_SPRING_SHA256` | 비어 있음 | 선택적인 64자 hexadecimal checksum |
 | `WIZ_HELPER_JAVA_BIN` | `java` | Java executable |
@@ -117,7 +117,7 @@ Helper는 listener를 열기 전에 다음을 수행합니다.
 
 1. Stage된 registry와 overlay를 검증합니다.
 2. 선택적으로 JAR SHA-256을 확인합니다.
-3. `java -jar ... --version` 결과가 정확히 `wiz-spring 1.1.0`인지 확인합니다.
+3. `java -jar ... --version` 결과가 정확히 `wiz-spring 1.1.1`인지 확인합니다.
 4. 등록된 template마다 폐기 가능한 프로젝트를 생성, customize, 압축 및 정리합니다.
 
 Template 또는 필요한 toolchain이 하나라도 잘못되면 시작에 실패합니다. `/healthz`는
@@ -127,7 +127,7 @@ process liveness를 반환하며 Docker healthcheck는 시작 probe를 통과한
 Generator artifact를 고정하려면 다음을 실행합니다.
 
 ```bash
-sha256sum target/wiz-spring-1.1.0.jar
+sha256sum target/wiz-spring-1.1.1.jar
 # 64자 값을 WIZ_SPRING_SHA256에 설정합니다.
 ```
 
@@ -196,7 +196,7 @@ make -C helper e2e-custom
 ```
 
 Host에서 직접 개발하려면 Go `1.24`, full JDK 25 이상, 지원되는 Node.js/npm,
-`target/wiz-spring-1.1.0.jar`가 필요합니다.
+`target/wiz-spring-1.1.1.jar`가 필요합니다.
 
 ```bash
 make -C helper test

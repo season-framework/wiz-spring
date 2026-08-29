@@ -4,7 +4,7 @@ services:
       context: .
       args:
         WIZ_HELPER_TEMPLATE_FILE: ${WIZ_HELPER_TEMPLATE_FILE:-registry.json}
-    image: wiz-spring-helper:1.1.0
+    image: wiz-spring-helper:1.1.1
     environment:
       WIZ_HELPER_ADDR: 0.0.0.0:8080
       WIZ_HELPER_MAX_CONCURRENT: ${WIZ_HELPER_MAX_CONCURRENT:-2}
@@ -13,7 +13,7 @@ services:
       WIZ_SPRING_SOURCE_JAR: /opt/wiz-source/wiz-spring.jar
       WIZ_SPRING_SHA256: ${WIZ_SPRING_SHA256:-}
     volumes:
-      - ../target/wiz-spring-1.1.0.jar:/opt/wiz-source/wiz-spring.jar:ro
+      - ../target/wiz-spring-1.1.1.jar:/opt/wiz-source/wiz-spring.jar:ro
     ports:
       - "127.0.0.1:${WIZ_HELPER_PORT:-8080}:8080"
     read_only: true

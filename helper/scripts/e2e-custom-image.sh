@@ -4,8 +4,8 @@ set -eu
 script_directory="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 helper_directory="$(CDPATH= cd -- "$script_directory/.." && pwd)"
 repository_directory="$(CDPATH= cd -- "$helper_directory/.." && pwd)"
-jar_path="${WIZ_SPRING_JAR:-$repository_directory/target/wiz-spring-1.1.0.jar}"
-image="${WIZ_HELPER_CUSTOM_TEST_IMAGE:-wiz-spring-helper:1.1.0-custom-e2e}"
+jar_path="${WIZ_SPRING_JAR:-$repository_directory/target/wiz-spring-1.1.1.jar}"
+image="${WIZ_HELPER_CUSTOM_TEST_IMAGE:-wiz-spring-helper:1.1.1-custom-e2e}"
 container_name="wiz-spring-helper-custom-e2e-$$"
 
 if [ ! -f "$jar_path" ]; then

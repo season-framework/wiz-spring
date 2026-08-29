@@ -4,7 +4,7 @@
 
 **Generate a standard Spring Boot backend with the frontend structure your project needs.**
 
-[![Release 1.1.0](https://img.shields.io/badge/release-1.1.0-2563eb)](release-log/1.1.0.md)
+[![Release 1.1.1](https://img.shields.io/badge/release-1.1.1-2563eb)](release-log/1.1.1.md)
 [![Java 25+](https://img.shields.io/badge/Java-25%2B-e76f00)](pom.xml)
 [![MIT License](https://img.shields.io/badge/license-MIT-16a34a)](LICENSE)
 
@@ -42,7 +42,7 @@ Requirements: full JDK 25+, Node.js `^22.22.3 || ^24.15.0` (LTS only), and npm 1
 ```bash
 ./mvnw clean package
 
-java -jar target/wiz-spring-1.1.0.jar create ../dashboard \
+java -jar target/wiz-spring-1.1.1.jar create ../dashboard \
   --package com.example.dashboard
 
 cd ../dashboard
@@ -65,7 +65,7 @@ segments cannot because they must be valid Java identifiers.
 | `html` | Static HTML, CSS, and JavaScript |
 | `jsp` | Server-rendered Spring MVC/JSP application |
 
-Run `java -jar target/wiz-spring-1.1.0.jar templates` for the built-in descriptions.
+Run `java -jar target/wiz-spring-1.1.1.jar templates` for the built-in descriptions.
 
 ## Generated workflow
 
@@ -93,7 +93,7 @@ Use `<command> --help` for the complete options.
 
 The optional [Docker project helper](helper/README.md) exposes project generation over
 HTTP and returns a ZIP. Its build-time registry can add, customize, or remove templates
-without packaging the helper into `wiz-spring-1.1.0.jar`.
+without packaging the helper into `wiz-spring-1.1.1.jar`.
 
 ## Documentation
 
