@@ -5,7 +5,7 @@
 **Generate a standard Spring Boot backend with the frontend structure your project needs.**
 
 [![Release 1.1.0](https://img.shields.io/badge/release-1.1.0-2563eb)](release-log/1.1.0.md)
-[![Java 21+](https://img.shields.io/badge/Java-21%2B-e76f00)](pom.xml)
+[![Java 25+](https://img.shields.io/badge/Java-25%2B-e76f00)](pom.xml)
 [![MIT License](https://img.shields.io/badge/license-MIT-16a34a)](LICENSE)
 
 [English](README.md) · [한국어](README.ko.md)
@@ -37,7 +37,7 @@ frontend, watch, build, bundle, and runtime workflows.
 
 ## Quick start
 
-Requirements: full JDK 21+, Node.js `^22.22.3 || ^24.15.0 || ^26.0.0`, and npm 10+.
+Requirements: full JDK 25+, Node.js `^22.22.3 || ^24.15.0` (LTS only), and npm 10+.
 
 ```bash
 ./mvnw clean package
@@ -110,10 +110,13 @@ without packaging the helper into `wiz-spring-1.1.0.jar`.
 
 ```bash
 ./mvnw test
+scripts/verify-templates.sh
 ```
 
 Tests generate every frontend template in disposable directories. Helper-specific
 checks are documented in the [helper operations guide](helper/docs/operations.md).
+The template verification script installs, audits, tests, builds, and bundles all five
+generated templates; it requires the same JDK and Node.js toolchain as generated projects.
 
 Bugs and feature requests are tracked in [GitHub Issues](https://github.com/season-framework/wiz-spring/issues).
 WIZ Spring is available under the [MIT License](LICENSE).

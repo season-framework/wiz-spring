@@ -99,7 +99,7 @@ Form fields must occur no more than once. Unknown fields are rejected.
 | Field | Required | Rules |
 | --- | --- | --- |
 | `projectName` | Yes | 1–64 lowercase ASCII characters; starts and ends with a letter or digit; `.`, `_`, and `-` allowed inside |
-| `packageName` | Yes | 1–255 characters; dot-separated ASCII Java 21 identifiers; Java keywords and the `java` namespace are rejected |
+| `packageName` | Yes | 1–255 characters; dot-separated ASCII Java 25 identifiers; Java keywords and the `java` namespace are rejected |
 | `template` | No | 1–64 character lowercase ASCII slug registered in the image; omitted means the registry default |
 
 A project name may contain a hyphen. A Java package segment may not, because a

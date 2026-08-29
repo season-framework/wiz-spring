@@ -1,4 +1,4 @@
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:25-jre
 
 ARG APP_ARTIFACT=application.__WIZ_ARTIFACT_TYPE__
 RUN apt-get update \

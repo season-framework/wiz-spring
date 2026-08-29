@@ -3,7 +3,7 @@
 [English](operations.md) | [한국어](operations.ko.md) · [Helper README](../README.md)
 
 Supported deployments run the helper as a disposable Docker workload. The
-image supplies the HTTP binary, full JDK 21, Node.js `24.15.0`, npm, and one
+image supplies the HTTP binary, full JDK 25, Node.js `24.20.0`, npm, and one
 immutable template bundle. The WIZ Spring generator JAR is supplied separately.
 
 ## Runtime model
@@ -202,7 +202,7 @@ Build and exercise the example custom image in an isolated temporary container:
 make -C helper e2e-custom
 ```
 
-Host-side development requires Go `1.24`, full JDK 21 or newer, supported
+Host-side development requires Go `1.24`, full JDK 25 or newer, supported
 Node.js/npm, and `target/wiz-spring-1.1.0.jar`:
 
 ```bash

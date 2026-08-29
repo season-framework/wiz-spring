@@ -3,7 +3,7 @@
 [English](operations.md) | [한국어](operations.ko.md) · [Helper README](../README.ko.md)
 
 지원되는 배포에서는 helper를 폐기 가능한 Docker workload로 실행합니다. 이미지는 HTTP
-binary, full JDK 21, Node.js `24.15.0`, npm, immutable template bundle 하나를
+binary, full JDK 25, Node.js `24.20.0`, npm, immutable template bundle 하나를
 제공합니다. WIZ Spring generator JAR는 별도로 공급합니다.
 
 ## Runtime 구조
@@ -195,7 +195,7 @@ Example custom 이미지를 빌드하고 격리된 임시 container에서 검증
 make -C helper e2e-custom
 ```
 
-Host에서 직접 개발하려면 Go `1.24`, full JDK 21 이상, 지원되는 Node.js/npm,
+Host에서 직접 개발하려면 Go `1.24`, full JDK 25 이상, 지원되는 Node.js/npm,
 `target/wiz-spring-1.1.0.jar`가 필요합니다.
 
 ```bash

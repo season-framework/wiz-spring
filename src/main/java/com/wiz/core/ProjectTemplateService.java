@@ -218,13 +218,13 @@ public final class ProjectTemplateService {
             throw new IllegalArgumentException("Java package root must not use the java namespace");
         }
         for (String segment : value.split("\\.", -1)) {
-            if (SourceVersion.isKeyword(segment, SourceVersion.RELEASE_21)) {
+            if (SourceVersion.isKeyword(segment, SourceVersion.RELEASE_25)) {
                 throw new IllegalArgumentException(
-                        "Java package root must not contain a Java 21 keyword: " + segment);
+                        "Java package root must not contain a Java 25 keyword: " + segment);
             }
             if (!SourceVersion.isIdentifier(segment)) {
                 throw new IllegalArgumentException(
-                        "Java package root must contain only Java 21 identifiers");
+                        "Java package root must contain only Java 25 identifiers");
             }
         }
         return value;
@@ -702,7 +702,8 @@ public final class ProjectTemplateService {
         LinkedHashMap<String, Object> imported = readPackageJson(Files.readAllBytes(packageJson), packageJson.toString());
 
         for (Map.Entry<String, Object> entry : overlay.entrySet()) {
-            if (!Set.of("wiz", "scripts", "dependencies", "devDependencies").contains(entry.getKey())) {
+            if (!Set.of("wiz", "scripts", "dependencies", "devDependencies", "allowScripts")
+                    .contains(entry.getKey())) {
                 imported.putIfAbsent(entry.getKey(), entry.getValue());
             }
         }
@@ -721,6 +722,17 @@ public final class ProjectTemplateService {
             importedScripts.put(script.getKey(), script.getValue());
         }
         imported.put("scripts", importedScripts);
+
+        LinkedHashMap<String, Object> importedAllowScripts = mutableObject(
+                imported.get("allowScripts"), "imported package.json field 'allowScripts'");
+        Map<String, Object> overlayAllowScripts = optionalObject(
+                overlay.get("allowScripts"), "embedded package.json field 'allowScripts'");
+        for (Map.Entry<String, Object> approval : overlayAllowScripts.entrySet()) {
+            importedAllowScripts.putIfAbsent(approval.getKey(), approval.getValue());
+        }
+        if (!importedAllowScripts.isEmpty() || imported.containsKey("allowScripts")) {
+            imported.put("allowScripts", importedAllowScripts);
+        }
 
         LinkedHashMap<String, Object> importedDependencies = mutableObject(
                 imported.get("dependencies"), "imported package.json field 'dependencies'");

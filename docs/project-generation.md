@@ -8,8 +8,8 @@ committed into the generated repository.
 
 ## Requirements
 
-- A full JDK 21 or newer, including `javac`
-- Node.js `^22.22.3 || ^24.15.0 || ^26.0.0`
+- A full JDK 25 or newer, including `javac`
+- Node.js `^22.22.3 || ^24.15.0` (LTS releases only)
 - npm 10 or newer
 - Git on `PATH` when importing with `--uri`
 
@@ -56,7 +56,7 @@ the source layout instead of silently choosing another builder.
 
 The target directory name is lowercased to form the Maven/npm artifact ID. Runs of
 characters outside `[a-z0-9_.-]` become `-`, and leading or trailing separators are
-removed. A Java package is made of Java 21 identifiers, so a package segment cannot
+removed. A Java package is made of Java 25 identifiers, so a package segment cannot
 contain `-` and cannot be a Java keyword or use the `java` namespace.
 
 ## Creating a new project

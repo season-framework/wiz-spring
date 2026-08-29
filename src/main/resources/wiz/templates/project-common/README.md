@@ -5,8 +5,8 @@ The generated project has no runtime dependency on `wiz-spring`.
 
 ## Requirements
 
-- JDK 21 or newer (a full JDK with `javac`)
-- Node.js `^22.22.3 || ^24.15.0 || ^26.0.0`
+- JDK 25 or newer (a full JDK with `javac`)
+- Node.js `^22.22.3 || ^24.15.0` (LTS releases only)
 - npm 10 or newer
 
 The generator checks these tools before project creation. The same requirements remain
@@ -63,7 +63,10 @@ password: admin1234
 
 The sample API covers session login/logout, dashboard statistics, member management,
 post search and CRUD, profile/password updates, chat history, and an SSE chat stream.
-Open `/swagger-ui` for the generated contract. Important routes are:
+Under the default `dev` profile, open `/swagger-ui` for the generated contract.
+The `prod` profile disables API docs and Swagger UI unless
+`SPRINGDOC_API_DOCS_ENABLED=true` and `SPRINGDOC_SWAGGER_UI_ENABLED=true` are set.
+Important routes are:
 
 - `/api/auth/session`, `/api/auth/login`, `/api/auth/logout`
 - `/api/dashboard`

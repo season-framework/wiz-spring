@@ -152,7 +152,7 @@ components:
           minLength: 1
           maxLength: 255
           pattern: '^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*$'
-          description: Conservative ASCII subset of Java 21 identifiers; Java keywords and the java namespace are rejected.
+          description: Conservative ASCII subset of Java 25 identifiers; Java keywords and the java namespace are rejected.
           examples: [kr.nanoha.testwiz]
         template:
           type: string

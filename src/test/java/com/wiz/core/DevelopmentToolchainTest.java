@@ -16,8 +16,8 @@ class DevelopmentToolchainTest {
 
     @Test
     void acceptsTheSupportedNodeLinesAndNpmTen() {
-        for (String node : List.of("v22.22.3", "v24.15.0", "v26.0.0", "v26.8.1")) {
-            DevelopmentToolchain toolchain = toolchain(21, true, node, "10.0.0");
+        for (String node : List.of("v22.22.3", "v22.23.2", "v24.15.0", "v24.20.0")) {
+            DevelopmentToolchain toolchain = toolchain(25, true, node, "10.0.0");
             DevelopmentToolchain.Report report = toolchain.verify();
 
             assertEquals(node.substring(1), report.nodeVersion());
@@ -28,10 +28,11 @@ class DevelopmentToolchainTest {
     @Test
     void rejectsUnsupportedNodeLinesAndBoundaryVersions() {
         for (String node : List.of(
-                "v22.22.2", "v23.9.0", "v24.14.9", "v25.0.0", "v27.0.0", "v28.0.0", "v24.15.0-rc.1")) {
+                "v22.22.2", "v23.9.0", "v24.14.9", "v25.0.0", "v26.0.0", "v26.8.1",
+                "v27.0.0", "v28.0.0", "v24.15.0-rc.1")) {
             IllegalStateException error = assertThrows(
                     IllegalStateException.class,
-                    () -> toolchain(21, true, node, "10.0.0").verify(),
+                    () -> toolchain(25, true, node, "10.0.0").verify(),
                     node);
 
             assertTrue(error.getMessage().contains("Node.js"), node);
@@ -60,7 +61,7 @@ class DevelopmentToolchainTest {
     void rejectsOldNpmAndMalformedVersionOutput() {
         IllegalStateException oldNpm = assertThrows(
                 IllegalStateException.class,
-                () -> toolchain(21, true, "v24.15.0", "9.99.9").verify());
+                () -> toolchain(25, true, "v24.15.0", "9.99.9").verify());
         assertTrue(oldNpm.getMessage().contains("npm 9.99.9 is too old"));
 
         IllegalStateException malformed = assertThrows(

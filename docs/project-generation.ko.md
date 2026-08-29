@@ -8,8 +8,8 @@ WIZ Spring은 선택한 프론트엔드 하나와 표준 Spring Boot 프로젝�
 
 ## 요구 사항
 
-- `javac`를 포함한 full JDK 21 이상
-- Node.js `^22.22.3 || ^24.15.0 || ^26.0.0`
+- `javac`를 포함한 full JDK 25 이상
+- Node.js `^22.22.3 || ^24.15.0`(LTS만 지원)
 - npm 10 이상
 - `--uri`로 import할 때 `PATH`에서 실행할 수 있는 Git
 
@@ -55,7 +55,7 @@ alias wiz-spring='java -jar /absolute/path/to/wiz-spring/target/wiz-spring-1.1.0
 
 Target directory 이름은 Maven/npm artifact ID를 만들 때 소문자로 변환합니다.
 `[a-z0-9_.-]` 이외의 연속 문자는 `-`로 바꾸고 앞뒤 separator는 제거합니다. Java
-package는 Java 21 identifier로 구성하므로 segment에 `-`를 사용할 수 없으며 Java
+package는 Java 25 identifier로 구성하므로 segment에 `-`를 사용할 수 없으며 Java
 keyword 또는 `java` namespace도 허용되지 않습니다.
 
 ## 새 프로젝트 생성

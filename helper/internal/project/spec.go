@@ -72,7 +72,7 @@ func Validate(projectName, packageName, template string) (Spec, error) {
 		if _, reserved := javaKeywords[part]; reserved {
 			return Spec{}, &ValidationError{
 				Field:   "packageName",
-				Message: fmt.Sprintf("packageName segment %q is reserved by Java 21", part),
+				Message: fmt.Sprintf("packageName segment %q is reserved by Java 25", part),
 			}
 		}
 	}

@@ -9,7 +9,7 @@ if [ ! -f "$generator_jar" ] || [ ! -r "$generator_jar" ] || [ ! -s "$generator_
     exit 1
 fi
 if ! command -v java >/dev/null 2>&1; then
-    printf 'Java was not found on PATH. WIZ Spring requires JDK 21 or newer.\n' >&2
+    printf 'Java was not found on PATH. WIZ Spring requires JDK 25 or newer.\n' >&2
     exit 1
 fi
 
@@ -21,12 +21,12 @@ if [ "$java_major" = "1" ]; then
 fi
 case "$java_major" in
     ''|*[!0-9]*)
-        printf 'Could not determine the Java version. WIZ Spring requires JDK 21 or newer.\n' >&2
+        printf 'Could not determine the Java version. WIZ Spring requires JDK 25 or newer.\n' >&2
         exit 1
         ;;
 esac
-if [ "$java_major" -lt 21 ]; then
-    printf 'Java %s is too old. WIZ Spring requires JDK 21 or newer.\n' "$java_version" >&2
+if [ "$java_major" -lt 25 ]; then
+    printf 'Java %s is too old. WIZ Spring requires JDK 25 or newer.\n' "$java_version" >&2
     exit 1
 fi
 exec java -jar "$generator_jar" "$@"

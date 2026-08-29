@@ -10,6 +10,9 @@ sha256sum -c SHA256SUMS
 Run the backend directly from this directory:
 
 Run `java -jar app/application.__WIZ_ARTIFACT_TYPE__ --spring.profiles.active=prod,bundle`.
+The production profile disables API docs and Swagger UI by default. Set
+`SPRINGDOC_API_DOCS_ENABLED=true` and `SPRINGDOC_SWAGGER_UI_ENABLED=true` only when
+those endpoints should be exposed.
 
 For a reverse proxy, copy `.env.example` to `.env`, then choose exactly one profile:
 

@@ -10,6 +10,8 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod,bundle
       APP_API_PREFIX: ${APP_API_PREFIX:-/api}
+      SPRINGDOC_API_DOCS_ENABLED: ${SPRINGDOC_API_DOCS_ENABLED:-false}
+      SPRINGDOC_SWAGGER_UI_ENABLED: ${SPRINGDOC_SWAGGER_UI_ENABLED:-false}
       SERVER_PORT: 8080
     expose:
       - "8080"

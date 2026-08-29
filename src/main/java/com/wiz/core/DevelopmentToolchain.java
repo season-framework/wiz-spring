@@ -21,8 +21,8 @@ import javax.tools.ToolProvider;
 /** Verifies the local build tools required by every generated project. */
 public final class DevelopmentToolchain {
 
-    public static final int MINIMUM_JAVA = 21;
-    public static final String NODE_REQUIREMENT = "^22.22.3 || ^24.15.0 || ^26.0.0";
+    public static final int MINIMUM_JAVA = 25;
+    public static final String NODE_REQUIREMENT = "^22.22.3 || ^24.15.0";
     public static final String NPM_REQUIREMENT = ">=10.0.0";
 
     private static final Duration COMMAND_TIMEOUT = Duration.ofSeconds(5);
@@ -126,7 +126,7 @@ public final class DevelopmentToolchain {
         if (version.major() == 24) {
             return version.compareTo(new Version(24, 15, 0, null)) >= 0;
         }
-        return version.major() == 26;
+        return false;
     }
 
     private static JavaInstallation currentJava() {

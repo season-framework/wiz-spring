@@ -110,11 +110,14 @@ class ProjectTemplateCommandTest {
             String pom = Files.readString(target.resolve("pom.xml"));
             assertTrue(packageJson.contains("\"version\": \"1.1.0\""), template.id());
             assertTrue(packageJson.contains("\"frontend\": \"" + template.id() + "\""), template.id());
-            assertTrue(packageJson.contains("\"node\": \"^22.22.3 || ^24.15.0 || ^26.0.0\""), template.id());
+            assertTrue(packageJson.contains("\"node\": \"^22.22.3 || ^24.15.0\""), template.id());
             assertTrue(packageJson.contains("\"npm\": \">=10.0.0\""), template.id());
-            assertTrue(packageLock.contains("\"node\": \"^22.22.3 || ^24.15.0 || ^26.0.0\""), template.id());
+            assertTrue(packageLock.contains("\"node\": \"^22.22.3 || ^24.15.0\""), template.id());
             assertTrue(packageLock.contains("\"npm\": \">=10.0.0\""), template.id());
             assertTrue(pom.contains("<version>1.1.0</version>"), template.id());
+            assertTrue(pom.contains("<version>4.1.1</version>"), template.id());
+            assertTrue(pom.contains("<java.version>25</java.version>"), template.id());
+            assertTrue(pom.contains("<springdoc.version>3.1.0</springdoc.version>"), template.id());
             String archiveType = template == com.wiz.core.FrontendTemplate.JSP ? "war" : "jar";
             assertTrue(Files.readString(target.resolve("docker-compose.yaml"))
                     .contains("${APP_ARTIFACT:-application." + archiveType + "}"), template.id());
@@ -122,6 +125,8 @@ class ProjectTemplateCommandTest {
                     .contains("APP_ARTIFACT=application." + archiveType), template.id());
             assertTrue(Files.readString(target.resolve("deploy/docker/backend.Dockerfile"))
                     .contains("ARG APP_ARTIFACT=application." + archiveType), template.id());
+            assertTrue(Files.readString(target.resolve("deploy/docker/backend.Dockerfile"))
+                    .contains("FROM eclipse-temurin:25-jre"), template.id());
             assertFalse(Files.exists(target.resolve(".wiz")), template.id());
             assertFalse(Files.exists(target.resolve("config/wiz.yml")), template.id());
             assertTrue(Files.readString(target.resolve(".github/copilot-instructions.md"))
@@ -323,6 +328,11 @@ class ProjectTemplateCommandTest {
                     "--path", source.toString()), template.getKey());
 
             assertFalse(Files.readString(target.resolve("pom.xml")).contains("original Maven build"));
+            if (template.getKey().startsWith("angular")) {
+                String packageJson = Files.readString(target.resolve("package.json"));
+                assertTrue(packageJson.contains("\"esbuild@0.28.2\" : true"), template.getKey());
+                assertTrue(packageJson.contains("\"@parcel/watcher@2.6.0\" : true"), template.getKey());
+            }
             assertEquals("original Maven build\n", Files.readString(
                     target.resolve("replaced-originals/wiz-spring-import/pom.xml")));
             assertEquals("original Maven build\n", Files.readString(source.resolve("pom.xml")));
@@ -362,7 +372,7 @@ class ProjectTemplateCommandTest {
             public <K> K create(Class<K> type) throws Exception {
                 if (type == CreateCommand.class) {
                     CreateCommand create = new CreateCommand(() ->
-                            new com.wiz.core.DevelopmentToolchain.Report("21.0.0", "24.15.0", "10.0.0"));
+                            new com.wiz.core.DevelopmentToolchain.Report("25.0.0", "24.20.0", "11.0.0"));
                     return type.cast(create);
                 }
                 return delegate.create(type);

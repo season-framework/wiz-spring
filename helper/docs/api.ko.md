@@ -99,7 +99,7 @@ Form field는 하나씩만 나타나야 하며 알 수 없는 field는 거부됩
 | Field | 필수 | 규칙 |
 | --- | --- | --- |
 | `projectName` | 예 | 1–64자의 ASCII 소문자; 영문 또는 숫자로 시작하고 끝남; 중간에 `.`, `_`, `-` 허용 |
-| `packageName` | 예 | 1–255자; 점으로 구분한 ASCII Java 21 identifier; Java keyword와 `java` namespace는 거부 |
+| `packageName` | 예 | 1–255자; 점으로 구분한 ASCII Java 25 identifier; Java keyword와 `java` namespace는 거부 |
 | `template` | 아니요 | 이미지에 등록된 1–64자의 ASCII 소문자 slug; 생략하면 registry 기본값 사용 |
 
 프로젝트 이름에는 하이픈을 사용할 수 있습니다. 하이픈은 Java identifier에 유효하지

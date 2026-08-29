@@ -5,7 +5,7 @@
 **프로젝트에 필요한 프론트엔드 구조와 표준 Spring Boot 백엔드를 생성합니다.**
 
 [![Release 1.1.0](https://img.shields.io/badge/release-1.1.0-2563eb)](release-log/1.1.0.md)
-[![Java 21+](https://img.shields.io/badge/Java-21%2B-e76f00)](pom.xml)
+[![Java 25+](https://img.shields.io/badge/Java-25%2B-e76f00)](pom.xml)
 [![MIT License](https://img.shields.io/badge/license-MIT-16a34a)](LICENSE)
 
 [English](README.md) · [한국어](README.ko.md)
@@ -37,7 +37,7 @@ workflow는 생성된 프로젝트가 직접 소유합니다.
 
 ## 빠른 시작
 
-요구 사항: full JDK 21+, Node.js `^22.22.3 || ^24.15.0 || ^26.0.0`, npm 10+.
+요구 사항: full JDK 25+, Node.js `^22.22.3 || ^24.15.0`(LTS만 지원), npm 10+.
 
 ```bash
 ./mvnw clean package
@@ -110,10 +110,13 @@ npm run bundle    # 배포 artifact, proxy 설정, Compose, checksum
 
 ```bash
 ./mvnw test
+scripts/verify-templates.sh
 ```
 
 테스트는 임시 디렉터리에 모든 프론트엔드 템플릿을 생성합니다. Helper 전용 검증은
-[Helper 운영 문서](helper/docs/operations.ko.md)를 참고하십시오.
+[Helper 운영 문서](helper/docs/operations.ko.md)를 참고하십시오. 템플릿 검증 스크립트는
+생성된 5개 템플릿 모두에 대해 설치, 보안 감사, 테스트, 빌드, 번들을 수행하며 생성
+프로젝트와 같은 JDK 및 Node.js toolchain이 필요합니다.
 
 버그와 기능 요청은 [GitHub Issues](https://github.com/season-framework/wiz-spring/issues)에서
 관리합니다. WIZ Spring은 [MIT License](LICENSE)로 배포합니다.

@@ -1,6 +1,6 @@
 # Angular WIZ frontend rules
 
-This project keeps the human- and AI-friendly WIZ frontend layout while producing a normal Angular 21 application.
+This project keeps the human- and AI-friendly WIZ frontend layout while producing a normal Angular 22 application.
 
 - Edit WIZ components in `src/app/<app-id>/app.json` and `view.ts`, `view.pug` or `view.html`, and `view.scss`.
 - Legacy Angular WIZ reusable frontend sources live in `src/portal/<name>/app`; their `assets` and `libs` are staged automatically. This frontend-only source namespace is not a Java backend `portal` or `module` package.
