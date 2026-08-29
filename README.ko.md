@@ -4,7 +4,7 @@
 
 **프로젝트에 필요한 프론트엔드 구조와 표준 Spring Boot 백엔드를 생성합니다.**
 
-[![Release 1.0.0](https://img.shields.io/badge/release-1.0.0-2563eb)](release-log/1.0.0.md)
+[![Release 1.1.0](https://img.shields.io/badge/release-1.1.0-2563eb)](release-log/1.1.0.md)
 [![Java 21+](https://img.shields.io/badge/Java-21%2B-e76f00)](pom.xml)
 [![MIT License](https://img.shields.io/badge/license-MIT-16a34a)](LICENSE)
 
@@ -26,6 +26,8 @@ workflow는 생성된 프로젝트가 직접 소유합니다.
 
 - **표준 백엔드** — Java는 `src/main/java`에 있고 Maven으로 직접 빌드합니다. WIZ
   백엔드 변환이나 runtime dispatcher가 없습니다.
+- **얕은 도메인 구조** — Controller는 type-safe Root `Struct`로 진입하고 각 기능의
+  동작과 persistence는 하나의 `model/<feature>` package에 함께 둡니다.
 - **다섯 가지 프론트엔드** — 표준 프론트엔드를 선택하거나 사람과 AI가 빠르게
   편집하도록 설계된 Angular WIZ 구조를 유지할 수 있습니다.
 - **독립 프로젝트** — `create` 이후 빌드에는 generator JAR나 외부 WIZ NPM package가
@@ -40,7 +42,7 @@ workflow는 생성된 프로젝트가 직접 소유합니다.
 ```bash
 ./mvnw clean package
 
-java -jar target/wiz-spring-1.0.0.jar create ../dashboard \
+java -jar target/wiz-spring-1.1.0.jar create ../dashboard \
   --package com.example.dashboard
 
 cd ../dashboard
@@ -63,7 +65,7 @@ identifier여야 하므로 `-`를 사용할 수 없습니다.
 | `html` | 정적 HTML, CSS, JavaScript |
 | `jsp` | 서버 렌더링 Spring MVC/JSP 애플리케이션 |
 
-내장 설명은 `java -jar target/wiz-spring-1.0.0.jar templates`로 확인할 수 있습니다.
+내장 설명은 `java -jar target/wiz-spring-1.1.0.jar templates`로 확인할 수 있습니다.
 
 ## 생성 프로젝트 workflow
 
@@ -91,7 +93,7 @@ npm run bundle    # 배포 artifact, proxy 설정, Compose, checksum
 
 선택적 [Docker 프로젝트 Helper](helper/README.ko.md)는 HTTP로 프로젝트를 생성해 ZIP으로
 반환합니다. Build-time registry로 템플릿을 추가·수정·삭제할 수 있으며 Helper는
-`wiz-spring-1.0.0.jar`에 포함되지 않습니다.
+`wiz-spring-1.1.0.jar`에 포함되지 않습니다.
 
 ## 문서
 

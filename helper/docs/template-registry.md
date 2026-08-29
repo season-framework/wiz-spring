@@ -105,7 +105,7 @@ cp helper/templates/registry.example.json \
 docker build \
   --build-arg WIZ_HELPER_TEMPLATE_FILE=registry.company.json \
   -f helper/Dockerfile \
-  -t company/wiz-spring-helper:1.0.0 \
+  -t company/wiz-spring-helper:1.1.0 \
   helper
 ```
 

@@ -72,6 +72,17 @@ Open `/swagger-ui` for the generated contract. Important routes are:
 - `/api/profile`, `/api/profile/password`
 - `/api/chat/messages`, `/api/chat/stream`
 
+The backend follows a shallow, feature-oriented Spring structure:
+
+```text
+controller -> model.Struct -> model/<feature>/<Feature>Struct -> Repository
+```
+
+Each feature keeps its Struct, Entity, Repository, and safe response records together at
+one depth. Endpoint-only request records stay inside Controllers; `config`, `security`,
+`exception`, and `web` contain named infrastructure responsibilities. See
+`docs/ai/backend-spring.md` before changing this boundary.
+
 Invited sample members receive the initial password `welcome1`. Override the default
 database with `APP_DATASOURCE_URL`, `APP_DATASOURCE_USERNAME`, and
 `APP_DATASOURCE_PASSWORD`. Production applications should replace the demo invitation

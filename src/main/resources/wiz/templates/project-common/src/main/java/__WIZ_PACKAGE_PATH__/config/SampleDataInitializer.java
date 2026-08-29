@@ -4,12 +4,12 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
-import __WIZ_PACKAGE_ROOT__.domain.PostEntity;
-import __WIZ_PACKAGE_ROOT__.domain.PostStatus;
-import __WIZ_PACKAGE_ROOT__.domain.UserEntity;
-import __WIZ_PACKAGE_ROOT__.domain.UserRole;
-import __WIZ_PACKAGE_ROOT__.repository.PostRepository;
-import __WIZ_PACKAGE_ROOT__.repository.UserRepository;
+import __WIZ_PACKAGE_ROOT__.model.post.PostEntity;
+import __WIZ_PACKAGE_ROOT__.model.post.PostRepository;
+import __WIZ_PACKAGE_ROOT__.model.post.PostStatus;
+import __WIZ_PACKAGE_ROOT__.model.user.UserEntity;
+import __WIZ_PACKAGE_ROOT__.model.user.UserRepository;
+import __WIZ_PACKAGE_ROOT__.model.user.UserRole;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;

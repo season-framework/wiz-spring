@@ -20,7 +20,7 @@ toolchain이 지원하지 않는 Node.js 범위는 숫자가 더 높더라도 �
 
 ```bash
 ./mvnw clean package
-alias wiz-spring='java -jar /absolute/path/to/wiz-spring/target/wiz-spring-1.0.0.jar'
+alias wiz-spring='java -jar /absolute/path/to/wiz-spring/target/wiz-spring-1.1.0.jar'
 ```
 
 ## CLI

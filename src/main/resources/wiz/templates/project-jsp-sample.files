@@ -23,5 +23,5 @@ src/main/webapp/assets/js/shell.js
 src/main/webapp/assets/js/ui.js
 src/main/webapp/assets/styles.css
 src/test/frontend/api.test.mjs
-src/test/java/__WIZ_PACKAGE_PATH__/api/ApiPathIntegrationTest.java
+src/test/java/__WIZ_PACKAGE_PATH__/web/ApiPathIntegrationTest.java
 src/test/java/__WIZ_PACKAGE_PATH__/web/HomeControllerTest.java

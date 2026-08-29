@@ -2,12 +2,12 @@
 
 [English](README.md) | [한국어](README.ko.md)
 
-WIZ Spring `1.0.0` 프로젝트 템플릿을 다운로드 가능한 ZIP으로 만들어 주는
+WIZ Spring `1.1.0` 프로젝트 템플릿을 다운로드 가능한 ZIP으로 만들어 주는
 작고 단순한 Docker 전용 HTTP 서비스입니다. 사내 도구, CI, `curl` 기반 프로젝트
 생성에 사용할 수 있습니다.
 
 > [!IMPORTANT]
-> 이 helper는 새로운 WIZ Spring `1.0.0` 프로젝트만 생성합니다. `0.2.8`을 포함한
+> 이 helper는 새로운 WIZ Spring `1.1.0` 프로젝트만 생성합니다. `0.2.8`을 포함한
 > `0.2.x` workspace와 호환되지 않으며 이를 migration하지도 않습니다.
 
 ## 빠른 시작
@@ -16,7 +16,7 @@ WIZ Spring `1.0.0` 프로젝트 템플릿을 다운로드 가능한 ZIP으로 �
 
 - Docker 및 Compose
 - WIZ Spring 저장소
-- 로컬에서 빌드한 `target/wiz-spring-1.0.0.jar`
+- 로컬에서 빌드한 `target/wiz-spring-1.1.0.jar`
 
 지원되는 배포 방식에서는 helper를 Docker workload로 실행합니다. Generator JAR는
 이미지 밖에 유지하고 실행 시 읽기 전용으로 mount합니다.

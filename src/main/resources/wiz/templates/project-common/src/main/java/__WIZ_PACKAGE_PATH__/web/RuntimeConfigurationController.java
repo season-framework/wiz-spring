@@ -2,7 +2,7 @@ package __WIZ_PACKAGE_ROOT__.web;
 
 import java.util.Map;
 
-import __WIZ_PACKAGE_ROOT__.api.ApiProperties;
+import __WIZ_PACKAGE_ROOT__.config.ApiProperties;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 

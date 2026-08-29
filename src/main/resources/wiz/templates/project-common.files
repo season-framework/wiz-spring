@@ -28,9 +28,9 @@ scripts/bundle.mjs
 scripts/static-build.mjs
 scripts/static-watch.mjs
 src/main/java/__WIZ_PACKAGE_PATH__/Application.java
-src/main/java/__WIZ_PACKAGE_PATH__/api/ApiController.java
-src/main/java/__WIZ_PACKAGE_PATH__/api/ApiProperties.java
-src/main/java/__WIZ_PACKAGE_PATH__/api/ApiWebConfiguration.java
+src/main/java/__WIZ_PACKAGE_PATH__/config/ApiConfiguration.java
+src/main/java/__WIZ_PACKAGE_PATH__/config/ApiProperties.java
+src/main/java/__WIZ_PACKAGE_PATH__/web/ApiController.java
 src/main/java/__WIZ_PACKAGE_PATH__/web/RuntimeConfigurationController.java
 src/main/resources/application.yml
 src/main/resources/application-dev.yml

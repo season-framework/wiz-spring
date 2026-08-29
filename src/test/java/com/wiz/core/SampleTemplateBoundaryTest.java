@@ -27,8 +27,10 @@ class SampleTemplateBoundaryTest {
     private static final String COMMON_INFRA_MANIFEST = "/wiz/templates/project-common.files";
     private static final String COMMON_SAMPLE_MANIFEST = "/wiz/templates/project-common-sample.files";
     private static final String COMMON_RESOURCE_ROOT = "/wiz/templates/project-common/";
-    private static final String AUTH_CONTROLLER_ENTRY =
-            "src/main/java/__WIZ_PACKAGE_PATH__/api/AuthController.java";
+    private static final String USER_CONTROLLER_ENTRY =
+            "src/main/java/__WIZ_PACKAGE_PATH__/controller/UserController.java";
+    private static final String ROOT_STRUCT_ENTRY =
+            "src/main/java/__WIZ_PACKAGE_PATH__/model/Struct.java";
     private static final Map<FrontendTemplate, String> FRONTEND_SAMPLE_ENTRY = Map.of(
             FrontendTemplate.ANGULAR_WIZ, "src/app/page.dashboard/app.json",
             FrontendTemplate.ANGULAR, "frontend/src/app/pages/dashboard-page.component.ts",
@@ -66,7 +68,7 @@ class SampleTemplateBoundaryTest {
         }
 
         assertDisjoint(COMMON_INFRA_MANIFEST, COMMON_SAMPLE_MANIFEST);
-        assertTrue(manifestEntries(COMMON_SAMPLE_MANIFEST).contains(AUTH_CONTROLLER_ENTRY));
+        assertGeneratedBackendArchitecture();
         for (FrontendTemplate template : FrontendTemplate.values()) {
             ManifestLayer infrastructure = infrastructureLayer(template);
             ManifestLayer sample = sampleLayer(template);
@@ -87,7 +89,7 @@ class SampleTemplateBoundaryTest {
             assertFalse(generated.imported(), template.id());
             assertManifestFilesPresent(target, COMMON_SAMPLE_MANIFEST);
             assertManifestFilesPresent(target, sampleLayer(template).manifest());
-            assertTrue(Files.isRegularFile(target.resolve(generatedPath(AUTH_CONTROLLER_ENTRY))), template.id());
+            assertTrue(Files.isRegularFile(target.resolve(generatedPath(USER_CONTROLLER_ENTRY))), template.id());
             assertTrue(Files.isRegularFile(target.resolve(generatedPath(FRONTEND_SAMPLE_ENTRY.get(template)))),
                     template.id());
         }
@@ -111,7 +113,7 @@ class SampleTemplateBoundaryTest {
             assertManifestFilesAbsent(target, sampleLayer(template).manifest(), importedFiles);
             assertManifestFilesPresent(target, COMMON_INFRA_MANIFEST);
             assertManifestFilesPresent(target, infrastructureLayer(template).manifest());
-            assertFalse(Files.exists(target.resolve(generatedPath(AUTH_CONTROLLER_ENTRY))), template.id());
+            assertFalse(Files.exists(target.resolve(generatedPath(USER_CONTROLLER_ENTRY))), template.id());
             assertFalse(Files.exists(target.resolve(generatedPath(FRONTEND_SAMPLE_ENTRY.get(template)))),
                     template.id());
             assertEquals("preserved\n", Files.readString(target.resolve("keep.txt"), StandardCharsets.UTF_8));
@@ -175,6 +177,34 @@ class SampleTemplateBoundaryTest {
         assertTrue(infrastructure.isEmpty(),
                 () -> "Infrastructure and sample manifests overlap: "
                         + infrastructureManifest + " / " + sampleManifest + " -> " + infrastructure);
+    }
+
+    private void assertGeneratedBackendArchitecture() throws IOException {
+        List<String> infrastructure = manifestEntries(COMMON_INFRA_MANIFEST).stream()
+                .filter(entry -> entry.startsWith("src/main/java/"))
+                .toList();
+        List<String> sample = manifestEntries(COMMON_SAMPLE_MANIFEST).stream()
+                .filter(entry -> entry.startsWith("src/main/java/"))
+                .toList();
+
+        assertEquals(5, infrastructure.size());
+        assertEquals(23, sample.size());
+        assertTrue(sample.contains(USER_CONTROLLER_ENTRY));
+        assertTrue(sample.contains(ROOT_STRUCT_ENTRY));
+
+        for (String entry : sample) {
+            for (String forbidden : List.of(
+                    "/api/", "/service/", "/domain/", "/repository/", "/dto/", "/dao/",
+                    "/support/", "/common/", "/util/", "/portal/")) {
+                assertFalse(entry.contains(forbidden), () -> "Forbidden generated package: " + entry);
+            }
+            int model = entry.indexOf("/model/");
+            if (model >= 0) {
+                String belowModel = entry.substring(model + "/model/".length());
+                assertTrue(belowModel.chars().filter(character -> character == '/').count() <= 1,
+                        () -> "Generated model exceeds model/<feature> depth: " + entry);
+            }
+        }
     }
 
     private List<String> manifestEntries(String manifest) throws IOException {

@@ -2,12 +2,12 @@
 
 [English](README.md) | [한국어](README.ko.md)
 
-A small, Docker-only HTTP service that turns WIZ Spring `1.0.0` project
+A small, Docker-only HTTP service that turns WIZ Spring `1.1.0` project
 templates into downloadable ZIP archives. It is intended for internal tooling,
 CI, and `curl`-based project bootstrapping.
 
 > [!IMPORTANT]
-> This helper creates new WIZ Spring `1.0.0` projects. It is not compatible
+> This helper creates new WIZ Spring `1.1.0` projects. It is not compatible
 > with, and does not migrate, `0.2.x` workspaces such as `0.2.8`.
 
 ## Quick start
@@ -16,7 +16,7 @@ CI, and `curl`-based project bootstrapping.
 
 - Docker with Compose
 - The WIZ Spring repository
-- A locally built `target/wiz-spring-1.0.0.jar`
+- A locally built `target/wiz-spring-1.1.0.jar`
 
 The helper runs only as a Docker workload in supported deployments. The
 generator JAR stays outside the image and is mounted read-only at runtime.

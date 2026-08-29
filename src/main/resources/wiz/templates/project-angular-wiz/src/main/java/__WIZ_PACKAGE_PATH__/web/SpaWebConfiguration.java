@@ -3,7 +3,7 @@ package __WIZ_PACKAGE_ROOT__.web;
 import java.util.Collections;
 import java.util.List;
 
-import __WIZ_PACKAGE_ROOT__.api.ApiProperties;
+import __WIZ_PACKAGE_ROOT__.config.ApiProperties;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.boot.autoconfigure.web.WebProperties;
 import org.springframework.context.annotation.Configuration;

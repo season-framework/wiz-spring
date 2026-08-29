@@ -12,7 +12,7 @@ immutable template bundle. The WIZ Spring generator JAR is supplied separately.
 client
   │
   ▼
-HTTP validation ── concurrency gate ── wiz-spring 1.0.0 JAR
+HTTP validation ── concurrency gate ── wiz-spring 1.1.0 JAR
                                             │
                                             ▼
                                    generated base project
@@ -26,7 +26,7 @@ HTTP validation ── concurrency gate ── wiz-spring 1.0.0 JAR
 
 The generator JAR is intentionally absent from the helper image, while helper
 sources and assets are absent from the published WIZ Spring JAR. Compose mounts
-`target/wiz-spring-1.0.0.jar` read-only at `/opt/wiz-source/wiz-spring.jar`. At
+`target/wiz-spring-1.1.0.jar` read-only at `/opt/wiz-source/wiz-spring.jar`. At
 startup, the entrypoint copies it into container tmpfs and starts the service as
 UID/GID `10001`.
 
@@ -61,7 +61,7 @@ Build only the default image:
 ```bash
 docker build \
   -f helper/Dockerfile \
-  -t wiz-spring-helper:1.0.0 \
+  -t wiz-spring-helper:1.1.0 \
   helper
 ```
 
@@ -99,7 +99,7 @@ some of them.
 | Variable | Process default | Notes |
 | --- | --- | --- |
 | `WIZ_HELPER_ADDR` | `127.0.0.1:8080` | Listen address; image/Compose use `0.0.0.0:8080` |
-| `WIZ_SPRING_JAR` | `../target/wiz-spring-1.0.0.jar` | Generator path used by the Go process |
+| `WIZ_SPRING_JAR` | `../target/wiz-spring-1.1.0.jar` | Generator path used by the Go process |
 | `WIZ_SPRING_SOURCE_JAR` | `/opt/wiz-source/wiz-spring.jar` | Container entrypoint's read-only source mount |
 | `WIZ_SPRING_SHA256` | Empty | Optional 64-character hexadecimal checksum |
 | `WIZ_HELPER_JAVA_BIN` | `java` | Java executable |
@@ -120,7 +120,7 @@ Before opening the listener, the helper:
 1. validates the staged registry and overlays;
 2. verifies an optional JAR SHA-256;
 3. requires `java -jar ... --version` to return exactly
-   `wiz-spring 1.0.0`; and
+   `wiz-spring 1.1.0`; and
 4. generates, customizes, archives, and cleans a disposable project for every
    registered template.
 
@@ -131,7 +131,7 @@ healthcheck after those startup probes have passed.
 To pin a generator artifact:
 
 ```bash
-sha256sum target/wiz-spring-1.0.0.jar
+sha256sum target/wiz-spring-1.1.0.jar
 # Put the 64-character value in WIZ_SPRING_SHA256.
 ```
 
@@ -203,7 +203,7 @@ make -C helper e2e-custom
 ```
 
 Host-side development requires Go `1.24`, full JDK 21 or newer, supported
-Node.js/npm, and `target/wiz-spring-1.0.0.jar`:
+Node.js/npm, and `target/wiz-spring-1.1.0.jar`:
 
 ```bash
 make -C helper test

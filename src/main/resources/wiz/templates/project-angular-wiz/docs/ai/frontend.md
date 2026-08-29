@@ -3,7 +3,7 @@
 This project keeps the human- and AI-friendly WIZ frontend layout while producing a normal Angular 21 application.
 
 - Edit WIZ components in `src/app/<app-id>/app.json` and `view.ts`, `view.pug` or `view.html`, and `view.scss`.
-- Reusable portal components live in `src/portal/<portal>/app`; portal `assets` and `libs` are staged automatically.
+- Legacy Angular WIZ reusable frontend sources live in `src/portal/<name>/app`; their `assets` and `libs` are staged automatically. This frontend-only source namespace is not a Java backend `portal` or `module` package.
 - Keep the Angular shell in `src/angular`. Root application bootstrap, global styles, and the small `wiz.ts` browser client belong there.
 - `npm run wizbuild` compiles Pug, generates Angular components and routes, runs the local Angular CLI, and writes static output to `target/generated-resources/frontend`.
 - `npm run wizwatch` debounces WIZ source changes and keeps Angular's incremental build running. Use `npm run dev` when Spring should run alongside it.

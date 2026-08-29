@@ -2,7 +2,7 @@
 set -eu
 
 source_jar="${WIZ_SPRING_SOURCE_JAR:-/opt/wiz-source/wiz-spring.jar}"
-runtime_jar="/tmp/wiz-spring-1.0.0.jar"
+runtime_jar="/tmp/wiz-spring-1.1.0.jar"
 
 if [ ! -f "$source_jar" ]; then
   echo "WIZ Spring JAR is not mounted: $source_jar" >&2

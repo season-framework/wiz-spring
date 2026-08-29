@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: WIZ Spring Project Helper API
-  version: 1.0.0
-  description: Generates a fresh WIZ Spring 1.0.0 project and returns it as a ZIP archive.
+  version: 1.1.0
+  description: Generates a fresh WIZ Spring 1.1.0 project and returns it as a ZIP archive.
 servers:
   - url: http://127.0.0.1:8080
 paths:

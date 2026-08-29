@@ -108,13 +108,13 @@ class ProjectTemplateCommandTest {
             String packageJson = Files.readString(target.resolve("package.json"));
             String packageLock = Files.readString(target.resolve("package-lock.json"));
             String pom = Files.readString(target.resolve("pom.xml"));
-            assertTrue(packageJson.contains("\"version\": \"1.0.0\""), template.id());
+            assertTrue(packageJson.contains("\"version\": \"1.1.0\""), template.id());
             assertTrue(packageJson.contains("\"frontend\": \"" + template.id() + "\""), template.id());
             assertTrue(packageJson.contains("\"node\": \"^22.22.3 || ^24.15.0 || ^26.0.0\""), template.id());
             assertTrue(packageJson.contains("\"npm\": \">=10.0.0\""), template.id());
             assertTrue(packageLock.contains("\"node\": \"^22.22.3 || ^24.15.0 || ^26.0.0\""), template.id());
             assertTrue(packageLock.contains("\"npm\": \">=10.0.0\""), template.id());
-            assertTrue(pom.contains("<version>1.0.0</version>"), template.id());
+            assertTrue(pom.contains("<version>1.1.0</version>"), template.id());
             String archiveType = template == com.wiz.core.FrontendTemplate.JSP ? "war" : "jar";
             assertTrue(Files.readString(target.resolve("docker-compose.yaml"))
                     .contains("${APP_ARTIFACT:-application." + archiveType + "}"), template.id());
