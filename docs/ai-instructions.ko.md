@@ -3,8 +3,15 @@
 # AI 인스트럭션
 
 모든 생성 프로젝트에는 공통 프로젝트, Spring 백엔드, 배포 계약과 선택한 프론트엔드
-계약 하나가 들어갑니다. 이 파일들은 AI coding tool과 사람에게 현재 1.0 구조를
-설명하며 MCP runtime을 추가하지 않습니다.
+계약 하나가 들어갑니다. 이 파일들은 AI coding tool과 사람에게 현재 `1.1.1`
+프로젝트 계약을 설명하며 MCP runtime을 추가하지 않습니다.
+
+인스트럭션의 기준은 Java 25, Spring Boot `4.1.1`, Spring Framework `7.0.9`
+(Boot BOM 관리), springdoc `3.1.0`, Maven `3.9.15`, Node.js
+`^22.22.3 || ^24.15.0`입니다. 프론트엔드별 인스트럭션은
+고정된 Angular 22 또는 React 19 toolchain도 명시합니다. 독립적인 생성
+프로젝트를 이후에 버전업했다면 해당 프로젝트의 `pom.xml`, `package.json`,
+lockfile이 최종 기준입니다.
 
 | 범위 | Generator 원본 | 생성 프로젝트 |
 | --- | --- | --- |
@@ -24,10 +31,13 @@
 ## 인스트럭션 변경
 
 1. 공통 또는 프론트엔드 범위에 해당하는 generator 원본을 수정합니다.
-2. 경로, 빌드 명령, API 규칙을 실제 템플릿 코드와 일치시킵니다.
+2. 버전, 경로, 빌드 명령, API 규칙을 실제 템플릿 코드와 일치시킵니다.
+   README만 또는 인스트럭션만 따로 바꾸지 않습니다.
 3. `./mvnw test`를 실행합니다. Generator test가 임시 프로젝트를 만들면서
-   인스트럭션 경계를 검증합니다.
-4. 릴리스 전에는 해당 템플릿을 생성해 결과 인스트럭션을 직접 확인합니다.
+   인스트럭션과 버전 경계를 검증합니다.
+4. `scripts/verify-documentation.sh`를 실행하고 해당 템플릿을 생성해 README와
+   결과 인스트럭션을 직접 확인합니다.
+5. 플랫폼이나 의존성 버전을 바꾸었다면 `scripts/verify-templates.sh`를 실행합니다.
 
 템플릿 구조는 [프로젝트 생성](project-generation.ko.md)을, 인스트럭션이 설명하는
 계약은 [빌드와 배포](build-and-deployment.ko.md)를 참고하십시오.

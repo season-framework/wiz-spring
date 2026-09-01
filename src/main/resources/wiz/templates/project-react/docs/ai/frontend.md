@@ -1,5 +1,7 @@
 # React frontend rules
 
+- WIZ Spring `1.1.1` pins React and React DOM `19.2.8`, Vite `8.2.2`, and
+  `@vitejs/plugin-react` `6.1.1`. `package.json` and `package-lock.json` are authoritative.
 - This is a normal React and Vite application; it does not use WIZ component generation.
 - Source lives under `frontend/` and production output is `target/generated-resources/frontend`.
 - Read `/app-config.json` at runtime. Never hardcode the configured API prefix in components.
@@ -13,3 +15,5 @@
   and the named `chat.message` SSE event. Preserve these API contracts when replacing the demo.
 - Fresh projects include those sample pages; `--uri` and `--path` imports do not. The chat
   page passes the last history ID as the SSE `after` cursor so replay closes the connection gap.
+- After dependency or build-configuration changes, run `npm ci` and
+  `npm run frontend:build`; update this guide and the project README with the new baseline.

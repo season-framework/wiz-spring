@@ -8,10 +8,10 @@ details.
 
 | Guide | Covers |
 | --- | --- |
-| [Project generation](project-generation.md) | Requirements, CLI, templates, imports, sample application, and frontend detection |
+| [Project generation](project-generation.md) | 1.1.1 version baseline, requirements, CLI, templates, imports, and sample application |
 | [Build and deployment](build-and-deployment.md) | Project scripts, API prefixes, bundles, Docker Compose, and systemd services |
 | [1.0 compatibility](compatibility.md) | The clean break from 0.2.x and the supported migration path |
-| [AI instructions](ai-instructions.md) | Instruction sources and their generated-project destinations |
+| [AI instructions](ai-instructions.md) | Versioned instruction contract, sources, generated destinations, and verification |
 | [HTTP project helper](../helper/README.md) | Docker-hosted project generation and custom template registries |
 | [Release notes](../release-log/README.md) | Version history and the 1.0.0 release boundary |
 

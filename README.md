@@ -22,6 +22,25 @@ frontend, watch, build, bundle, and runtime workflows.
 > legacy workspace in place. Read the [1.0 compatibility guide](docs/compatibility.md)
 > before moving an existing application.
 
+## 1.1.1 platform baseline
+
+WIZ Spring `1.1.1` generates and validates the following stack. These are concrete
+template versions, not merely minimum compatibility claims.
+
+| Layer | 1.1.1 baseline |
+| --- | --- |
+| Generator and generated project version | `1.1.1` |
+| Java | release `25`; full JDK 25 or newer required |
+| Spring backend | Spring Boot `4.1.1`, Boot-managed Spring Framework `7.0.9`, springdoc `3.1.0` |
+| Build tools | Maven Wrapper `3.9.15`, npm `10+` |
+| Node.js | `^22.22.3 || ^24.15.0` (LTS releases only) |
+| Angular templates | Angular `22.1.4`, Angular CLI/build `22.1.6`, TypeScript `6.0.3` |
+| React template | React `19.2.8`, Vite `8.2.2` |
+
+Updating the generator does not rewrite an already generated project. To adopt this
+baseline, create a new `1.1.1` project or deliberately update that project's `pom.xml`,
+`package.json`, lockfile, and `docs/ai` instructions together.
+
 ## Why WIZ Spring
 
 - **Standard backend** — Java stays under `src/main/java` and builds directly with
@@ -110,6 +129,7 @@ without packaging the helper into `wiz-spring-1.1.1.jar`.
 
 ```bash
 ./mvnw test
+scripts/verify-documentation.sh
 scripts/verify-templates.sh
 ```
 

@@ -17,6 +17,19 @@ committed into the generated repository.
 outside the supported Angular toolchain ranges are rejected even when their numeric
 version is newer.
 
+## Generated platform
+
+Every `1.1.1` template pins Java release 25, Spring Boot `4.1.1`, its BOM-managed
+Spring Framework `7.0.9`, springdoc `3.1.0`, and Maven Wrapper `3.9.15`. The Angular templates pin Angular `22.1.4`, Angular
+CLI/build `22.1.6`, and TypeScript `6.0.3`; the React template pins React `19.2.8`
+and Vite `8.2.2`. The root [`README`](../README.md#111-platform-baseline) is the
+canonical human-readable version matrix, while template `pom.xml` and `package.json`
+files are the executable source of truth.
+
+Generator upgrades never mutate existing projects. Upgrade an existing generated
+project only by changing its Maven model, npm manifest and lockfile, and AI instructions
+as one reviewed change.
+
 Build the generator from source:
 
 ```bash
@@ -78,7 +91,9 @@ same responsive screens and light/dark theme.
 admin@example.com / admin1234
 ```
 
-The generated project documents its API at `/swagger-ui` when running.
+The generated project documents its API at `/swagger-ui` under the default `dev`
+profile. The `prod` profile keeps OpenAPI and Swagger UI disabled unless explicitly
+enabled with environment variables.
 
 ## Importing existing source
 

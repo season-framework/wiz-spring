@@ -1,5 +1,7 @@
 # HTML frontend rules
 
+- This is the WIZ Spring `1.1.1` dependency-free HTML template. It uses the common
+  Node.js `^22.22.3 || ^24.15.0` build-tool policy declared in `package.json`.
 - Source files live in `frontend/` and are copied to `target/generated-resources/frontend`.
 - Use browser-native modules unless the project deliberately adopts a framework.
 - Read `/app-config.json` at runtime and prepend its `apiPrefix` to business API paths.
@@ -11,3 +13,5 @@
 - Keep frontend Node tests under `src/test/frontend`; anything below `frontend/` is copied into the production static output.
 - Fresh projects include the modular sample screens; `--uri` and `--path` imports do not.
 - Start chat SSE with the last history message as the `after` cursor and keep replayed messages ordered by ID.
+- After build-script changes, run `npm ci`, `npm run frontend:test`, and
+  `npm run frontend:build`.

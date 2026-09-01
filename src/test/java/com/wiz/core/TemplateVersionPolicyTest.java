@@ -14,6 +14,12 @@ import org.junit.jupiter.api.Test;
 
 class TemplateVersionPolicyTest {
 
+    private static final String WIZ_VERSION = "1.1.1";
+    private static final String JAVA_RELEASE = "25";
+    private static final String SPRING_BOOT_VERSION = "4.1.1";
+    private static final String SPRING_FRAMEWORK_VERSION = "7.0.9";
+    private static final String SPRINGDOC_VERSION = "3.1.0";
+    private static final String MAVEN_VERSION = "3.9.15";
     private static final String NODE_LTS_RANGE = "\"node\": \"^22.22.3 || ^24.15.0\"";
     private static final Map<String, String> ANGULAR_RUNTIME = Map.of(
             "@angular/common", "22.1.4",
@@ -93,9 +99,65 @@ class TemplateVersionPolicyTest {
         assertTrue(compose.contains("SPRINGDOC_SWAGGER_UI_ENABLED: ${SPRINGDOC_SWAGGER_UI_ENABLED:-false}"));
     }
 
+    @Test
+    void generatedReadmeAndAiInstructionsDeclareTheExecutableVersionPolicy() throws Exception {
+        String readme = resource("/wiz/templates/project-common/README.md");
+        String agents = resource("/wiz/templates/project-common/AGENTS.md");
+        String copilot = resource("/wiz/templates/project-common/.github/copilot-instructions.md");
+        String backend = resource("/wiz/templates/project-common/docs/ai/backend-spring.md");
+        String deployment = resource("/wiz/templates/project-common/docs/ai/deployment.md");
+
+        for (String document : List.of(readme, agents, copilot, backend)) {
+            assertContains(document, "WIZ Spring `" + WIZ_VERSION + "`");
+            assertContains(document, "Spring Boot `" + SPRING_BOOT_VERSION + "`");
+            assertContains(document, "Spring Framework `" + SPRING_FRAMEWORK_VERSION + "`");
+        }
+        for (String document : List.of(readme, agents, backend, deployment)) {
+            assertContains(document, JAVA_RELEASE);
+        }
+        for (String document : List.of(readme, agents, copilot, deployment)) {
+            assertContains(document, MAVEN_VERSION);
+        }
+        assertContains(readme, "springdoc `" + SPRINGDOC_VERSION + "`");
+        assertContains(agents, "springdoc `" + SPRINGDOC_VERSION + "`");
+        assertContains(backend, "springdoc `" + SPRINGDOC_VERSION + "`");
+        assertContains(backend, "jakarta.*");
+        assertContains(deployment, "^22.22.3 || ^24.15.0");
+
+        for (String document : List.of(readme, agents, copilot, backend, deployment)) {
+            assertFalse(document.contains("Java 21"));
+            assertFalse(document.contains("Spring Boot `4.0"));
+            assertFalse(document.contains("wiz-spring build"));
+            assertFalse(document.contains("WizContext"));
+        }
+    }
+
+    @Test
+    void frontendInstructionsNameThePinnedOnePointOnePointOneToolchains() throws Exception {
+        Map<String, List<String>> expected = Map.of(
+                "angular-wiz", List.of("WIZ Spring `1.1.1`", "22.1.4", "22.1.6", "6.0.3", "3.0.4"),
+                "angular", List.of("WIZ Spring `1.1.1`", "22.1.4", "22.1.6", "6.0.3"),
+                "react", List.of("WIZ Spring `1.1.1`", "19.2.8", "8.2.2", "6.1.1"),
+                "html", List.of("WIZ Spring `1.1.1`", "^22.22.3 || ^24.15.0"),
+                "jsp", List.of("WIZ Spring `1.1.1`", "Spring Boot `4.1.1`", "^22.22.3 || ^24.15.0"));
+
+        for (Map.Entry<String, List<String>> entry : expected.entrySet()) {
+            String guide = resource("/wiz/templates/project-" + entry.getKey() + "/docs/ai/frontend.md");
+            for (String fragment : entry.getValue()) {
+                assertContains(guide, fragment);
+            }
+            assertFalse(guide.contains("Angular 21"), entry.getKey());
+            assertFalse(guide.contains("Spring Boot 4.0"), entry.getKey());
+        }
+    }
+
     private void assertPinned(String contents, Map.Entry<String, String> dependency, String source) {
         assertTrue(contents.contains("\"" + dependency.getKey() + "\": \"" + dependency.getValue() + "\""),
                 () -> source + " must pin " + dependency.getKey() + " to " + dependency.getValue());
+    }
+
+    private void assertContains(String contents, String fragment) {
+        assertTrue(contents.contains(fragment), () -> "Missing documentation policy fragment: " + fragment);
     }
 
     private String resource(String path) throws IOException {

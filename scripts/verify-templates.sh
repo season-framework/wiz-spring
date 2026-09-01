@@ -14,6 +14,7 @@ cleanup() {
 trap cleanup EXIT
 
 cd "$repository_root"
+scripts/verify-documentation.sh
 if [[ -n "${WIZ_SPRING_JAR:-}" ]]; then
     generator_jar=$(realpath "$WIZ_SPRING_JAR")
 else

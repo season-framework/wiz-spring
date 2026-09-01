@@ -1,6 +1,9 @@
 # Angular WIZ frontend rules
 
-This project keeps the human- and AI-friendly WIZ frontend layout while producing a normal Angular 22 application.
+This project keeps the human- and AI-friendly WIZ frontend layout while producing a
+normal Angular 22 application. WIZ Spring `1.1.1` pins Angular runtime `22.1.4`, Angular
+CLI/build `22.1.6`, TypeScript `6.0.3`, and Pug `3.0.4`; `package.json` and the lockfile
+are authoritative.
 
 - Edit WIZ components in `src/app/<app-id>/app.json` and `view.ts`, `view.pug` or `view.html`, and `view.scss`.
 - Legacy Angular WIZ reusable frontend sources live in `src/portal/<name>/app`; their `assets` and `libs` are staged automatically. This frontend-only source namespace is not a Java backend `portal` or `module` package.
@@ -30,4 +33,6 @@ Imported projects intentionally omit those sample directories. The chat sample o
 with the last history message as its `after` cursor and sorts replayed events by ID; preserve
 that handoff if the demo is adapted rather than replaced.
 
-After changing vendored builder scripts, run `npm run test:wizbuild` and a clean `npm run wizbuild` before committing.
+After changing dependencies or vendored builder scripts, run `npm ci`,
+`npm run test:wizbuild`, and a clean `npm run wizbuild` before committing. Update this
+guide and the project README when changing the pinned frontend baseline.

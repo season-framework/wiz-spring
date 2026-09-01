@@ -1,5 +1,7 @@
 # Angular frontend rules
 
+- WIZ Spring `1.1.1` pins Angular runtime `22.1.4`, Angular CLI/build `22.1.6`, and
+  TypeScript `6.0.3`. `package.json` and `package-lock.json` are authoritative.
 - This is a normal Angular CLI workspace; it does not use WIZ component generation.
 - Application source lives under `frontend/src` and production output is `target/generated-resources/frontend`.
 - Keep API paths relative and resolve the prefix through `/app-config.json`.
@@ -14,3 +16,5 @@
   contracts when replacing the sample UI with product features.
 - Fresh projects include those sample pages; `--uri` and `--path` imports do not. The chat
   page passes the last history ID as the SSE `after` cursor so replay closes the connection gap.
+- After dependency or build-configuration changes, run `npm ci` and
+  `npm run frontend:build`; update this guide and the project README with the new baseline.

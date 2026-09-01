@@ -1,5 +1,7 @@
 # JSP frontend rules
 
+- This is the WIZ Spring `1.1.1` JSP template on Java 25 and Spring Boot `4.1.1`.
+  Browser build tools follow the Node.js `^22.22.3 || ^24.15.0` policy in `package.json`.
 - JSP views live under `src/main/webapp/WEB-INF/jsp` and are rendered by Spring MVC controllers.
 - The deployment artifact is an executable WAR, not a JAR.
 - Browser assets live under `src/main/webapp/assets`; `npm run frontend:build` stages a public copy for reverse proxies.
@@ -13,3 +15,5 @@
 - `npm run frontend:build` stages only `src/main/webapp/assets`. JSP files remain inside the executable WAR and browser tests under `src/test/frontend` must not be copied to the public bundle.
 - Fresh projects include `HomeController`, the feature JSPs, and their browser modules; `--uri` and `--path` imports do not.
 - Start chat SSE with the last history message as the `after` cursor and keep replayed messages ordered by ID.
+- After browser asset or build-script changes, run `npm ci`, `npm run frontend:test`,
+  and `npm run frontend:build`; run `./mvnw test` after JSP or MVC changes.

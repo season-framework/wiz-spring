@@ -12,6 +12,25 @@ The generated project has no runtime dependency on `wiz-spring`.
 The generator checks these tools before project creation. The same requirements remain
 visible in `package.json` so a fresh clone and its package manager can report the policy.
 
+## Generated platform baseline
+
+This project was generated from WIZ Spring `1.1.1` with the following backend and
+build baseline:
+
+| Layer | Version or policy |
+| --- | --- |
+| Java compilation | release `25` |
+| Spring backend | Spring Boot `4.1.1`, Boot-managed Spring Framework `7.0.9` |
+| API documentation | springdoc `3.1.0` |
+| Maven | Wrapper `3.9.15` |
+| Node.js | `^22.22.3 || ^24.15.0` |
+| npm | `10+` |
+
+The exact frontend dependency versions are documented in `docs/ai/frontend.md` and
+pinned in `package.json` and `package-lock.json`. This project is standalone: installing
+a newer WIZ Spring generator does not update it. When changing the platform, update
+`pom.xml`, npm manifests and lockfiles, this README, and `docs/ai` in the same change.
+
 ## Commands
 
 ```bash
@@ -42,7 +61,7 @@ The selected frontend must already use its 1.0 source root: `src/app/` (Angular 
 `frontend/index.html` plus `frontend/src/` (React), `frontend/index.html` (HTML), or
 `src/main/webapp/WEB-INF/jsp/` (JSP).
 
-The committed Maven Wrapper pins Maven 3.9.15, so the backend can also be built
+The committed Maven Wrapper pins Maven `3.9.15`, so the backend can also be built
 directly with `./mvnw clean package` (`mvnw.cmd clean package` on Windows).
 
 Business APIs start at `/api` by default. Change `app.api.prefix` or the

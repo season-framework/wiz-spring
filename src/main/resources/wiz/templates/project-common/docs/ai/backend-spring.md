@@ -2,6 +2,20 @@
 
 The backend is ordinary Spring Boot source. `wiz-spring` does not transform or compile it.
 
+## Platform baseline
+
+- WIZ Spring `1.1.1` generation contract.
+- Compile for Java release 25 with a full JDK 25 or newer. Do not lower the release or
+  add compatibility branches for the pre-1.1.1 toolchain.
+- Use Spring Boot `4.1.1` and its managed dependency set, including Spring Framework `7.0.9`.
+  The MVC and test starters are `spring-boot-starter-webmvc` and
+  `spring-boot-starter-webmvc-test`; do not override the Framework version separately.
+- API documentation uses springdoc `3.1.0`.
+- Jakarta EE APIs use `jakarta.*` packages. Do not use the retired `javax.servlet`,
+  `javax.persistence`, or `javax.validation` namespaces.
+- `pom.xml` is authoritative after generation. If the application deliberately upgrades
+  the platform, change this guide, `AGENTS.md`, and `README.md` in the same commit.
+
 - Keep Java and tests in their standard Maven source directories.
 - Organize application code by this dependency flow:
 

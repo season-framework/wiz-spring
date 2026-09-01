@@ -8,10 +8,10 @@
 
 | 문서 | 내용 |
 | --- | --- |
-| [프로젝트 생성](project-generation.ko.md) | 요구 사항, CLI, 템플릿, import, 샘플 애플리케이션, 프론트엔드 식별 |
+| [프로젝트 생성](project-generation.ko.md) | 1.1.1 버전 기준, 요구 사항, CLI, 템플릿, import, 샘플 애플리케이션 |
 | [빌드와 배포](build-and-deployment.ko.md) | 프로젝트 스크립트, API prefix, 번들, Docker Compose, systemd 서비스 |
 | [1.0 호환성](compatibility.ko.md) | 0.2.x와의 단절 및 지원하는 이전 방식 |
-| [AI 인스트럭션](ai-instructions.ko.md) | 인스트럭션 원본과 생성 프로젝트의 배치 위치 |
+| [AI 인스트럭션](ai-instructions.ko.md) | 버전별 인스트럭션 계약, 원본과 배치 위치, 검증 방법 |
 | [HTTP 프로젝트 Helper](../helper/README.ko.md) | Docker 기반 프로젝트 생성과 커스텀 템플릿 registry |
 | [릴리스 노트](../release-log/README.md) | 버전 이력과 1.0.0 릴리스 경계 |
 

@@ -22,6 +22,25 @@ workflow는 생성된 프로젝트가 직접 소유합니다.
 > workspace를 인플레이스 마이그레이션하지 않습니다. 애플리케이션을 옮기기 전에
 > [1.0 호환성 문서](docs/compatibility.ko.md)를 확인하십시오.
 
+## 1.1.1 플랫폼 기준
+
+WIZ Spring `1.1.1`이 생성하고 검증하는 정확한 stack은 다음과 같습니다. 단순한 최소
+호환 버전이 아니라 템플릿에 고정된 버전입니다.
+
+| 계층 | 1.1.1 기준 |
+| --- | --- |
+| Generator와 생성 프로젝트 버전 | `1.1.1` |
+| Java | release `25`; full JDK 25 이상 필요 |
+| Spring 백엔드 | Spring Boot `4.1.1`, Boot 관리 Spring Framework `7.0.9`, springdoc `3.1.0` |
+| 빌드 도구 | Maven Wrapper `3.9.15`, npm `10+` |
+| Node.js | `^22.22.3 || ^24.15.0`(LTS만 지원) |
+| Angular 템플릿 | Angular `22.1.4`, Angular CLI/build `22.1.6`, TypeScript `6.0.3` |
+| React 템플릿 | React `19.2.8`, Vite `8.2.2` |
+
+Generator를 올려도 이미 생성된 프로젝트를 자동으로 다시 쓰지 않습니다. 이 기준을
+적용하려면 새 `1.1.1` 프로젝트를 생성하거나 기존 프로젝트의 `pom.xml`,
+`package.json`, lockfile, `docs/ai` 인스트럭션을 함께 명시적으로 갱신하십시오.
+
 ## WIZ Spring을 사용하는 이유
 
 - **표준 백엔드** — Java는 `src/main/java`에 있고 Maven으로 직접 빌드합니다. WIZ
@@ -110,6 +129,7 @@ npm run bundle    # 배포 artifact, proxy 설정, Compose, checksum
 
 ```bash
 ./mvnw test
+scripts/verify-documentation.sh
 scripts/verify-templates.sh
 ```
 
