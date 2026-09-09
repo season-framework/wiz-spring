@@ -19,7 +19,7 @@ import (
 	"github.com/season-framework/wiz-spring/helper/internal/templatecatalog"
 )
 
-const Version = "1.1.1"
+const Version = "1.2.0"
 
 var ErrGenerationTimeout = errors.New("project generation timed out")
 

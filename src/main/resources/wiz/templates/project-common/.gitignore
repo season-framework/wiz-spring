@@ -8,5 +8,4 @@ data/
 .vscode/
 *.iml
 *.log
-.env
 src/main/resources/application-local.yml

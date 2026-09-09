@@ -1,3 +1,10 @@
+spring:
+  devtools:
+    restart:
+      additional-paths:
+        - scripts
+      trigger-file: .reload-trigger
+
 logging:
   level:
     __WIZ_PACKAGE_ROOT__: DEBUG

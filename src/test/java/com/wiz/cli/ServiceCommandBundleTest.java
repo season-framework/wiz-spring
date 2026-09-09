@@ -43,9 +43,10 @@ class ServiceCommandBundleTest {
         assertTrue(script.contains("# wiz.service.artifact=" + bundle.resolve("app/application.jar").toRealPath()));
         assertTrue(script.contains("# wiz.service.artifact-type=jar"));
         assertTrue(script.contains("# wiz.service.profiles=prod,bundle"));
+        assertTrue(script.contains("# wiz.service.env-file=" + bundle.toRealPath().resolve(".env")));
         assertTrue(script.contains("# wiz.service.logs=journald"));
         assertTrue(script.contains(" -jar '" + bundle.resolve("app/application.jar").toRealPath() + "'"));
-        assertTrue(script.contains("'--spring.profiles.active=prod,bundle'"));
+        assertTrue(script.contains("export SPRING_PROFILES_ACTIVE=\"${SPRING_PROFILES_ACTIVE:-prod,bundle}\""));
         assertTrue(script.contains("'--server.port=19090'"));
         assertTrue(script.contains("set -euo pipefail"));
         assertFalse(script.contains(" 2>&1"));
@@ -72,6 +73,48 @@ class ServiceCommandBundleTest {
     }
 
     @Test
+    void explicitProductionModeUsesBundleBeneathProjectRoot() throws Exception {
+        Path project = Files.createDirectories(tempDir.resolve("production-project"));
+        Path bundle = project.resolve("bundle");
+        Files.move(createBundle("jar"), bundle);
+
+        CommandResult result = execute(
+                "service", "install", "production-demo",
+                "--production",
+                "--root", project.toString(),
+                "--allow-root",
+                "--dry-run",
+                "--systemd-dir", tempDir.resolve("systemd-production").toString(),
+                "--bin-dir", tempDir.resolve("bin-production").toString());
+
+        assertEquals(0, result.exitCode(), result.error());
+        assertTrue(result.output().contains("# wiz.service.mode=production"));
+        assertTrue(result.output().contains("# wiz.service.bundle=" + bundle.toRealPath()));
+        assertTrue(result.output().contains("# wiz.service.profiles=prod,bundle"));
+        assertTrue(result.output().contains(" -jar '" + bundle.resolve("app/application.jar").toRealPath() + "'"));
+        assertFalse(result.output().contains("run dev"));
+    }
+
+    @Test
+    void relativeBundleWithoutRootResolvesFromTheWorkingDirectory() throws Exception {
+        Path bundle = createBundle("jar");
+        Path workingDirectory = Path.of("").toAbsolutePath().normalize();
+        Path relativeBundle = workingDirectory.relativize(bundle);
+
+        CommandResult result = execute(
+                "service", "install", "relative-production",
+                "--bundle", relativeBundle.toString(),
+                "--allow-root",
+                "--dry-run",
+                "--systemd-dir", tempDir.resolve("systemd-relative").toString(),
+                "--bin-dir", tempDir.resolve("bin-relative").toString());
+
+        assertEquals(0, result.exitCode(), result.error());
+        assertTrue(result.output().contains("# wiz.service.mode=production"));
+        assertTrue(result.output().contains("# wiz.service.bundle=" + bundle.toRealPath()));
+    }
+
+    @Test
     void rejectsBundleWithoutRequiredManifest() throws Exception {
         Path bundle = Files.createDirectories(tempDir.resolve("fallback-bundle/app")).getParent();
         Files.writeString(bundle.resolve("app/application.jar"), "archive");
@@ -91,14 +134,18 @@ class ServiceCommandBundleTest {
     }
 
     @Test
-    void installRequiresExplicitBundleOption() {
+    void productionModeExplainsHowToCreateTheDefaultBundle() throws Exception {
+        Path project = Files.createDirectories(tempDir.resolve("missing-bundle-project"));
         CommandResult result = execute(
                 "service", "install", "missing-bundle",
+                "--production",
+                "--root", project.toString(),
                 "--allow-root",
                 "--dry-run");
 
-        assertEquals(2, result.exitCode());
-        assertTrue(result.error().contains("Missing required option: '--bundle=<bundle>'"), result.error());
+        assertEquals(1, result.exitCode());
+        assertTrue(result.error().contains("Production bundle directory must already exist"), result.error());
+        assertTrue(result.error().contains("Run npm run bundle"), result.error());
         assertFalse(result.output().contains("# wiz.service."));
     }
 
@@ -238,6 +285,28 @@ class ServiceCommandBundleTest {
     }
 
     @Test
+    void permitsRuntimeEnvironmentAndDatabaseFilesWithoutWeakeningTheImmutableBundleTree() throws Exception {
+        Path bundle = createBundle("jar");
+        Path environment = bundle.resolve(".env");
+        Files.writeString(environment, "SERVER_PORT=8080\n");
+        Path data = Files.createDirectories(bundle.resolve("data"));
+        Files.writeString(data.resolve("sample.mv.db"), "runtime database\n");
+
+        CommandResult allowed = installDryRun("runtime-data", bundle);
+        assertEquals(0, allowed.exitCode(), allowed.error());
+
+        Files.writeString(environment, "SERVER_PORT=9090\n");
+        CommandResult editedEnvironment = installDryRun("edited-environment", bundle);
+        assertEquals(0, editedEnvironment.exitCode(), editedEnvironment.error());
+
+        Path config = Files.createDirectories(bundle.resolve("config"));
+        Files.writeString(config.resolve("unsigned.yml"), "spring: {}\n");
+        CommandResult rejected = installDryRun("unsigned-config", bundle);
+        assertEquals(1, rejected.exitCode());
+        assertTrue(rejected.error().contains("missing entries for: config/unsigned.yml"), rejected.error());
+    }
+
+    @Test
     void rejectsChecksumMismatch() throws Exception {
         Path bundle = createBundle("jar");
         Path checksums = bundle.resolve("SHA256SUMS");
@@ -276,7 +345,7 @@ class ServiceCommandBundleTest {
         Path systemd = Files.createDirectories(tempDir.resolve("installed-systemd"));
         Path bin = Files.createDirectories(tempDir.resolve("installed-bin"));
         Path java = tempDir.resolve("fake-java");
-        Files.writeString(java, "#!/bin/sh\nprintf 'FAKE_JAVA:%s\\n' \"$*\"\n");
+        Files.writeString(java, "#!/bin/sh\nprintf 'PROFILE=%s\\n' \"$SPRING_PROFILES_ACTIVE\"\nprintf 'FAKE_JAVA:%s\\n' \"$*\"\n");
         java.toFile().setExecutable(true, false);
 
         Path systemctlCalls = tempDir.resolve("systemctl.calls");
@@ -310,12 +379,15 @@ class ServiceCommandBundleTest {
         assertTrue(unit.contains("StandardOutput=journal"));
         assertTrue(unit.contains("StandardError=journal"));
         assertTrue(unit.contains("SyslogIdentifier=wiz.demo"));
+        assertTrue(unit.contains("EnvironmentFile=" + bundle.resolve(".env")));
+        assertFalse(unit.contains("EnvironmentFile=-"));
 
         Process process = new ProcessBuilder(launcher.toString()).start();
         String applicationOutput = new String(process.getInputStream().readAllBytes());
         assertEquals(0, process.waitFor());
-        assertEquals("FAKE_JAVA:-jar " + bundle.resolve("app/application.jar").toRealPath()
-                + " --spring.profiles.active=prod,blue-green --server.port=18080\n", applicationOutput);
+        assertEquals("PROFILE=prod,blue-green\nFAKE_JAVA:-jar "
+                + bundle.resolve("app/application.jar").toRealPath()
+                + " --server.port=18080\n", applicationOutput);
     }
 
     @Test
@@ -405,6 +477,7 @@ class ServiceCommandBundleTest {
         Files.setPosixFilePermissions(bundle.resolve("app"), PosixFilePermissions.fromString("rwxr-xr-x"));
         Files.setPosixFilePermissions(
                 bundle.resolve("app/application.jar"), PosixFilePermissions.fromString("rw-r--r--"));
+        Files.setPosixFilePermissions(bundle.resolve(".env"), PosixFilePermissions.fromString("rw-r--r--"));
         Files.setPosixFilePermissions(bundle.resolve("manifest.json"), PosixFilePermissions.fromString("rw-r--r--"));
         Files.setPosixFilePermissions(bundle.resolve("public"), PosixFilePermissions.fromString("rwxr-xr-x"));
         Files.setPosixFilePermissions(
@@ -630,6 +703,7 @@ class ServiceCommandBundleTest {
         Files.writeString(bundle.resolve("app/application." + type), "archive");
         Files.createDirectories(bundle.resolve("public"));
         Files.writeString(bundle.resolve("public/index.html"), "<!doctype html>\n");
+        Files.writeString(bundle.resolve(".env"), "SERVER_PORT=8080\nSPRING_PROFILES_ACTIVE=prod,bundle\n");
         writeManifest(bundle, type);
         writeChecksums(bundle);
         return bundle;
@@ -652,6 +726,8 @@ class ServiceCommandBundleTest {
                     .filter(path -> Files.isRegularFile(path))
                     .filter(path -> !path.equals(bundle.resolve("SHA256SUMS")))
                     .map(bundle::relativize)
+                    .filter(path -> !path.equals(Path.of(".env")))
+                    .filter(path -> !path.startsWith(Path.of("data")))
                     .sorted()
                     .toList();
         }
@@ -684,6 +760,7 @@ class ServiceCommandBundleTest {
         Files.setPosixFilePermissions(bundle.resolve("app"), PosixFilePermissions.fromString("rwxr-xr-x"));
         Files.setPosixFilePermissions(
                 bundle.resolve("app/application." + type), PosixFilePermissions.fromString("rw-r--r--"));
+        Files.setPosixFilePermissions(bundle.resolve(".env"), PosixFilePermissions.fromString("rw-r--r--"));
         Files.setPosixFilePermissions(bundle.resolve("manifest.json"), PosixFilePermissions.fromString("rw-r--r--"));
     }
 

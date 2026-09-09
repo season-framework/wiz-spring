@@ -108,21 +108,24 @@ class ProjectTemplateCommandTest {
             String packageJson = Files.readString(target.resolve("package.json"));
             String packageLock = Files.readString(target.resolve("package-lock.json"));
             String pom = Files.readString(target.resolve("pom.xml"));
-            assertTrue(packageJson.contains("\"version\": \"1.1.1\""), template.id());
+            assertTrue(packageJson.contains("\"version\": \"1.2.0\""), template.id());
             assertTrue(packageJson.contains("\"frontend\": \"" + template.id() + "\""), template.id());
             assertTrue(packageJson.contains("\"node\": \"^22.22.3 || ^24.15.0\""), template.id());
             assertTrue(packageJson.contains("\"npm\": \">=10.0.0\""), template.id());
             assertTrue(packageLock.contains("\"node\": \"^22.22.3 || ^24.15.0\""), template.id());
             assertTrue(packageLock.contains("\"npm\": \">=10.0.0\""), template.id());
-            assertTrue(pom.contains("<version>1.1.1</version>"), template.id());
+            assertTrue(pom.contains("<version>1.2.0</version>"), template.id());
             assertTrue(pom.contains("<version>4.1.1</version>"), template.id());
             assertTrue(pom.contains("<java.version>25</java.version>"), template.id());
             assertTrue(pom.contains("<springdoc.version>3.1.0</springdoc.version>"), template.id());
             String archiveType = template == com.wiz.core.FrontendTemplate.JSP ? "war" : "jar";
             assertTrue(Files.readString(target.resolve("docker-compose.yaml"))
                     .contains("${APP_ARTIFACT:-application." + archiveType + "}"), template.id());
-            assertTrue(Files.readString(target.resolve("deploy/.env.example"))
+            assertTrue(Files.readString(target.resolve(".env"))
                     .contains("APP_ARTIFACT=application." + archiveType), template.id());
+            assertFalse(Files.exists(target.resolve(".env.example")), template.id());
+            assertFalse(Files.readAllLines(target.resolve(".gitignore")).stream()
+                    .anyMatch(".env"::equals), template.id());
             assertTrue(Files.readString(target.resolve("deploy/docker/backend.Dockerfile"))
                     .contains("ARG APP_ARTIFACT=application." + archiveType), template.id());
             assertTrue(Files.readString(target.resolve("deploy/docker/backend.Dockerfile"))
@@ -285,8 +288,10 @@ class ProjectTemplateCommandTest {
 
         String packageJson = Files.readString(target.resolve("package.json"));
         assertTrue(packageJson.contains("\"frontend\" : \"html\""));
-        assertTrue(packageJson.contains("\"build\" : \"node scripts/build.mjs\""));
-        assertTrue(packageJson.contains("\"dev\" : \"node scripts/dev.mjs\""));
+        assertTrue(packageJson.contains(
+                "\"build\" : \"node --env-file-if-exists=.env scripts/build.mjs\""));
+        assertTrue(packageJson.contains(
+                "\"dev\" : \"node --env-file-if-exists=.env scripts/dev.mjs\""));
         assertFalse(packageJson.contains("original:build"));
         assertFalse(packageJson.contains("original:dev"));
         assertTrue(packageJson.contains("\"test\" : \"node --test\""));

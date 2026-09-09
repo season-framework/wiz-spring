@@ -1,6 +1,6 @@
 {
   "name": "__WIZ_ARTIFACT_ID__",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -12,12 +12,13 @@
     "templateVersion": 1
   },
   "scripts": {
-    "frontend:build": "vite build --config vite.config.js",
-    "frontend:watch": "vite --config vite.config.js",
-    "backend:build": "node scripts/build-backend.mjs",
-    "build": "node scripts/build.mjs",
-    "dev": "node scripts/dev.mjs",
-    "bundle": "node scripts/bundle.mjs"
+    "frontend:build": "node --env-file-if-exists=.env node_modules/vite/bin/vite.js build --config vite.config.js",
+    "frontend:watch": "node --env-file-if-exists=.env node_modules/vite/bin/vite.js build --watch --mode development --config vite.config.js",
+    "frontend:serve": "node --env-file-if-exists=.env node_modules/vite/bin/vite.js --config vite.config.js",
+    "backend:build": "node --env-file-if-exists=.env scripts/build-backend.mjs",
+    "build": "node --env-file-if-exists=.env scripts/build.mjs",
+    "dev": "node --env-file-if-exists=.env scripts/dev.mjs",
+    "bundle": "node --env-file-if-exists=.env scripts/bundle.mjs"
   },
   "dependencies": {
     "react": "19.2.8",

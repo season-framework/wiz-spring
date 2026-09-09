@@ -1,11 +1,15 @@
 # React frontend rules
 
-- WIZ Spring `1.1.1` pins React and React DOM `19.2.8`, Vite `8.2.2`, and
+- WIZ Spring `1.2.0` pins React and React DOM `19.2.8`, Vite `8.2.2`, and
   `@vitejs/plugin-react` `6.1.1`. `package.json` and `package-lock.json` are authoritative.
 - This is a normal React and Vite application; it does not use WIZ component generation.
 - Source lives under `frontend/` and production output is `target/generated-resources/frontend`.
 - Read `/app-config.json` at runtime. Never hardcode the configured API prefix in components.
-- The Vite development proxy follows `APP_API_PREFIX`; keep it aligned with the Spring process.
+- `npm run dev` uses Vite's build watcher and writes every successful rebuild to
+  `target/generated-resources/frontend`, which Spring serves on its own port. Do not replace
+  it with an in-memory dev server or edit the generated output.
+- Use `npm run frontend:serve` only when you explicitly want Vite's separate development
+  server with HMR. Its proxy follows `APP_API_PREFIX`; keep it aligned with Spring.
 - Keep server state and view state separate, and keep API calls in small typed modules as the application grows.
 - `frontend/src/router.js` intentionally provides dependency-free hash routing. Authenticated
   pages render inside `layout/AppShell.jsx`; add a routing package only when the product needs it.

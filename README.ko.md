@@ -4,7 +4,7 @@
 
 **프로젝트에 필요한 프론트엔드 구조와 표준 Spring Boot 백엔드를 생성합니다.**
 
-[![Release 1.1.1](https://img.shields.io/badge/release-1.1.1-2563eb)](release-log/1.1.1.md)
+[![Release 1.2.0](https://img.shields.io/badge/release-1.2.0-2563eb)](release-log/1.2.0.md)
 [![Java 25+](https://img.shields.io/badge/Java-25%2B-e76f00)](pom.xml)
 [![MIT License](https://img.shields.io/badge/license-MIT-16a34a)](LICENSE)
 
@@ -22,14 +22,28 @@ workflow는 생성된 프로젝트가 직접 소유합니다.
 > workspace를 인플레이스 마이그레이션하지 않습니다. 애플리케이션을 옮기기 전에
 > [1.0 호환성 문서](docs/compatibility.ko.md)를 확인하십시오.
 
-## 1.1.1 플랫폼 기준
+## 1.2.0 핵심 변경
 
-WIZ Spring `1.1.1`이 생성하고 검증하는 정확한 stack은 다음과 같습니다. 단순한 최소
+- `npm run dev`와 기본 systemd 서비스가 백엔드 compile 및 프론트엔드 build를 계속
+  감시합니다. 성공한 소스 변경은 서비스 재설치나 프로세스 수동 재시작 없이 반영됩니다.
+- `service install`은 unit과 launcher를 만드는 설치 도구로만 WIZ Spring을 사용합니다.
+  설치된 launcher는 생성 프로젝트의 `npm` 또는 bundle의 `java`를 직접 실행하므로
+  WIZ Spring 실행 파일이나 generator JAR에 런타임 의존하지 않습니다.
+- 서비스 설치는 기본적으로 실시간 개발 모드입니다. 변경되지 않는 bundle을 실행하는
+  production 모드는 `--production` 또는 `--bundle`로 명시해야 합니다.
+- 프로젝트와 bundle 모두 복사 절차 없는 `.env`를 기본 제공하며, JDK 25 이상만 있는
+  서버에서도 bundle의 `./run.sh`를 바로 실행할 수 있습니다.
+- 사용하지 않는 `completion` 명령을 제거해 CLI는 `create`, `templates`, `service`에만
+  집중합니다.
+
+## 1.2.0 플랫폼 기준
+
+WIZ Spring `1.2.0`이 생성하고 검증하는 정확한 stack은 다음과 같습니다. 단순한 최소
 호환 버전이 아니라 템플릿에 고정된 버전입니다.
 
-| 계층 | 1.1.1 기준 |
+| 계층 | 1.2.0 기준 |
 | --- | --- |
-| Generator와 생성 프로젝트 버전 | `1.1.1` |
+| Generator와 생성 프로젝트 버전 | `1.2.0` |
 | Java | release `25`; full JDK 25 이상 필요 |
 | Spring 백엔드 | Spring Boot `4.1.1`, Boot 관리 Spring Framework `7.0.9`, springdoc `3.1.0` |
 | 빌드 도구 | Maven Wrapper `3.9.15`, npm `10+` |
@@ -38,7 +52,7 @@ WIZ Spring `1.1.1`이 생성하고 검증하는 정확한 stack은 다음과 같
 | React 템플릿 | React `19.2.8`, Vite `8.2.2` |
 
 Generator를 올려도 이미 생성된 프로젝트를 자동으로 다시 쓰지 않습니다. 이 기준을
-적용하려면 새 `1.1.1` 프로젝트를 생성하거나 기존 프로젝트의 `pom.xml`,
+적용하려면 새 `1.2.0` 프로젝트를 생성하거나 기존 프로젝트의 `pom.xml`,
 `package.json`, lockfile, `docs/ai` 인스트럭션을 함께 명시적으로 갱신하십시오.
 
 ## WIZ Spring을 사용하는 이유
@@ -61,13 +75,16 @@ Generator를 올려도 이미 생성된 프로젝트를 자동으로 다시 쓰�
 ```bash
 ./mvnw clean package
 
-java -jar target/wiz-spring-1.1.1.jar create ../dashboard \
+java -jar target/wiz-spring-1.2.0.jar create ../dashboard \
   --package com.example.dashboard
 
 cd ../dashboard
 npm ci
 npm run dev
 ```
+
+생성된 프로젝트에는 바로 사용할 수 있는 root `.env`가 이미 포함됩니다. 기본값을
+바꿀 때 이 파일을 직접 편집합니다.
 
 기본 템플릿은 `angular-wiz`입니다. 다른 프론트엔드는 `--template react`처럼
 지정합니다. Target directory 이름은 소문자 Maven/npm artifact ID로 정규화되므로
@@ -84,7 +101,7 @@ identifier여야 하므로 `-`를 사용할 수 없습니다.
 | `html` | 정적 HTML, CSS, JavaScript |
 | `jsp` | 서버 렌더링 Spring MVC/JSP 애플리케이션 |
 
-내장 설명은 `java -jar target/wiz-spring-1.1.1.jar templates`로 확인할 수 있습니다.
+내장 설명은 `java -jar target/wiz-spring-1.2.0.jar templates`로 확인할 수 있습니다.
 
 ## 생성 프로젝트 workflow
 
@@ -96,6 +113,11 @@ npm run bundle    # 배포 artifact, proxy 설정, Compose, checksum
 
 모든 템플릿은 `frontend:build`, `backend:build`도 제공합니다. Angular WIZ에는
 `wizbuild`, `wizwatch`가 추가되며 compiler source가 생성 프로젝트에 포함됩니다.
+개발 명령은 프론트엔드 watcher 결과를 Spring 정적 산출물에 기록하고 백엔드는
+DevTools로 재기동하므로, 일반적인 소스 수정에는 명령을 다시 시작할 필요가 없습니다.
+모든 프로젝트 npm script는 root `.env`를 읽습니다. 생성한 배포 bundle은 JDK만 설치된
+서버로 복사해 `./run.sh`로 시작할 수 있으며, 이 launcher와 설치된 systemd service는
+runtime에 WIZ Spring을 요구하지 않습니다.
 
 ## CLI
 
@@ -103,8 +125,7 @@ npm run bundle    # 배포 artifact, proxy 설정, Compose, checksum
 | --- | --- |
 | `create` | 새 프로젝트를 생성하거나 호환되는 1.0 source를 import합니다. |
 | `templates` | 프론트엔드 템플릿을 표시합니다. |
-| `service` | 생성된 번들을 systemd로 설치하고 관리합니다. |
-| `completion` | Bash 또는 Zsh 자동 완성을 생성합니다. |
+| `service` | 생성 프로젝트의 실시간 개발 모드 또는 production 번들을 systemd로 관리합니다. |
 
 전체 옵션은 `<command> --help`에서 확인하십시오.
 
@@ -112,7 +133,7 @@ npm run bundle    # 배포 artifact, proxy 설정, Compose, checksum
 
 선택적 [Docker 프로젝트 Helper](helper/README.ko.md)는 HTTP로 프로젝트를 생성해 ZIP으로
 반환합니다. Build-time registry로 템플릿을 추가·수정·삭제할 수 있으며 Helper는
-`wiz-spring-1.1.1.jar`에 포함되지 않습니다.
+`wiz-spring-1.2.0.jar`에 포함되지 않습니다.
 
 ## 문서
 

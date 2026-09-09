@@ -73,7 +73,7 @@ class ProjectTemplateServiceTest {
         Map<String, Object> scripts = object(manifest.get("scripts"));
         assertTrue(generated.imported());
         assertEquals("existing-app", manifest.get("name"));
-        assertEquals("node scripts/build.mjs", scripts.get("build"));
+        assertEquals("node --env-file-if-exists=.env scripts/build.mjs", scripts.get("build"));
         assertEquals("node --test", scripts.get("test"));
         assertFalse(scripts.containsKey("original:build"));
         assertEquals("html", object(manifest.get("wiz")).get("frontend"));

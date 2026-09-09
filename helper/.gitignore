@@ -1,6 +1,8 @@
 /bin/
 /dist/
 /tmp/
-.env
+# Runnable non-secret defaults are committed. Inject private values through the
+# process environment instead of creating a copied example file.
+!.env
 *.log
 *.zip

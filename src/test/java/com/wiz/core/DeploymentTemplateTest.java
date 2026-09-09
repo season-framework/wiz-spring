@@ -131,6 +131,32 @@ class DeploymentTemplateTest {
         assertTrue(apacheDockerfile.contains("chmod -R a=rX /usr/local/apache2/htdocs"));
     }
 
+    @Test
+    void generatedConfigurationAndBundleLauncherAreStandaloneAndExplicit() throws Exception {
+        String environment = resource("/wiz/templates/project-common/.env");
+        String projectHelpers = resource("/wiz/templates/project-common/scripts/lib/project.mjs");
+        String bundle = resource("/wiz/templates/project-common/scripts/bundle.mjs");
+        String manifest = resource("/wiz/templates/project-common.files");
+
+        assertTrue(manifest.lines().anyMatch(".env"::equals));
+        assertFalse(manifest.contains(".env.example"));
+        assertTrue(environment.contains("SERVER_PORT=8080"));
+        assertTrue(environment.contains("SPRING_PROFILES_ACTIVE=dev"));
+        assertFalse(environment.lines().anyMatch("SPRINGDOC_API_DOCS_ENABLED=false"::equals));
+        assertFalse(environment.lines().anyMatch("SPRINGDOC_SWAGGER_UI_ENABLED=false"::equals));
+        assertTrue(projectHelpers.contains("process.loadEnvFile(projectEnvironmentFile)"));
+        assertTrue(bundle.contains("writeFile(path.join(stage, '.env')"));
+        assertTrue(bundle.contains("if (relative === '.env') continue"));
+        assertFalse(bundle.contains(".env.example"));
+        assertTrue(bundle.contains("const launcherPath = path.join(stage, 'run.sh')"));
+        assertTrue(bundle.contains("await chmod(launcherPath, 0o755)"));
+        assertTrue(bundle.contains("SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-prod,bundle}"));
+        assertTrue(bundle.contains("carriage_return=$(printf"));
+        assertTrue(bundle.contains("exec \"$java_bin\" -jar"));
+        assertFalse(bundle.contains("exec wiz-spring"));
+        assertFalse(bundle.contains("exec npm"));
+    }
+
     private static String resource(String path) throws Exception {
         try (InputStream input = DeploymentTemplateTest.class.getResourceAsStream(path)) {
             assertNotNull(input, path);

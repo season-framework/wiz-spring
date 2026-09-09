@@ -1,6 +1,6 @@
 # HTML frontend rules
 
-- This is the WIZ Spring `1.1.1` dependency-free HTML template. It uses the common
+- This is the WIZ Spring `1.2.0` dependency-free HTML template. It uses the common
   Node.js `^22.22.3 || ^24.15.0` build-tool policy declared in `package.json`.
 - Source files live in `frontend/` and are copied to `target/generated-resources/frontend`.
 - Use browser-native modules unless the project deliberately adopts a framework.

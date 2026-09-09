@@ -61,6 +61,22 @@ for template in "${templates[@]}"; do
         npm run build
         npm run bundle
         (cd bundle && sha256sum -c SHA256SUMS)
+        test -f .env
+        test ! -e .env.example
+        test -f bundle/.env
+        test ! -e bundle/.env.example
+        if grep -Eq '  \.env$' bundle/SHA256SUMS; then
+            printf 'Mutable bundle .env must not be checksum-protected: %s\n' "$template" >&2
+            exit 1
+        fi
+        test -x bundle/run.sh
+        test -d bundle/data
+        sh -n bundle/run.sh
+        if grep -Eiq 'wiz-spring|node|npm|mvn' bundle/run.sh; then
+            printf 'Standalone bundle launcher has a forbidden generator/build-tool dependency: %s\n' \
+                "$template" >&2
+            exit 1
+        fi
         node -e '
           const fs = require("node:fs");
           const manifest = JSON.parse(fs.readFileSync("bundle/manifest.json", "utf8"));
@@ -68,6 +84,9 @@ for template in "${templates[@]}"; do
           const artifact = expected === "jsp" ? "war" : "jar";
           const publicEntry = expected === "jsp" ? "bundle/public/js/shell.js" : "bundle/public/index.html";
           if (manifest.template !== expected || manifest.artifact.type !== artifact) process.exit(1);
+          if (manifest.launcher?.path !== "run.sh" || manifest.launcher?.requires !== "JDK 25+") process.exit(1);
+          if (!manifest.mutable?.files?.includes(".env")) process.exit(1);
+          if (!manifest.mutable?.directories?.includes("data")) process.exit(1);
           if (!fs.existsSync(`bundle/app/application.${artifact}`)) process.exit(1);
           if (!fs.existsSync(publicEntry)) process.exit(1);
         ' "$template"

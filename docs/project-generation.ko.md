@@ -18,7 +18,7 @@ toolchain이 지원하지 않는 Node.js 범위는 숫자가 더 높더라도 �
 
 ## 생성 플랫폼
 
-모든 `1.1.1` 템플릿은 Java release 25, Spring Boot `4.1.1`, 해당 BOM이 관리하는
+모든 `1.2.0` 템플릿은 Java release 25, Spring Boot `4.1.1`, 해당 BOM이 관리하는
 Spring Framework `7.0.9`, springdoc `3.1.0`, Maven Wrapper `3.9.15`를 고정합니다. Angular 템플릿은 Angular `22.1.4`, Angular
 CLI/build `22.1.6`, TypeScript `6.0.3`을, React 템플릿은 React `19.2.8`, Vite
 `8.2.2`를 고정합니다. 사람이 읽는 기준표는 루트
@@ -33,7 +33,7 @@ Generator 버전업은 기존 생성 프로젝트를 자동으로 변경하지 �
 
 ```bash
 ./mvnw clean package
-alias wiz-spring='java -jar /absolute/path/to/wiz-spring/target/wiz-spring-1.1.1.jar'
+alias wiz-spring='java -jar /absolute/path/to/wiz-spring/target/wiz-spring-1.2.0.jar'
 ```
 
 ## CLI
@@ -42,12 +42,9 @@ alias wiz-spring='java -jar /absolute/path/to/wiz-spring/target/wiz-spring-1.1.1
 | --- | --- |
 | `create <path> --package <package> [--template <id>]` | 독립 프로젝트를 생성하거나 import합니다. |
 | `templates` | 내장 프론트엔드 템플릿을 표시합니다. |
-| `service <subcommand>` | 생성된 번들을 systemd 서비스로 관리합니다. |
-| `completion <bash\|zsh>` | 셸 자동 완성을 생성합니다. |
+| `service <subcommand>` | 생성 프로젝트의 개발 모드 또는 production 번들을 systemd 서비스로 관리합니다. |
 
-전체 옵션은 `wiz-spring <command> --help`가 기준입니다. 현재 셸에는
-`source <(wiz-spring completion bash)` 또는 `source <(wiz-spring completion zsh)`로
-자동 완성을 적용할 수 있습니다.
+전체 옵션은 `wiz-spring <command> --help`가 기준입니다.
 
 ## 템플릿
 

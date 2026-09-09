@@ -4,9 +4,9 @@ The backend is ordinary Spring Boot source. `wiz-spring` does not transform or c
 
 ## Platform baseline
 
-- WIZ Spring `1.1.1` generation contract.
+- WIZ Spring `1.2.0` generation contract.
 - Compile for Java release 25 with a full JDK 25 or newer. Do not lower the release or
-  add compatibility branches for the pre-1.1.1 toolchain.
+  add compatibility branches for the pre-1.2.0 toolchain.
 - Use Spring Boot `4.1.1` and its managed dependency set, including Spring Framework `7.0.9`.
   The MVC and test starters are `spring-boot-starter-webmvc` and
   `spring-boot-starter-webmvc-test`; do not override the Framework version separately.

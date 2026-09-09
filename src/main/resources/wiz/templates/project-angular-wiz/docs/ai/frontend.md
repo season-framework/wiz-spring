@@ -1,7 +1,7 @@
 # Angular WIZ frontend rules
 
 This project keeps the human- and AI-friendly WIZ frontend layout while producing a
-normal Angular 22 application. WIZ Spring `1.1.1` pins Angular runtime `22.1.4`, Angular
+normal Angular 22 application. WIZ Spring `1.2.0` pins Angular runtime `22.1.4`, Angular
 CLI/build `22.1.6`, TypeScript `6.0.3`, and Pug `3.0.4`; `package.json` and the lockfile
 are authoritative.
 

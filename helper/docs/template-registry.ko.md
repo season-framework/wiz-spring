@@ -104,7 +104,7 @@ cp helper/templates/registry.example.json \
 docker build \
   --build-arg WIZ_HELPER_TEMPLATE_FILE=registry.company.json \
   -f helper/Dockerfile \
-  -t company/wiz-spring-helper:1.1.1 \
+  -t company/wiz-spring-helper:1.2.0 \
   helper
 ```
 
@@ -118,7 +118,6 @@ WIZ_HELPER_TEMPLATE_FILE=registry.company.json \
 로컬 설정을 유지하려면 다음처럼 환경 파일을 명시합니다.
 
 ```bash
-cp helper/.env.example helper/.env
 # helper/.env에서 WIZ_HELPER_TEMPLATE_FILE=registry.company.json 설정
 docker compose \
   --env-file helper/.env \

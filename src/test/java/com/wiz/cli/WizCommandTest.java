@@ -15,11 +15,11 @@ import picocli.CommandLine;
 class WizCommandTest {
 
     @Test
-    void exposesOnlyTheOneDotZeroRootCommands() {
+    void exposesOnlySupportedRootCommands() {
         CommandLine command = new CommandLine(new WizCommand());
 
         assertEquals(
-                Set.of("create", "templates", "service", "completion"),
+                Set.of("create", "templates", "service"),
                 command.getSubcommands().keySet());
 
         StringWriter output = new StringWriter();
@@ -31,7 +31,7 @@ class WizCommandTest {
         assertTrue(help.contains("create"));
         assertTrue(help.contains("templates"));
         assertTrue(help.contains("service"));
-        assertTrue(help.contains("completion"));
+        assertFalse(help.contains(System.lineSeparator() + "  completion"));
         assertFalse(help.contains(System.lineSeparator() + "  build"));
         assertFalse(help.contains(System.lineSeparator() + "  run"));
         assertFalse(help.contains(System.lineSeparator() + "  jar"));
@@ -42,7 +42,7 @@ class WizCommandTest {
 
     @Test
     void rejectsRemovedZeroDotXCommands() {
-        for (String removed : Set.of("build", "run", "jar", "bundle", "kill", "mcp")) {
+        for (String removed : Set.of("build", "run", "jar", "bundle", "kill", "mcp", "completion")) {
             StringWriter error = new StringWriter();
             CommandLine command = new CommandLine(new WizCommand());
             command.setErr(new PrintWriter(error));
@@ -89,8 +89,11 @@ class WizCommandTest {
 
         output.getBuffer().setLength(0);
         assertEquals(0, root.execute("service", "install", "--help"));
+        assertTrue(output.toString().contains("--root"));
+        assertTrue(output.toString().contains("--production"));
         assertTrue(output.toString().contains("--bundle"));
-        assertTrue(output.toString().contains("1.0 bundle"));
+        assertTrue(output.toString().contains("--env-file"));
+        assertTrue(output.toString().contains("live-development or production"));
 
         output.getBuffer().setLength(0);
         assertEquals(0, root.execute("service", "uninstall", "--help"));

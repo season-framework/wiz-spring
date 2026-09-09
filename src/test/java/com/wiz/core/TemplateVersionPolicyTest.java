@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 
 class TemplateVersionPolicyTest {
 
-    private static final String WIZ_VERSION = "1.1.1";
+    private static final String WIZ_VERSION = "1.2.0";
     private static final String JAVA_RELEASE = "25";
     private static final String SPRING_BOOT_VERSION = "4.1.1";
     private static final String SPRING_FRAMEWORK_VERSION = "7.0.9";
@@ -133,13 +133,56 @@ class TemplateVersionPolicyTest {
     }
 
     @Test
-    void frontendInstructionsNameThePinnedOnePointOnePointOneToolchains() throws Exception {
+    void generatedProjectsRequireVerifiedLiveDevelopmentBuilds() throws Exception {
+        String agents = resource("/wiz/templates/project-common/AGENTS.md");
+        String copilot = resource("/wiz/templates/project-common/.github/copilot-instructions.md");
+        String deployment = resource("/wiz/templates/project-common/docs/ai/deployment.md");
+        String backendWatcher = resource("/wiz/templates/project-common/scripts/backend-watch.mjs");
+        String backendBuild = resource("/wiz/templates/project-common/scripts/build-backend.mjs");
+        String fullBuild = resource("/wiz/templates/project-common/scripts/build.mjs");
+        String projectHelpers = resource("/wiz/templates/project-common/scripts/lib/project.mjs");
+        String developmentProfile = resource("/wiz/templates/project-common/src/main/resources/application-dev.yml");
+        String angular = resource("/wiz/templates/project-angular/package.json");
+        String angularWorkspace = resource("/wiz/templates/project-angular/angular.json");
+        String react = resource("/wiz/templates/project-react/package.json");
+
+        assertContains(agents, "Never finish a source-code task after editing files only");
+        assertContains(agents, "Do not stop and restart it for ordinary source edits");
+        assertContains(agents, "generated root `.env`");
+        assertContains(agents, "never introduce a copy or rename step");
+        assertContains(agents, "runnable with `./run.sh`");
+        assertContains(copilot, "watcher reports a successful rebuild");
+        assertContains(copilot, "without calling the WIZ Spring CLI at runtime");
+        assertContains(deployment, "service install <name> --root <project>");
+        assertContains(deployment, "--production");
+        assertContains(backendWatcher, "await runMaven(['compile', '-DskipTests'])");
+        assertContains(backendWatcher, "await requestBackendRestart()");
+        assertTrue(backendWatcher.indexOf("await runMaven") < backendWatcher.indexOf("await requestBackendRestart"));
+        assertContains(backendBuild, "await requestBackendRestart()");
+        assertContains(fullBuild, "await requestBackendRestart()");
+        assertFalse(backendBuild.contains("['clean', 'package']"));
+        assertContains(backendBuild, "await runMaven(['package'])");
+        assertTrue(fullBuild.indexOf("await runNpmScript('frontend:build')")
+                < fullBuild.indexOf("await requestBackendRestart()"));
+        assertContains(projectHelpers, "await utimes(trigger");
+        assertContains(projectHelpers, "process.loadEnvFile(projectEnvironmentFile)");
+        assertContains(developmentProfile, "trigger-file: .reload-trigger");
+        assertContains(developmentProfile, "- scripts");
+        assertContains(angular, "node_modules/@angular/cli/bin/ng.js build --watch --configuration development");
+        assertContains(angular, "node_modules/@angular/cli/bin/ng.js serve");
+        assertContains(angularWorkspace, "\"analytics\": false");
+        assertContains(react, "node_modules/vite/bin/vite.js build --watch --mode development");
+        assertContains(react, "node_modules/vite/bin/vite.js --config");
+    }
+
+    @Test
+    void frontendInstructionsNameThePinnedOnePointTwoPointZeroToolchains() throws Exception {
         Map<String, List<String>> expected = Map.of(
-                "angular-wiz", List.of("WIZ Spring `1.1.1`", "22.1.4", "22.1.6", "6.0.3", "3.0.4"),
-                "angular", List.of("WIZ Spring `1.1.1`", "22.1.4", "22.1.6", "6.0.3"),
-                "react", List.of("WIZ Spring `1.1.1`", "19.2.8", "8.2.2", "6.1.1"),
-                "html", List.of("WIZ Spring `1.1.1`", "^22.22.3 || ^24.15.0"),
-                "jsp", List.of("WIZ Spring `1.1.1`", "Spring Boot `4.1.1`", "^22.22.3 || ^24.15.0"));
+                "angular-wiz", List.of("WIZ Spring `1.2.0`", "22.1.4", "22.1.6", "6.0.3", "3.0.4"),
+                "angular", List.of("WIZ Spring `1.2.0`", "22.1.4", "22.1.6", "6.0.3"),
+                "react", List.of("WIZ Spring `1.2.0`", "19.2.8", "8.2.2", "6.1.1"),
+                "html", List.of("WIZ Spring `1.2.0`", "^22.22.3 || ^24.15.0"),
+                "jsp", List.of("WIZ Spring `1.2.0`", "Spring Boot `4.1.1`", "^22.22.3 || ^24.15.0"));
 
         for (Map.Entry<String, List<String>> entry : expected.entrySet()) {
             String guide = resource("/wiz/templates/project-" + entry.getKey() + "/docs/ai/frontend.md");

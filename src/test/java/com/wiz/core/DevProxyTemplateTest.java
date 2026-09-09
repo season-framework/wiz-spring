@@ -73,8 +73,8 @@ class DevProxyTemplateTest {
         String angularProxy = resource("/wiz/templates/project-angular/proxy.conf.cjs");
         String reactVite = resource("/wiz/templates/project-react/vite.config.js");
 
-        assertTrue(angularPackage.contains("ng serve --proxy-config proxy.conf.cjs"));
-        assertTrue(reactPackage.contains("vite --config vite.config.js"));
+        assertTrue(angularPackage.contains("node_modules/@angular/cli/bin/ng.js serve --proxy-config proxy.conf.cjs"));
+        assertTrue(reactPackage.contains("node_modules/vite/bin/vite.js --config vite.config.js"));
         assertTrue(angularProxy.contains("createDevProxy"));
         assertTrue(reactVite.contains("createDevProxy()"));
         assertTrue(reactVite.contains("./scripts/lib/dev-proxy.cjs"));

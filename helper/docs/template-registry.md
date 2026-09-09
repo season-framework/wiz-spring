@@ -105,7 +105,7 @@ cp helper/templates/registry.example.json \
 docker build \
   --build-arg WIZ_HELPER_TEMPLATE_FILE=registry.company.json \
   -f helper/Dockerfile \
-  -t company/wiz-spring-helper:1.1.1 \
+  -t company/wiz-spring-helper:1.2.0 \
   helper
 ```
 
@@ -119,7 +119,6 @@ WIZ_HELPER_TEMPLATE_FILE=registry.company.json \
 For a persistent local setting:
 
 ```bash
-cp helper/.env.example helper/.env
 # Set WIZ_HELPER_TEMPLATE_FILE=registry.company.json in helper/.env.
 docker compose \
   --env-file helper/.env \

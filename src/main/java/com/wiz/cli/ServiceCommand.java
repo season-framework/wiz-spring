@@ -53,6 +53,7 @@ public class ServiceCommand implements Callable<Integer> {
     private static final String BUNDLE_MANIFEST = "manifest.json";
     private static final String BUNDLE_CHECKSUMS = "SHA256SUMS";
     private static final Set<Path> MUTABLE_BUNDLE_FILES = Set.of(Path.of(".env"));
+    private static final Set<Path> MUTABLE_BUNDLE_DIRECTORIES = Set.of(Path.of("data"));
 
     @Spec
     private CommandSpec spec;
@@ -82,7 +83,8 @@ public class ServiceCommand implements Callable<Integer> {
         }
     }
 
-    @Command(name = "install", mixinStandardHelpOptions = true, description = "Install a WIZ systemd service from a 1.0 bundle.")
+    @Command(name = "install", mixinStandardHelpOptions = true,
+            description = "Install a live-development or production WIZ systemd service.")
     static class Install implements Callable<Integer> {
         @Spec
         private CommandSpec spec;
@@ -90,29 +92,45 @@ public class ServiceCommand implements Callable<Integer> {
         @Parameters(index = "0", description = "Service name.")
         private String name;
 
-        @Option(names = "--bundle", required = true,
-                description = "Bundle directory containing manifest.json and the executable backend artifact.")
+        @Option(names = "--root",
+                description = "Generated project root. Defaults to the current directory.")
+        private Path root;
+
+        @Option(names = "--production",
+                description = "Run the immutable production bundle instead of the default live-development project.")
+        private boolean production;
+
+        @Option(names = "--bundle",
+                description = "Production bundle directory. Implies --production; defaults to <root>/bundle.")
         private Path bundle;
+
+        @Option(names = "--npm", description = "Absolute npm executable path for development mode.")
+        private String npmCommand = defaultNpmCommand();
 
         @Option(names = "--java", description = "Absolute Java executable path.")
         private String javaCommand = defaultJavaCommand();
 
-        @Option(names = "--artifact", description = "Backend archive override beneath --bundle.")
+        @Option(names = "--artifact", description = "Production backend archive override beneath --bundle.")
         private Path artifact;
 
         @Option(names = "--port", description = "Override the Spring Boot HTTP port.")
         private Integer port;
 
-        @Option(names = "--user", description = "Operating-system user for the service. Defaults to the bundle owner.")
+        @Option(names = "--user",
+                description = "Operating-system user for the service. Defaults to the project or bundle owner.")
         private String user;
 
         @Option(names = "--allow-root",
                 description = "Explicitly allow the systemd service to run as root (not recommended).")
         private boolean allowRoot;
 
-        @Option(names = "--profiles", defaultValue = "prod,bundle",
-                description = "Comma-separated Spring profiles. Defaults to ${DEFAULT-VALUE}.")
+        @Option(names = "--profiles",
+                description = "Comma-separated Spring profiles. Defaults to dev, or prod,bundle with --production.")
         private String profiles;
+
+        @Option(names = "--env-file",
+                description = "Environment file. Defaults to <project>/.env, or <bundle>/.env in production.")
+        private Path envFile;
 
         @Option(names = "--dry-run", description = "Print generated files without writing them.")
         private boolean dryRun;
@@ -130,23 +148,48 @@ public class ServiceCommand implements Callable<Integer> {
         public Integer call() throws Exception {
             ensureLinux();
             String serviceName = serviceName(name);
-            Path rootPath = serviceRoot(null, bundle);
+            boolean productionMode = production || bundle != null;
+            if (!productionMode && artifact != null) {
+                throw new IllegalArgumentException("--artifact requires --production or --bundle");
+            }
+            Path rootPath = serviceRoot(root, productionMode ? bundle : null);
             requireSingleLine("Workspace root", rootPath.toString());
-            Path bundlePath = bundlePath(rootPath, bundle);
-            BundleArtifact resolvedArtifact = resolveBundleArtifact(bundlePath, artifact);
-            verifyBundleChecksums(bundlePath);
             Path javaPath = javaExecutable(javaCommand);
             Path commandPath = binDir.resolve(serviceName);
             Path servicePath = systemdDir.resolve(serviceName + ".service");
             requireSystemdExecutablePath(commandPath);
             requireSingleLine("Service definition path", servicePath.toString());
-            String serviceUser = serviceUser(user, bundlePath, allowRoot);
-            requireBundleAccessibleToServiceUser(resolvedArtifact, javaPath, serviceUser);
-            String activeProfiles = normalizeProfiles(profiles);
             validatePort(port);
-            String script = script(
-                    serviceName, javaPath, rootPath, resolvedArtifact, port, activeProfiles);
-            String unit = unit(serviceName, commandPath, serviceUser);
+            boolean profilesExplicit = profiles != null;
+            String activeProfiles = normalizeProfiles(profiles == null
+                    ? (productionMode ? "prod,bundle" : "dev")
+                    : profiles);
+            String serviceUser;
+            String script;
+            ServiceEnvironment serviceEnvironment;
+            if (productionMode) {
+                Path bundlePath = bundlePath(rootPath, bundle);
+                BundleArtifact resolvedArtifact = resolveBundleArtifact(bundlePath, artifact);
+                verifyBundleChecksums(bundlePath);
+                serviceUser = serviceUser(user, bundlePath, allowRoot);
+                serviceEnvironment = serviceEnvironment(envFile, bundlePath);
+                requireBundleAccessibleToServiceUser(resolvedArtifact, javaPath, serviceUser);
+                requireEnvironmentAccessibleToServiceUser(serviceEnvironment, serviceUser);
+                script = productionScript(
+                        serviceName, javaPath, rootPath, resolvedArtifact, port, activeProfiles,
+                        profilesExplicit, serviceEnvironment.path());
+            } else {
+                DevelopmentProject project = developmentProject(rootPath);
+                Path npmPath = npmExecutable(npmCommand);
+                serviceUser = serviceUser(user, rootPath, allowRoot);
+                serviceEnvironment = serviceEnvironment(envFile, project.root());
+                requireDevelopmentProjectAccessibleToServiceUser(project, npmPath, javaPath, serviceUser);
+                requireEnvironmentAccessibleToServiceUser(serviceEnvironment, serviceUser);
+                script = developmentScript(
+                        serviceName, npmPath, javaPath, project, port, activeProfiles,
+                        profilesExplicit, serviceEnvironment.path());
+            }
+            String unit = unit(serviceName, commandPath, serviceUser, serviceEnvironment);
             if (dryRun) {
                 var out = spec.commandLine().getOut();
                 out.println(commandPath);
@@ -168,7 +211,10 @@ public class ServiceCommand implements Callable<Integer> {
             if (enableExit != 0) {
                 return enableExit;
             }
-            spec.commandLine().getOut().println("Service installed: " + serviceName);
+            spec.commandLine().getOut().println("Service installed: " + serviceName
+                    + " (" + (productionMode ? "production" : "development") + ")");
+            spec.commandLine().getOut().println("Environment file: " + serviceEnvironment.path()
+                    + (serviceEnvironment.optional() ? " (optional)" : ""));
             return 0;
         }
     }
@@ -375,6 +421,27 @@ public class ServiceCommand implements Callable<Integer> {
                 .toString();
     }
 
+    private static String defaultNpmCommand() {
+        String pathValue = System.getenv("PATH");
+        if (pathValue != null && !pathValue.isBlank()) {
+            for (String directory : pathValue.split(java.io.File.pathSeparator)) {
+                if (directory.isBlank()) {
+                    continue;
+                }
+                Path candidate = Path.of(directory).resolve("npm").toAbsolutePath().normalize();
+                if (Files.isRegularFile(candidate) && Files.isExecutable(candidate)) {
+                    return candidate.toString();
+                }
+            }
+        }
+        for (Path candidate : List.of(Path.of("/usr/local/bin/npm"), Path.of("/usr/bin/npm"))) {
+            if (Files.isRegularFile(candidate) && Files.isExecutable(candidate)) {
+                return candidate.toAbsolutePath().normalize().toString();
+            }
+        }
+        return Path.of("/usr/bin/npm").toString();
+    }
+
     private static Path javaExecutable(String command) {
         if (command == null || command.isBlank()) {
             throw new IllegalArgumentException("Java executable is required");
@@ -391,11 +458,28 @@ public class ServiceCommand implements Callable<Integer> {
         return normalized;
     }
 
+    private static Path npmExecutable(String command) {
+        if (command == null || command.isBlank()) {
+            throw new IllegalArgumentException("npm executable is required in development mode");
+        }
+        String value = requireSingleLine("npm executable", command).trim();
+        Path configured = Path.of(value);
+        if (!configured.isAbsolute()) {
+            throw new IllegalArgumentException("npm executable must be an absolute path: " + value);
+        }
+        Path normalized = configured.normalize();
+        if (!Files.isRegularFile(normalized) || !Files.isExecutable(normalized)) {
+            throw new IllegalArgumentException("npm executable must be an executable regular file: " + normalized
+                    + ". Install Node.js/npm or pass --npm with its absolute path.");
+        }
+        return normalized;
+    }
+
     private static Path serviceRoot(Path configuredRoot, Path configuredBundle) {
         Path selected;
         if (configuredRoot != null) {
             selected = configuredRoot;
-        } else if (configuredBundle != null) {
+        } else if (configuredBundle != null && configuredBundle.isAbsolute()) {
             Path absoluteBundle = configuredBundle.toAbsolutePath().normalize();
             selected = absoluteBundle.getParent() == null ? absoluteBundle : absoluteBundle.getParent();
         } else {
@@ -412,13 +496,54 @@ public class ServiceCommand implements Callable<Integer> {
     private static Path bundlePath(Path projectRoot, Path configuredBundle) throws IOException {
         Path selected = configuredBundle == null
                 ? projectRoot.resolve("bundle")
-                : configuredBundle.toAbsolutePath().normalize();
+                : configuredBundle.isAbsolute()
+                        ? configuredBundle
+                        : projectRoot.resolve(configuredBundle);
         Path normalized = selected.toAbsolutePath().normalize();
         requireSingleLine("Bundle directory", normalized.toString());
         if (!Files.isDirectory(normalized, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IllegalArgumentException("Bundle directory must already exist as a real directory: " + normalized);
+            throw new IllegalArgumentException("Production bundle directory must already exist: " + normalized
+                    + ". Run npm run bundle in the project first, or pass --bundle with its path.");
         }
         return normalized.toRealPath();
+    }
+
+    private static DevelopmentProject developmentProject(Path projectRoot) throws IOException {
+        Path packageJson = projectRoot.resolve("package.json");
+        Path mavenWrapper = projectRoot.resolve("mvnw");
+        Path developmentScript = projectRoot.resolve("scripts/dev.mjs");
+        Path javaSources = projectRoot.resolve("src/main/java");
+        for (Path required : List.of(packageJson, mavenWrapper, developmentScript)) {
+            if (!Files.isRegularFile(required, LinkOption.NOFOLLOW_LINKS)) {
+                throw new IllegalArgumentException("Development service requires a generated WIZ Spring project. "
+                        + "Missing required file: " + required
+                        + ". Pass --root with the project directory, or use --production for a bundle.");
+            }
+        }
+        if (!Files.isExecutable(mavenWrapper)) {
+            throw new IllegalArgumentException("Maven Wrapper must be executable for development service: "
+                    + mavenWrapper);
+        }
+        if (!Files.isDirectory(javaSources, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IllegalArgumentException("Development service requires backend sources at: " + javaSources);
+        }
+
+        Map<String, Object> descriptor;
+        try {
+            descriptor = new ObjectMapper().readValue(
+                    Files.readAllBytes(packageJson), new TypeReference<>() {
+                    });
+        } catch (IOException | RuntimeException exception) {
+            throw new IllegalArgumentException("Invalid project package.json " + packageJson + ": "
+                    + exception.getMessage(), exception);
+        }
+        Object scripts = descriptor == null ? null : descriptor.get("scripts");
+        Object dev = scripts instanceof Map<?, ?> values ? values.get("dev") : null;
+        if (!(dev instanceof String command) || command.isBlank()) {
+            throw new IllegalArgumentException("Development service requires package.json script 'dev': "
+                    + packageJson);
+        }
+        return new DevelopmentProject(projectRoot, packageJson, mavenWrapper, developmentScript);
     }
 
     private static BundleArtifact resolveBundleArtifact(Path bundleRoot, Path configuredArtifact) throws IOException {
@@ -519,6 +644,15 @@ public class ServiceCommand implements Callable<Integer> {
 
         HashSet<Path> actual = new HashSet<>();
         Files.walkFileTree(bundleRoot, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) {
+                Path relative = bundleRoot.relativize(directory).normalize();
+                if (MUTABLE_BUNDLE_DIRECTORIES.contains(relative)) {
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
+                return FileVisitResult.CONTINUE;
+            }
+
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
                 Path relative = bundleRoot.relativize(file).normalize();
@@ -695,8 +829,9 @@ public class ServiceCommand implements Callable<Integer> {
         throw new IllegalArgumentException("Bundle artifact must have a .jar or .war extension: " + artifact);
     }
 
-    private static String script(String serviceName, Path javaCommand, Path root,
-            BundleArtifact bundleArtifact, Integer port, String profiles) {
+    private static String productionScript(String serviceName, Path javaCommand, Path root,
+            BundleArtifact bundleArtifact, Integer port, String profiles, boolean profilesExplicit,
+            Path environmentFile) {
         String safeServiceName = requireSingleLine("Service name", serviceName);
         String safeCommand = requireSingleLine("Java executable", javaCommand.toString());
         String rootValue = requireSingleLine("Workspace root", root.toString());
@@ -705,23 +840,77 @@ public class ServiceCommand implements Callable<Integer> {
         String profileValue = normalizeProfiles(profiles);
         return "#!/bin/bash\n"
                 + metadataLine("name", shortServiceName(safeServiceName))
+                + metadataLine("mode", "production")
                 + metadataLine("root", rootValue)
                 + metadataLine("port", port == null ? "config" : String.valueOf(port))
                 + metadataLine("bundle", bundleValue)
                 + metadataLine("artifact", artifactValue)
                 + metadataLine("artifact-type", bundleArtifact.type())
                 + metadataLine("profiles", profileValue)
+                + metadataLine("env-file", environmentFile.toString())
                 + metadataLine("logs", "journald")
                 + metadataLine("command", safeCommand)
                 + "set -euo pipefail\n"
                 + "cd " + shell(bundleValue) + "\n"
+                + profileExport(profileValue, profilesExplicit)
                 + "exec " + shell(safeCommand) + " -jar " + shell(artifactValue)
-                + " " + shell("--spring.profiles.active=" + profileValue)
                 + (port == null ? "" : " " + shell("--server.port=" + port))
                 + "\n";
     }
 
-    private static String unit(String serviceName, Path commandPath, String user) {
+    private static String developmentScript(String serviceName, Path npmCommand, Path javaCommand,
+            DevelopmentProject project, Integer port, String profiles, boolean profilesExplicit,
+            Path environmentFile) {
+        String safeServiceName = requireSingleLine("Service name", serviceName);
+        String npmValue = requireSingleLine("npm executable", npmCommand.toString());
+        String javaValue = requireSingleLine("Java executable", javaCommand.toString());
+        String rootValue = requireSingleLine("Project root", project.root().toString());
+        String profileValue = normalizeProfiles(profiles);
+        String runtimePath = developmentRuntimePath(npmCommand, javaCommand);
+        return "#!/bin/bash\n"
+                + metadataLine("name", shortServiceName(safeServiceName))
+                + metadataLine("mode", "development")
+                + metadataLine("root", rootValue)
+                + metadataLine("port", port == null ? "config" : String.valueOf(port))
+                + metadataLine("profiles", profileValue)
+                + metadataLine("env-file", environmentFile.toString())
+                + metadataLine("logs", "journald")
+                + metadataLine("command", npmValue)
+                + metadataLine("java", javaValue)
+                + "set -euo pipefail\n"
+                + "cd " + shell(rootValue) + "\n"
+                + "export PATH=" + shell(runtimePath) + "\n"
+                + profileExport(profileValue, profilesExplicit)
+                + (port == null ? "" : "export SERVER_PORT=" + shell(String.valueOf(port)) + "\n")
+                + "exec " + shell(npmValue) + " run dev\n";
+    }
+
+    private static String profileExport(String profiles, boolean explicit) {
+        String value = normalizeProfiles(profiles);
+        if (explicit) {
+            return "export SPRING_PROFILES_ACTIVE=" + shell(value) + "\n";
+        }
+        return "export SPRING_PROFILES_ACTIVE=\"${SPRING_PROFILES_ACTIVE:-" + value + "}\"\n";
+    }
+
+    private static String developmentRuntimePath(Path npmCommand, Path javaCommand) {
+        ArrayList<String> directories = new ArrayList<>();
+        for (Path directory : List.of(npmCommand.getParent(), javaCommand.getParent())) {
+            if (directory != null && !directories.contains(directory.toString())) {
+                directories.add(directory.toString());
+            }
+        }
+        for (String directory : List.of(
+                "/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin", "/sbin", "/bin")) {
+            if (!directories.contains(directory)) {
+                directories.add(directory);
+            }
+        }
+        return String.join(":", directories);
+    }
+
+    private static String unit(String serviceName, Path commandPath, String user,
+            ServiceEnvironment environment) {
         String safeServiceName = requireSingleLine("Service name", serviceName);
         String safeUser = systemdUser(user);
         String execStart = requireSystemdExecutablePath(commandPath);
@@ -733,6 +922,7 @@ public class ServiceCommand implements Callable<Integer> {
                 + "Type=simple\n"
                 + "User=" + safeUser + "\n"
                 + "Environment=\"PATH=/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin\"\n"
+                + "EnvironmentFile=" + systemdEnvironmentFile(environment) + "\n"
                 + "ExecStart=" + execStart + "\n"
                 + "StandardOutput=journal\n"
                 + "StandardError=journal\n"
@@ -744,6 +934,50 @@ public class ServiceCommand implements Callable<Integer> {
                 + "UMask=0027\n\n"
                 + "[Install]\n"
                 + "WantedBy=multi-user.target\n";
+    }
+
+    private static ServiceEnvironment serviceEnvironment(Path configured, Path runtimeRoot) {
+        boolean explicit = configured != null;
+        Path selected = explicit
+                ? (configured.isAbsolute() ? configured : runtimeRoot.resolve(configured))
+                : runtimeRoot.resolve(".env");
+        Path normalized = selected.toAbsolutePath().normalize();
+        requireSingleLine("Environment file", normalized.toString());
+        boolean present = Files.exists(normalized, LinkOption.NOFOLLOW_LINKS);
+        if (present) {
+            if (!Files.isRegularFile(normalized, LinkOption.NOFOLLOW_LINKS)) {
+                throw new IllegalArgumentException(
+                        "Environment file must be a regular file, not a directory or symlink: " + normalized);
+            }
+        } else if (explicit) {
+            throw new IllegalArgumentException("Explicit environment file does not exist: " + normalized);
+        }
+        return new ServiceEnvironment(normalized, !explicit && !present);
+    }
+
+    private static String systemdEnvironmentFile(ServiceEnvironment environment) {
+        String path = requireSingleLine("Environment file", environment.path().toString());
+        if (!environment.path().isAbsolute()) {
+            throw new IllegalArgumentException("Environment file must be absolute: " + path);
+        }
+        StringBuilder escaped = new StringBuilder(environment.optional() ? "-" : "");
+        for (byte raw : path.getBytes(StandardCharsets.UTF_8)) {
+            int value = Byte.toUnsignedInt(raw);
+            if ((value >= 'a' && value <= 'z')
+                    || (value >= 'A' && value <= 'Z')
+                    || (value >= '0' && value <= '9')
+                    || value == '_' || value == '.' || value == '/'
+                    || value == '+' || value == '~' || value == '-') {
+                escaped.append((char) value);
+            } else {
+                escaped.append("\\x");
+                if (value < 0x10) {
+                    escaped.append('0');
+                }
+                escaped.append(Integer.toHexString(value));
+            }
+        }
+        return escaped.toString();
     }
 
     private static String serviceUser(String configured, Path workspaceRoot, boolean allowRoot) throws IOException {
@@ -765,6 +999,121 @@ public class ServiceCommand implements Callable<Integer> {
 
     private static boolean isRootIdentity(String user) {
         return "root".equalsIgnoreCase(user) || "0".equals(user);
+    }
+
+    private static void requireEnvironmentAccessibleToServiceUser(
+            ServiceEnvironment environment,
+            String serviceUser) throws IOException, InterruptedException {
+        if (!Files.exists(environment.path(), LinkOption.NOFOLLOW_LINKS)) {
+            return;
+        }
+        PosixIdentity identity = posixIdentity(serviceUser);
+        if (identity.uid() == 0L) {
+            return;
+        }
+
+        ArrayList<Path> ancestors = new ArrayList<>();
+        for (Path directory = environment.path().getParent(); directory != null; directory = directory.getParent()) {
+            ancestors.add(directory);
+        }
+        Collections.reverse(ancestors);
+        for (Path directory : ancestors) {
+            requirePosixPermission(
+                    serviceUser,
+                    identity,
+                    directory,
+                    PosixFilePermission.OWNER_EXECUTE,
+                    PosixFilePermission.GROUP_EXECUTE,
+                    PosixFilePermission.OTHERS_EXECUTE,
+                    "traverse directory required to reach environment file");
+            requireEffectiveAccess(
+                    serviceUser, identity, directory, "-x", "traverse directory required to reach environment file");
+        }
+        requirePosixPermission(
+                serviceUser,
+                identity,
+                environment.path(),
+                PosixFilePermission.OWNER_READ,
+                PosixFilePermission.GROUP_READ,
+                PosixFilePermission.OTHERS_READ,
+                "read environment file");
+        requireEffectiveAccess(
+                serviceUser, identity, environment.path(), "-r", "read environment file");
+    }
+
+    private static void requireDevelopmentProjectAccessibleToServiceUser(
+            DevelopmentProject project,
+            Path npmExecutable,
+            Path javaExecutable,
+            String serviceUser) throws IOException, InterruptedException {
+        PosixIdentity identity = posixIdentity(serviceUser);
+        if (identity.uid() == 0L) {
+            return;
+        }
+
+        requireEffectiveAccess(serviceUser, identity, npmExecutable, "-x", "execute npm");
+        requireEffectiveAccess(serviceUser, identity, javaExecutable, "-x", "execute Java runtime");
+
+        ArrayList<Path> ancestors = new ArrayList<>();
+        for (Path directory = project.root(); directory != null; directory = directory.getParent()) {
+            ancestors.add(directory);
+        }
+        Collections.reverse(ancestors);
+        for (Path directory : ancestors) {
+            requirePosixPermission(
+                    serviceUser,
+                    identity,
+                    directory,
+                    PosixFilePermission.OWNER_EXECUTE,
+                    PosixFilePermission.GROUP_EXECUTE,
+                    PosixFilePermission.OTHERS_EXECUTE,
+                    "traverse directory required to reach project");
+            requireEffectiveAccess(
+                    serviceUser, identity, directory, "-x", "traverse directory required to reach project");
+        }
+
+        requirePosixPermission(
+                serviceUser,
+                identity,
+                project.root(),
+                PosixFilePermission.OWNER_READ,
+                PosixFilePermission.GROUP_READ,
+                PosixFilePermission.OTHERS_READ,
+                "read development project directory");
+        requirePosixPermission(
+                serviceUser,
+                identity,
+                project.root(),
+                PosixFilePermission.OWNER_WRITE,
+                PosixFilePermission.GROUP_WRITE,
+                PosixFilePermission.OTHERS_WRITE,
+                "write development project directory");
+        requireEffectiveAccess(
+                serviceUser, identity, project.root(), "-r", "read development project directory");
+        requireEffectiveAccess(
+                serviceUser, identity, project.root(), "-w", "write development project directory");
+
+        for (Path required : List.of(project.packageJson(), project.developmentScript(), project.mavenWrapper())) {
+            requirePosixPermission(
+                    serviceUser,
+                    identity,
+                    required,
+                    PosixFilePermission.OWNER_READ,
+                    PosixFilePermission.GROUP_READ,
+                    PosixFilePermission.OTHERS_READ,
+                    "read development project file");
+            requireEffectiveAccess(serviceUser, identity, required, "-r", "read development project file");
+        }
+        requirePosixPermission(
+                serviceUser,
+                identity,
+                project.mavenWrapper(),
+                PosixFilePermission.OWNER_EXECUTE,
+                PosixFilePermission.GROUP_EXECUTE,
+                PosixFilePermission.OTHERS_EXECUTE,
+                "execute Maven Wrapper");
+        requireEffectiveAccess(
+                serviceUser, identity, project.mavenWrapper(), "-x", "execute Maven Wrapper");
     }
 
     /**
@@ -1228,6 +1577,12 @@ public class ServiceCommand implements Callable<Integer> {
     }
 
     record BundleArtifact(Path bundleRoot, Path artifact, String type, Path frontendRoot) {
+    }
+
+    record ServiceEnvironment(Path path, boolean optional) {
+    }
+
+    record DevelopmentProject(Path root, Path packageJson, Path mavenWrapper, Path developmentScript) {
     }
 
     private static final class ServiceAccessInterruptedException extends IOException {

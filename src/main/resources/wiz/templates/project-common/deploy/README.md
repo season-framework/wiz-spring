@@ -7,24 +7,51 @@ Verify the bundle before deploying it:
 sha256sum -c SHA256SUMS
 ```
 
-Run the backend directly from this directory:
+Run the complete application directly from this directory:
 
-Run `java -jar app/application.__WIZ_ARTIFACT_TYPE__ --spring.profiles.active=prod,bundle`.
+```bash
+./run.sh
+```
+
+This bundle already contains `.env` with production defaults. Edit it directly when needed.
+
+This copied directory needs only JDK 25+ and a POSIX shell. It does not need Node.js,
+npm, Maven, the generator JAR, or a `wiz-spring` executable. `run.sh` loads this directory's
+`.env`, keeps any already exported environment value as the higher-priority value, selects
+the `prod,bundle` profiles by default, and then runs `app/application.__WIZ_ARTIFACT_TYPE__`.
+Spring command-line options can be appended, for example `./run.sh --server.port=9090`.
 The production profile disables API docs and Swagger UI by default. Set
 `SPRINGDOC_API_DOCS_ENABLED=true` and `SPRINGDOC_SWAGGER_UI_ENABLED=true` only when
 those endpoints should be exposed.
 
-For a reverse proxy, copy `.env.example` to `.env`, then choose exactly one profile:
+For a reverse proxy, edit `.env` when needed, then choose exactly one profile:
 
 ```bash
 docker compose --profile nginx up -d
 docker compose --profile apache2 up -d
 ```
 
-`.env` is the only runtime-local file intentionally allowed beside the checksum-protected
-bundle files, so the same bundle remains valid for `wiz-spring service install`. Keep any
-additional Spring configuration outside the bundle and reference it with
-`SPRING_CONFIG_ADDITIONAL_LOCATION` (for systemd, use a unit drop-in).
+`.env` and `data/` are the only runtime-mutable locations intentionally allowed beside the
+checksum-protected bundle files. Keep any additional Spring configuration outside the bundle and set
+`SPRING_CONFIG_ADDITIONAL_LOCATION` in `.env`.
+
+Install this immutable output from the generated project root with:
+
+```bash
+wiz-spring service install <name> --production --root . --user <service-user>
+```
+
+From this bundle directory, `wiz-spring service install <name> --bundle . --user
+<service-user>` is equivalent. `--bundle <path>` selects production mode and overrides the
+default bundle path. The CLI is only a one-time installer/administrator: the installed
+systemd launcher executes Java directly and has no runtime dependency on WIZ Spring.
+Omit `--production` only when intentionally installing the editable project as a
+live-development service; that mode runs `npm run dev` and does not execute this bundle.
+
+The production service reads `<bundle>/.env` by default. Pass `--env-file <path>` to choose
+another file. `--port` and `--profiles` override values from that file. Restart the service
+after changing environment configuration; rebuilding is unnecessary for configuration-only
+changes.
 
 The backend container runs as the non-root UID/GID `10001`. Keep bundled files
 world-readable or owned by that identity if you replace them at deployment time.

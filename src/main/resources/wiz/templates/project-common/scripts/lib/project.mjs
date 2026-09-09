@@ -1,11 +1,18 @@
 import { spawn } from 'node:child_process';
-import { cp, mkdir, readFile, rm, stat } from 'node:fs/promises';
+import { cp, mkdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 export const projectRoot = path.resolve(scriptDirectory, '..', '..');
+export const projectEnvironmentFile = path.join(projectRoot, '.env');
+
+try {
+    process.loadEnvFile(projectEnvironmentFile);
+} catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+}
 
 export async function readPackage() {
     return JSON.parse(await readFile(path.join(projectRoot, 'package.json'), 'utf8'));
@@ -90,6 +97,14 @@ export async function runMaven(args) {
 
 export async function runNpmScript(name) {
     return run(command('npm'), ['run', name]);
+}
+
+export async function requestBackendRestart() {
+    const trigger = path.join(projectRoot, 'scripts', '.reload-trigger');
+    await mkdir(path.dirname(trigger), { recursive: true });
+    if (!(await exists(trigger))) await writeFile(trigger, '');
+    const now = new Date();
+    await utimes(trigger, now, now);
 }
 
 export function assertInsideProject(target, label = 'path') {

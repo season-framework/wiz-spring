@@ -1,7 +1,7 @@
 import { watch } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import { projectRoot, runMaven } from './lib/project.mjs';
+import { projectRoot, requestBackendRestart, runMaven } from './lib/project.mjs';
 
 const roots = [path.join(projectRoot, 'src', 'main', 'java'), path.join(projectRoot, 'src', 'main', 'resources')];
 let timer;
@@ -16,6 +16,8 @@ async function compile() {
     compiling = true;
     try {
         await runMaven(['compile', '-DskipTests']);
+        await requestBackendRestart();
+        console.log('Backend compile succeeded; Spring restart requested.');
     } catch (error) {
         console.error(`Backend compile failed: ${error.message}`);
     } finally {
@@ -37,4 +39,4 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
         process.exit(0);
     });
 }
-console.log('Watching Spring sources; DevTools will restart after incremental compilation.');
+console.log('Watching Spring sources; DevTools will restart only after a successful incremental compilation.');

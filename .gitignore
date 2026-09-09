@@ -46,7 +46,7 @@ pnpm-debug.log*
 # Local environment files
 .env
 .env.*
-!.env.example
+!src/main/resources/wiz/templates/project-common/.env
 
 # OS files
 .DS_Store

@@ -37,11 +37,12 @@ current_docs=(
 )
 
 for file in "${current_docs[@]}"; do
-    require_text "$file" '1.1.1'
+    require_text "$file" '1.2.0'
     reject_text "$file" 'Java 21'
     reject_text "$file" 'JDK 21'
     reject_text "$file" 'Spring Boot 4.0.6'
     reject_text "$file" 'wiz-spring-1.1.0.jar'
+    reject_text "$file" 'wiz-spring-1.1.1.jar'
 done
 
 for file in README.md README.ko.md docs/project-generation.md docs/project-generation.ko.md; do
@@ -63,12 +64,26 @@ for file in \
     require_text "$file" 'Spring Framework `7.0.9`'
 done
 
-require_text pom.xml '<version>1.1.1</version>'
+require_text pom.xml '<version>1.2.0</version>'
 require_text pom.xml '<maven.compiler.release>25</maven.compiler.release>'
 require_text src/main/resources/wiz/templates/project-angular/pom.xml '<version>4.1.1</version>'
 require_text src/main/resources/wiz/templates/project-angular/pom.xml '<java.version>25</java.version>'
 require_text src/main/resources/wiz/templates/project-angular/package.json '"@angular/core": "22.1.4"'
 require_text src/main/resources/wiz/templates/project-react/package.json '"react": "19.2.8"'
+require_text src/main/resources/wiz/templates/project-common/.env 'SERVER_PORT=8080'
+require_text helper/.env 'WIZ_HELPER_PORT=8080'
+require_text helper/docs/operations.md 'checked-in [`helper/.env`](../.env)'
+require_text helper/docs/operations.ko.md '기본값이 포함된 [`helper/.env`](../.env)'
+
+for retired_env_example in \
+    src/main/resources/wiz/templates/project-common/.env.example \
+    src/main/resources/wiz/templates/project-common/deploy/.env.example \
+    helper/.env.example; do
+    if [[ -e "$retired_env_example" ]]; then
+        printf 'Retired environment example still exists: %s\n' "$retired_env_example" >&2
+        exit 1
+    fi
+done
 
 frontend_guides=(
     src/main/resources/wiz/templates/project-angular-wiz/docs/ai/frontend.md
@@ -79,8 +94,8 @@ frontend_guides=(
 )
 
 for file in "${frontend_guides[@]}"; do
-    require_text "$file" 'WIZ Spring `1.1.1`'
+    require_text "$file" 'WIZ Spring `1.2.0`'
     reject_text "$file" 'Angular 21'
 done
 
-printf 'Documentation and executable version policies are aligned with WIZ Spring 1.1.1.\n'
+printf 'Documentation and executable version policies are aligned with WIZ Spring 1.2.0.\n'

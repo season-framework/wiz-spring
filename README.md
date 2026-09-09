@@ -4,7 +4,7 @@
 
 **Generate a standard Spring Boot backend with the frontend structure your project needs.**
 
-[![Release 1.1.1](https://img.shields.io/badge/release-1.1.1-2563eb)](release-log/1.1.1.md)
+[![Release 1.2.0](https://img.shields.io/badge/release-1.2.0-2563eb)](release-log/1.2.0.md)
 [![Java 25+](https://img.shields.io/badge/Java-25%2B-e76f00)](pom.xml)
 [![MIT License](https://img.shields.io/badge/license-MIT-16a34a)](LICENSE)
 
@@ -22,14 +22,29 @@ frontend, watch, build, bundle, and runtime workflows.
 > legacy workspace in place. Read the [1.0 compatibility guide](docs/compatibility.md)
 > before moving an existing application.
 
-## 1.1.1 platform baseline
+## What's new in 1.2.0
 
-WIZ Spring `1.1.1` generates and validates the following stack. These are concrete
+- `npm run dev` and the default systemd service continuously watch backend compilation
+  and frontend builds. Successful source edits take effect without reinstalling the
+  service or manually restarting its process.
+- `service install` uses WIZ Spring only to write the unit and launcher. The installed
+  launcher directly executes the generated project's `npm` or the bundle's `java`, so
+  neither the WIZ Spring executable nor the generator JAR is a runtime dependency.
+- Service installation now defaults to live development. Select an immutable bundle
+  explicitly with `--production` or `--bundle`.
+- Projects and bundles both include a ready-to-edit `.env` with no copy step, and a
+  bundle starts through `./run.sh` on a server that has only JDK 25+.
+- The unused `completion` command has been removed, keeping the CLI focused on
+  `create`, `templates`, and `service`.
+
+## 1.2.0 platform baseline
+
+WIZ Spring `1.2.0` generates and validates the following stack. These are concrete
 template versions, not merely minimum compatibility claims.
 
-| Layer | 1.1.1 baseline |
+| Layer | 1.2.0 baseline |
 | --- | --- |
-| Generator and generated project version | `1.1.1` |
+| Generator and generated project version | `1.2.0` |
 | Java | release `25`; full JDK 25 or newer required |
 | Spring backend | Spring Boot `4.1.1`, Boot-managed Spring Framework `7.0.9`, springdoc `3.1.0` |
 | Build tools | Maven Wrapper `3.9.15`, npm `10+` |
@@ -38,7 +53,7 @@ template versions, not merely minimum compatibility claims.
 | React template | React `19.2.8`, Vite `8.2.2` |
 
 Updating the generator does not rewrite an already generated project. To adopt this
-baseline, create a new `1.1.1` project or deliberately update that project's `pom.xml`,
+baseline, create a new `1.2.0` project or deliberately update that project's `pom.xml`,
 `package.json`, lockfile, and `docs/ai` instructions together.
 
 ## Why WIZ Spring
@@ -61,13 +76,16 @@ Requirements: full JDK 25+, Node.js `^22.22.3 || ^24.15.0` (LTS only), and npm 1
 ```bash
 ./mvnw clean package
 
-java -jar target/wiz-spring-1.1.1.jar create ../dashboard \
+java -jar target/wiz-spring-1.2.0.jar create ../dashboard \
   --package com.example.dashboard
 
 cd ../dashboard
 npm ci
 npm run dev
 ```
+
+The generated project already contains a usable root `.env`; edit it directly when a
+default needs changing.
 
 `angular-wiz` is the default template. Add `--template react` or another template ID
 to select a different frontend. The target directory name is normalized into a
@@ -84,7 +102,7 @@ segments cannot because they must be valid Java identifiers.
 | `html` | Static HTML, CSS, and JavaScript |
 | `jsp` | Server-rendered Spring MVC/JSP application |
 
-Run `java -jar target/wiz-spring-1.1.1.jar templates` for the built-in descriptions.
+Run `java -jar target/wiz-spring-1.2.0.jar templates` for the built-in descriptions.
 
 ## Generated workflow
 
@@ -96,6 +114,11 @@ npm run bundle    # deployable artifact, proxy configs, Compose, checksums
 
 Every template also exposes `frontend:build` and `backend:build`. Angular WIZ adds
 `wizbuild` and `wizwatch`; its compiler is committed into the generated project.
+The development command writes watched frontend output to Spring's static output and
+uses DevTools for backend restarts, so normal source edits do not require restarting it.
+All project npm scripts read the root `.env`. A generated deployment bundle can be copied
+to a JDK-only server and started with `./run.sh`; neither that launcher nor an installed
+systemd service requires WIZ Spring at runtime.
 
 ## CLI
 
@@ -103,8 +126,7 @@ Every template also exposes `frontend:build` and `backend:build`. Angular WIZ ad
 | --- | --- |
 | `create` | Create a new project or import compatible 1.0 source. |
 | `templates` | List frontend templates. |
-| `service` | Install and manage a generated bundle with systemd. |
-| `completion` | Generate Bash or Zsh completion. |
+| `service` | Run a generated project live or a production bundle with systemd. |
 
 Use `<command> --help` for the complete options.
 
@@ -112,7 +134,7 @@ Use `<command> --help` for the complete options.
 
 The optional [Docker project helper](helper/README.md) exposes project generation over
 HTTP and returns a ZIP. Its build-time registry can add, customize, or remove templates
-without packaging the helper into `wiz-spring-1.1.1.jar`.
+without packaging the helper into `wiz-spring-1.2.0.jar`.
 
 ## Documentation
 

@@ -14,7 +14,7 @@ visible in `package.json` so a fresh clone and its package manager can report th
 
 ## Generated platform baseline
 
-This project was generated from WIZ Spring `1.1.1` with the following backend and
+This project was generated from WIZ Spring `1.2.0` with the following backend and
 build baseline:
 
 | Layer | Version or policy |
@@ -42,6 +42,16 @@ npm run dev
 npm run bundle
 ```
 
+`npm run dev` performs the initial backend/frontend builds and keeps both outputs current.
+Java and resource edits are compiled automatically and Spring DevTools restarts the
+application only after a successful compile, inside the same command lifecycle. A failed
+compile leaves the last good application running. Angular and React projects also write their
+watched frontend builds to `target/generated-resources/frontend`, so the Spring port never
+serves an older production build. A normal source edit does not require stopping and
+restarting the command; wait for the watcher to report a successful rebuild. The backend-only
+build preserves the watched frontend output, while the integrated build requests a restart
+only after both backend and frontend builds succeed.
+
 `npm ci` is for a freshly generated project. If this project was created with
 `--uri` or `--path`, run `npm install` once instead so its imported dependency state
 is reconciled with the injected template dependencies; commit the resulting lockfile,
@@ -66,8 +76,22 @@ directly with `./mvnw clean package` (`mvnw.cmd clean package` on Windows).
 
 Business APIs start at `/api` by default. Change `app.api.prefix` or the
 `APP_API_PREFIX` environment variable without editing controllers.
-The standard Angular and React development servers use the same variable, for
-example `APP_API_PREFIX=/api/v2 npm run dev`.
+The optional standard Angular and React development servers use the same variable, for
+example `APP_API_PREFIX=/api/v2 npm run frontend:serve`.
+
+## Environment configuration
+
+The generated root `.env` already contains runnable defaults. Edit that file directly; no
+copy or rename step is required. Every npm script loads it automatically, and an environment
+variable exported before the command takes precedence. Keep this source-controlled defaults
+file free of secrets; inject credentials through the process environment or an external
+service `--env-file`. Common settings include `SERVER_PORT`, `APP_API_PREFIX`,
+`SPRING_PROFILES_ACTIVE`, and `APP_DATASOURCE_*`.
+
+The default development systemd service also reads `<project>/.env`. A production service
+reads `<bundle>/.env`. Use `--env-file` to choose another location; `--port` and `--profiles`
+override file values. Source files reload automatically, but environment values are read at
+process start, so restart an installed service after editing its `.env`.
 
 ## Included sample application (fresh projects)
 
@@ -115,3 +139,16 @@ not inject the demo controllers, domain, database, tests, or frontend screens in
 imported application.
 
 Deployment output is written to `bundle/`. See `deploy/README.md`.
+The bundle itself starts with `./run.sh` on a server with JDK 25+ and does not require
+Node.js, npm, Maven, or WIZ Spring.
+
+For a continuously updated systemd service, install the project root in the default
+development mode:
+
+```bash
+wiz-spring service install __WIZ_ARTIFACT_ID__ --root . --user <service-user>
+```
+
+For an immutable deployment, first run `npm run bundle`, then add `--production`.
+The installed launcher calls the project's absolute npm executable in development or Java
+directly in production; it never calls or depends on the WIZ Spring CLI after installation.

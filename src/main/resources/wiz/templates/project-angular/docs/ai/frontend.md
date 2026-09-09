@@ -1,11 +1,15 @@
 # Angular frontend rules
 
-- WIZ Spring `1.1.1` pins Angular runtime `22.1.4`, Angular CLI/build `22.1.6`, and
+- WIZ Spring `1.2.0` pins Angular runtime `22.1.4`, Angular CLI/build `22.1.6`, and
   TypeScript `6.0.3`. `package.json` and `package-lock.json` are authoritative.
 - This is a normal Angular CLI workspace; it does not use WIZ component generation.
 - Application source lives under `frontend/src` and production output is `target/generated-resources/frontend`.
 - Keep API paths relative and resolve the prefix through `/app-config.json`.
-- The development proxy follows `APP_API_PREFIX`; do not add a hard-coded API proxy entry.
+- `npm run dev` uses `ng build --watch --configuration development` and writes every
+  successful rebuild to `target/generated-resources/frontend`, which Spring serves on its
+  own port. Do not replace it with an in-memory dev server or edit the generated output.
+- Use `npm run frontend:serve` only when you explicitly want Angular's separate development
+  server with HMR. Its proxy follows `APP_API_PREFIX`; do not add a hard-coded API proxy entry.
 - Use standalone Angular components and Angular signals for local UI state where appropriate.
 - Routes are declared in `frontend/src/app/app.routes.ts`; authenticated pages render inside
   `layout/app-shell.component.ts`, while the login page uses its own full-screen layout.

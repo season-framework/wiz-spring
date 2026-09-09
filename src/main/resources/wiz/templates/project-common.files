@@ -1,11 +1,11 @@
 .gitignore
 .dockerignore
+.env
 .github/copilot-instructions.md
 .mvn/wrapper/maven-wrapper.properties
 AGENTS.md
 README.md
 docker-compose.yaml
-deploy/.env.example
 deploy/README.md
 deploy/application-bundle.yml
 deploy/docker/backend.Dockerfile
@@ -20,6 +20,7 @@ mvnw
 mvnw.cmd
 scripts/lib/project.mjs
 scripts/lib/dev-proxy.cjs
+scripts/.reload-trigger
 scripts/build-backend.mjs
 scripts/build.mjs
 scripts/backend-watch.mjs

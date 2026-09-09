@@ -1,6 +1,6 @@
 {
   "name": "__WIZ_ARTIFACT_ID__",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -13,15 +13,15 @@
   },
   "scripts": {
     "ng": "ng",
-    "wizbuild": "node scripts/wizbuild.mjs",
-    "wizwatch": "node scripts/wizwatch.mjs",
+    "wizbuild": "node --env-file-if-exists=.env scripts/wizbuild.mjs",
+    "wizwatch": "node --env-file-if-exists=.env scripts/wizwatch.mjs",
     "frontend:build": "npm run wizbuild",
     "frontend:watch": "npm run wizwatch",
-    "backend:build": "node scripts/build-backend.mjs",
-    "build": "node scripts/build.mjs",
-    "dev": "node scripts/dev.mjs",
-    "bundle": "node scripts/bundle.mjs",
-    "test:wizbuild": "node --test scripts/wiz/compiler.test.mjs"
+    "backend:build": "node --env-file-if-exists=.env scripts/build-backend.mjs",
+    "build": "node --env-file-if-exists=.env scripts/build.mjs",
+    "dev": "node --env-file-if-exists=.env scripts/dev.mjs",
+    "bundle": "node --env-file-if-exists=.env scripts/bundle.mjs",
+    "test:wizbuild": "node --env-file-if-exists=.env --test scripts/wiz/compiler.test.mjs"
   },
   "dependencies": {
     "@angular/common": "22.1.4",

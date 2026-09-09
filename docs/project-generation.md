@@ -19,7 +19,7 @@ version is newer.
 
 ## Generated platform
 
-Every `1.1.1` template pins Java release 25, Spring Boot `4.1.1`, its BOM-managed
+Every `1.2.0` template pins Java release 25, Spring Boot `4.1.1`, its BOM-managed
 Spring Framework `7.0.9`, springdoc `3.1.0`, and Maven Wrapper `3.9.15`. The Angular templates pin Angular `22.1.4`, Angular
 CLI/build `22.1.6`, and TypeScript `6.0.3`; the React template pins React `19.2.8`
 and Vite `8.2.2`. The root [`README`](../README.md#111-platform-baseline) is the
@@ -34,7 +34,7 @@ Build the generator from source:
 
 ```bash
 ./mvnw clean package
-alias wiz-spring='java -jar /absolute/path/to/wiz-spring/target/wiz-spring-1.1.1.jar'
+alias wiz-spring='java -jar /absolute/path/to/wiz-spring/target/wiz-spring-1.2.0.jar'
 ```
 
 ## CLI
@@ -43,12 +43,9 @@ alias wiz-spring='java -jar /absolute/path/to/wiz-spring/target/wiz-spring-1.1.1
 | --- | --- |
 | `create <path> --package <package> [--template <id>]` | Create or import a standalone project. |
 | `templates` | List built-in frontend templates. |
-| `service <subcommand>` | Manage a generated bundle as a systemd service. |
-| `completion <bash\|zsh>` | Generate shell completion. |
+| `service <subcommand>` | Manage a live generated project or production bundle with systemd. |
 
-Use `wiz-spring <command> --help` as the option reference. Enable completion in the
-current shell with `source <(wiz-spring completion bash)` or
-`source <(wiz-spring completion zsh)`.
+Use `wiz-spring <command> --help` as the option reference.
 
 ## Templates
 
