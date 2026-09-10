@@ -14,13 +14,15 @@ import org.junit.jupiter.api.Test;
 
 class TemplateVersionPolicyTest {
 
-    private static final String WIZ_VERSION = "1.2.0";
+    private static final String WIZ_VERSION = "1.2.1";
     private static final String JAVA_RELEASE = "25";
     private static final String SPRING_BOOT_VERSION = "4.1.1";
     private static final String SPRING_FRAMEWORK_VERSION = "7.0.9";
     private static final String SPRINGDOC_VERSION = "3.1.0";
     private static final String MAVEN_VERSION = "3.9.15";
-    private static final String NODE_LTS_RANGE = "\"node\": \"^22.22.3 || ^24.15.0\"";
+    private static final String NODE_RANGE =
+            "\"node\": \"^22.22.3 || ^24.15.0 || >=26.0.0\"";
+    private static final String NPM_RANGE = "\"npm\": \">=8.0.0\"";
     private static final Map<String, String> ANGULAR_RUNTIME = Map.of(
             "@angular/common", "22.1.4",
             "@angular/compiler", "22.1.4",
@@ -40,7 +42,7 @@ class TemplateVersionPolicyTest {
             "msgpackr-extract@3.0.4");
 
     @Test
-    void everyTemplateUsesTheSameStableBackendAndLtsToolchainPolicy() throws Exception {
+    void everyTemplateUsesTheSameSupportedBackendAndFrontendToolchainPolicy() throws Exception {
         for (FrontendTemplate template : FrontendTemplate.values()) {
             String root = "/wiz/templates/project-" + template.id() + "/";
             String pom = resource(root + "pom.xml");
@@ -52,9 +54,10 @@ class TemplateVersionPolicyTest {
             assertTrue(pom.contains("<springdoc.version>3.1.0</springdoc.version>"), template.id());
             assertTrue(pom.contains("<goal>properties</goal>"), template.id());
             assertTrue(pom.contains("-javaagent:${org.mockito:mockito-core:jar}"), template.id());
-            assertTrue(packageJson.contains(NODE_LTS_RANGE), template.id());
-            assertTrue(packageLock.contains(NODE_LTS_RANGE), template.id());
-            assertFalse(packageJson.contains("^26.0.0"), template.id());
+            assertTrue(packageJson.contains(NODE_RANGE), template.id());
+            assertTrue(packageLock.contains(NODE_RANGE), template.id());
+            assertTrue(packageJson.contains(NPM_RANGE), template.id());
+            assertTrue(packageLock.contains(NPM_RANGE), template.id());
         }
     }
 
@@ -122,7 +125,7 @@ class TemplateVersionPolicyTest {
         assertContains(agents, "springdoc `" + SPRINGDOC_VERSION + "`");
         assertContains(backend, "springdoc `" + SPRINGDOC_VERSION + "`");
         assertContains(backend, "jakarta.*");
-        assertContains(deployment, "^22.22.3 || ^24.15.0");
+        assertContains(deployment, "^22.22.3 || ^24.15.0 || >=26.0.0");
 
         for (String document : List.of(readme, agents, copilot, backend, deployment)) {
             assertFalse(document.contains("Java 21"));
@@ -178,11 +181,14 @@ class TemplateVersionPolicyTest {
     @Test
     void frontendInstructionsNameThePinnedOnePointTwoPointZeroToolchains() throws Exception {
         Map<String, List<String>> expected = Map.of(
-                "angular-wiz", List.of("WIZ Spring `1.2.0`", "22.1.4", "22.1.6", "6.0.3", "3.0.4"),
-                "angular", List.of("WIZ Spring `1.2.0`", "22.1.4", "22.1.6", "6.0.3"),
-                "react", List.of("WIZ Spring `1.2.0`", "19.2.8", "8.2.2", "6.1.1"),
-                "html", List.of("WIZ Spring `1.2.0`", "^22.22.3 || ^24.15.0"),
-                "jsp", List.of("WIZ Spring `1.2.0`", "Spring Boot `4.1.1`", "^22.22.3 || ^24.15.0"));
+                "angular-wiz", List.of("WIZ Spring `1.2.1`", "22.1.4", "22.1.6", "6.0.3", "3.0.4"),
+                "angular", List.of("WIZ Spring `1.2.1`", "22.1.4", "22.1.6", "6.0.3"),
+                "react", List.of("WIZ Spring `1.2.1`", "19.2.8", "8.2.2", "6.1.1"),
+                "html", List.of("WIZ Spring `1.2.1`", "^22.22.3 || ^24.15.0 || >=26.0.0"),
+                "jsp", List.of(
+                        "WIZ Spring `1.2.1`",
+                        "Spring Boot `4.1.1`",
+                        "^22.22.3 || ^24.15.0 || >=26.0.0"));
 
         for (Map.Entry<String, List<String>> entry : expected.entrySet()) {
             String guide = resource("/wiz/templates/project-" + entry.getKey() + "/docs/ai/frontend.md");

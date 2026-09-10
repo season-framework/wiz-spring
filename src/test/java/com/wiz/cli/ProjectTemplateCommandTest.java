@@ -49,6 +49,24 @@ class ProjectTemplateCommandTest {
     }
 
     @Test
+    void createPrintsFrontendToolchainWarningsWithoutBlocking() {
+        Path target = tempDir.resolve("toolchain-warning");
+        CreateCommand create = new CreateCommand(() -> new com.wiz.core.DevelopmentToolchain.Report(
+                "25.0.0",
+                "20.19.0",
+                "7.0.0",
+                List.of("Node.js and npm are outside the generated project range")));
+        StringWriter output = new StringWriter();
+        CommandLine command = new CommandLine(create);
+        command.setOut(new PrintWriter(output));
+
+        assertEquals(0, command.execute(
+                target.toString(), "--package", "com.example.toolchainwarning", "--template", "html"));
+        assertTrue(Files.isRegularFile(target.resolve("package.json")));
+        assertTrue(output.toString().contains("Toolchain warning: Node.js and npm"));
+    }
+
+    @Test
     void defaultCreatePublishesTheVendoredAngularWizBuilder() throws Exception {
         Path target = tempDir.resolve("default-angular-wiz");
         StringWriter output = new StringWriter();
@@ -108,13 +126,15 @@ class ProjectTemplateCommandTest {
             String packageJson = Files.readString(target.resolve("package.json"));
             String packageLock = Files.readString(target.resolve("package-lock.json"));
             String pom = Files.readString(target.resolve("pom.xml"));
-            assertTrue(packageJson.contains("\"version\": \"1.2.0\""), template.id());
+            assertTrue(packageJson.contains("\"version\": \"1.2.1\""), template.id());
             assertTrue(packageJson.contains("\"frontend\": \"" + template.id() + "\""), template.id());
-            assertTrue(packageJson.contains("\"node\": \"^22.22.3 || ^24.15.0\""), template.id());
-            assertTrue(packageJson.contains("\"npm\": \">=10.0.0\""), template.id());
-            assertTrue(packageLock.contains("\"node\": \"^22.22.3 || ^24.15.0\""), template.id());
-            assertTrue(packageLock.contains("\"npm\": \">=10.0.0\""), template.id());
-            assertTrue(pom.contains("<version>1.2.0</version>"), template.id());
+            assertTrue(packageJson.contains(
+                    "\"node\": \"^22.22.3 || ^24.15.0 || >=26.0.0\""), template.id());
+            assertTrue(packageJson.contains("\"npm\": \">=8.0.0\""), template.id());
+            assertTrue(packageLock.contains(
+                    "\"node\": \"^22.22.3 || ^24.15.0 || >=26.0.0\""), template.id());
+            assertTrue(packageLock.contains("\"npm\": \">=8.0.0\""), template.id());
+            assertTrue(pom.contains("<version>1.2.1</version>"), template.id());
             assertTrue(pom.contains("<version>4.1.1</version>"), template.id());
             assertTrue(pom.contains("<java.version>25</java.version>"), template.id());
             assertTrue(pom.contains("<springdoc.version>3.1.0</springdoc.version>"), template.id());

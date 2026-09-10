@@ -3,13 +3,13 @@
 # AI instructions
 
 Every generated project receives the common project, Spring backend, and deployment
-contracts plus exactly one frontend contract. These files describe the current `1.2.0`
+contracts plus exactly one frontend contract. These files describe the current `1.2.1`
 project contract to AI coding tools and human contributors; they do not add an MCP
 runtime.
 
 The instruction baseline is Java 25, Spring Boot `4.1.1`, Spring Framework `7.0.9`
 (managed by the Boot BOM), springdoc `3.1.0`, Maven `3.9.15`, and Node.js
-`^22.22.3 || ^24.15.0`. Frontend-specific instructions also name
+`^22.22.3 || ^24.15.0 || >=26.0.0`. Frontend-specific instructions also name
 the pinned Angular 22 or React 19 toolchain. The generated `pom.xml`, `package.json`, and
 lockfile remain authoritative if application owners later upgrade their standalone
 project.

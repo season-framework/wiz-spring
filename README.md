@@ -4,7 +4,7 @@
 
 **Generate a standard Spring Boot backend with the frontend structure your project needs.**
 
-[![Release 1.2.0](https://img.shields.io/badge/release-1.2.0-2563eb)](release-log/1.2.0.md)
+[![Release 1.2.1](https://img.shields.io/badge/release-1.2.1-2563eb)](release-log/1.2.1.md)
 [![Java 25+](https://img.shields.io/badge/Java-25%2B-e76f00)](pom.xml)
 [![MIT License](https://img.shields.io/badge/license-MIT-16a34a)](LICENSE)
 
@@ -22,38 +22,34 @@ frontend, watch, build, bundle, and runtime workflows.
 > legacy workspace in place. Read the [1.0 compatibility guide](docs/compatibility.md)
 > before moving an existing application.
 
-## What's new in 1.2.0
+## What's new in 1.2.1
 
-- `npm run dev` and the default systemd service continuously watch backend compilation
-  and frontend builds. Successful source edits take effect without reinstalling the
-  service or manually restarting its process.
-- `service install` uses WIZ Spring only to write the unit and launcher. The installed
-  launcher directly executes the generated project's `npm` or the bundle's `java`, so
-  neither the WIZ Spring executable nor the generator JAR is a runtime dependency.
-- Service installation now defaults to live development. Select an immutable bundle
-  explicitly with `--production` or `--bundle`.
-- Projects and bundles both include a ready-to-edit `.env` with no copy step, and a
-  bundle starts through `./run.sh` on a server that has only JDK 25+.
-- The unused `completion` command has been removed, keeping the CLI focused on
-  `create`, `templates`, and `service`.
+- `create` no longer rejects a project because Node.js or npm is missing, prerelease,
+  outside the generated project's range, or cannot be inspected. It creates the project
+  and prints an explicit toolchain warning instead.
+- The generated frontend policy now follows the pinned Angular toolchain's supported
+  range: Node.js `^22.22.3 || ^24.15.0 || >=26.0.0` and npm 8 or newer.
+- A full JDK 25+ with `javac` remains the only mandatory local toolchain preflight.
+  Generated projects retain the live development, direct `.env`, standalone service,
+  and JDK-only bundle workflows introduced in 1.2.0.
 
-## 1.2.0 platform baseline
+## 1.2.1 platform baseline
 
-WIZ Spring `1.2.0` generates and validates the following stack. These are concrete
+WIZ Spring `1.2.1` generates and validates the following stack. These are concrete
 template versions, not merely minimum compatibility claims.
 
-| Layer | 1.2.0 baseline |
+| Layer | 1.2.1 baseline |
 | --- | --- |
-| Generator and generated project version | `1.2.0` |
+| Generator and generated project version | `1.2.1` |
 | Java | release `25`; full JDK 25 or newer required |
 | Spring backend | Spring Boot `4.1.1`, Boot-managed Spring Framework `7.0.9`, springdoc `3.1.0` |
-| Build tools | Maven Wrapper `3.9.15`, npm `10+` |
-| Node.js | `^22.22.3 || ^24.15.0` (LTS releases only) |
+| Build tools | Maven Wrapper `3.9.15`, npm `8+` |
+| Node.js | `^22.22.3 || ^24.15.0 || >=26.0.0` |
 | Angular templates | Angular `22.1.4`, Angular CLI/build `22.1.6`, TypeScript `6.0.3` |
 | React template | React `19.2.8`, Vite `8.2.2` |
 
 Updating the generator does not rewrite an already generated project. To adopt this
-baseline, create a new `1.2.0` project or deliberately update that project's `pom.xml`,
+baseline, create a new `1.2.1` project or deliberately update that project's `pom.xml`,
 `package.json`, lockfile, and `docs/ai` instructions together.
 
 ## Why WIZ Spring
@@ -71,12 +67,13 @@ baseline, create a new `1.2.0` project or deliberately update that project's `po
 
 ## Quick start
 
-Requirements: full JDK 25+, Node.js `^22.22.3 || ^24.15.0` (LTS only), and npm 10+.
+Generated-project build requirements: full JDK 25+, Node.js
+`^22.22.3 || ^24.15.0 || >=26.0.0`, and npm 8+.
 
 ```bash
 ./mvnw clean package
 
-java -jar target/wiz-spring-1.2.0.jar create ../dashboard \
+java -jar target/wiz-spring-1.2.1.jar create ../dashboard \
   --package com.example.dashboard
 
 cd ../dashboard
@@ -86,6 +83,10 @@ npm run dev
 
 The generated project already contains a usable root `.env`; edit it directly when a
 default needs changing.
+
+`create` requires the full JDK but treats Node.js and npm detection as advisory. Missing
+tools or versions outside the generated project's range produce a warning without blocking
+project creation; install a compatible frontend toolchain before running `npm ci`.
 
 `angular-wiz` is the default template. Add `--template react` or another template ID
 to select a different frontend. The target directory name is normalized into a
@@ -102,7 +103,7 @@ segments cannot because they must be valid Java identifiers.
 | `html` | Static HTML, CSS, and JavaScript |
 | `jsp` | Server-rendered Spring MVC/JSP application |
 
-Run `java -jar target/wiz-spring-1.2.0.jar templates` for the built-in descriptions.
+Run `java -jar target/wiz-spring-1.2.1.jar templates` for the built-in descriptions.
 
 ## Generated workflow
 
@@ -134,7 +135,7 @@ Use `<command> --help` for the complete options.
 
 The optional [Docker project helper](helper/README.md) exposes project generation over
 HTTP and returns a ZIP. Its build-time registry can add, customize, or remove templates
-without packaging the helper into `wiz-spring-1.2.0.jar`.
+without packaging the helper into `wiz-spring-1.2.1.jar`.
 
 ## Documentation
 

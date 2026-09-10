@@ -76,6 +76,9 @@ public class CreateCommand implements Callable<Integer> {
         output.println("Java package: " + project.packageRoot());
         output.println("Frontend template: " + project.template().id());
         output.println("Toolchain: " + toolchain.summary());
+        for (String warning : toolchain.warnings()) {
+            output.println("Toolchain warning: " + warning);
+        }
         printNextCommands(output, project);
         output.flush();
         return 0;

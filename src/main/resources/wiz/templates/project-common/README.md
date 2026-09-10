@@ -6,15 +6,16 @@ The generated project has no runtime dependency on `wiz-spring`.
 ## Requirements
 
 - JDK 25 or newer (a full JDK with `javac`)
-- Node.js `^22.22.3 || ^24.15.0` (LTS releases only)
-- npm 10 or newer
+- Node.js `^22.22.3 || ^24.15.0 || >=26.0.0`
+- npm 8 or newer
 
-The generator checks these tools before project creation. The same requirements remain
-visible in `package.json` so a fresh clone and its package manager can report the policy.
+The generator requires the full JDK before project creation. Node.js and npm checks are
+advisory and never block creation. The requirements remain visible in `package.json` so a
+fresh clone and its package manager can report the policy before a build.
 
 ## Generated platform baseline
 
-This project was generated from WIZ Spring `1.2.0` with the following backend and
+This project was generated from WIZ Spring `1.2.1` with the following backend and
 build baseline:
 
 | Layer | Version or policy |
@@ -23,8 +24,8 @@ build baseline:
 | Spring backend | Spring Boot `4.1.1`, Boot-managed Spring Framework `7.0.9` |
 | API documentation | springdoc `3.1.0` |
 | Maven | Wrapper `3.9.15` |
-| Node.js | `^22.22.3 || ^24.15.0` |
-| npm | `10+` |
+| Node.js | `^22.22.3 || ^24.15.0 || >=26.0.0` |
+| npm | `8+` |
 
 The exact frontend dependency versions are documented in `docs/ai/frontend.md` and
 pinned in `package.json` and `package-lock.json`. This project is standalone: installing

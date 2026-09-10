@@ -1,6 +1,6 @@
 # Angular frontend rules
 
-- WIZ Spring `1.2.0` pins Angular runtime `22.1.4`, Angular CLI/build `22.1.6`, and
+- WIZ Spring `1.2.1` pins Angular runtime `22.1.4`, Angular CLI/build `22.1.6`, and
   TypeScript `6.0.3`. `package.json` and `package-lock.json` are authoritative.
 - This is a normal Angular CLI workspace; it does not use WIZ component generation.
 - Application source lives under `frontend/src` and production output is `target/generated-resources/frontend`.

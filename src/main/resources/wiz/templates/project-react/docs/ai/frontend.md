@@ -1,6 +1,6 @@
 # React frontend rules
 
-- WIZ Spring `1.2.0` pins React and React DOM `19.2.8`, Vite `8.2.2`, and
+- WIZ Spring `1.2.1` pins React and React DOM `19.2.8`, Vite `8.2.2`, and
   `@vitejs/plugin-react` `6.1.1`. `package.json` and `package-lock.json` are authoritative.
 - This is a normal React and Vite application; it does not use WIZ component generation.
 - Source lives under `frontend/` and production output is `target/generated-resources/frontend`.

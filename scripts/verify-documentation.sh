@@ -37,7 +37,7 @@ current_docs=(
 )
 
 for file in "${current_docs[@]}"; do
-    require_text "$file" '1.2.0'
+    require_text "$file" '1.2.1'
     reject_text "$file" 'Java 21'
     reject_text "$file" 'JDK 21'
     reject_text "$file" 'Spring Boot 4.0.6'
@@ -64,7 +64,7 @@ for file in \
     require_text "$file" 'Spring Framework `7.0.9`'
 done
 
-require_text pom.xml '<version>1.2.0</version>'
+require_text pom.xml '<version>1.2.1</version>'
 require_text pom.xml '<maven.compiler.release>25</maven.compiler.release>'
 require_text src/main/resources/wiz/templates/project-angular/pom.xml '<version>4.1.1</version>'
 require_text src/main/resources/wiz/templates/project-angular/pom.xml '<java.version>25</java.version>'
@@ -94,8 +94,8 @@ frontend_guides=(
 )
 
 for file in "${frontend_guides[@]}"; do
-    require_text "$file" 'WIZ Spring `1.2.0`'
+    require_text "$file" 'WIZ Spring `1.2.1`'
     reject_text "$file" 'Angular 21'
 done
 
-printf 'Documentation and executable version policies are aligned with WIZ Spring 1.2.0.\n'
+printf 'Documentation and executable version policies are aligned with WIZ Spring 1.2.1.\n'

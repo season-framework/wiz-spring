@@ -1,7 +1,7 @@
 # JSP frontend rules
 
-- This is the WIZ Spring `1.2.0` JSP template on Java 25 and Spring Boot `4.1.1`.
-  Browser build tools follow the Node.js `^22.22.3 || ^24.15.0` policy in `package.json`.
+- This is the WIZ Spring `1.2.1` JSP template on Java 25 and Spring Boot `4.1.1`.
+  Browser build tools follow the Node.js `^22.22.3 || ^24.15.0 || >=26.0.0` policy in `package.json`.
 - JSP views live under `src/main/webapp/WEB-INF/jsp` and are rendered by Spring MVC controllers.
 - The deployment artifact is an executable WAR, not a JAR.
 - Browser assets live under `src/main/webapp/assets`; `npm run frontend:build` stages a public copy for reverse proxies.

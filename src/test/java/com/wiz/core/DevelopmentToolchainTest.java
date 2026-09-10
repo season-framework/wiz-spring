@@ -15,33 +15,31 @@ import org.junit.jupiter.api.Test;
 class DevelopmentToolchainTest {
 
     @Test
-    void acceptsTheSupportedNodeLinesAndNpmTen() {
-        for (String node : List.of("v22.22.3", "v22.23.2", "v24.15.0", "v24.20.0")) {
-            DevelopmentToolchain toolchain = toolchain(25, true, node, "10.0.0");
+    void acceptsTheDependencySupportedNodeLinesAndNpmEightOrNewer() {
+        for (String node : List.of(
+                "v22.22.3", "v22.23.2", "v24.15.0", "v24.20.0", "v26.0.0", "v28.1.0")) {
+            DevelopmentToolchain toolchain = toolchain(25, true, node, "8.0.0");
             DevelopmentToolchain.Report report = toolchain.verify();
 
             assertEquals(node.substring(1), report.nodeVersion());
-            assertEquals("10.0.0", report.npmVersion());
+            assertEquals("8.0.0", report.npmVersion());
+            assertTrue(report.warnings().isEmpty());
         }
     }
 
     @Test
-    void rejectsUnsupportedNodeLinesAndBoundaryVersions() {
+    void warnsWithoutBlockingForNodeAndNpmOutsideTheGeneratedProjectRange() {
         for (String node : List.of(
-                "v22.22.2", "v23.9.0", "v24.14.9", "v25.0.0", "v26.0.0", "v26.8.1",
-                "v27.0.0", "v28.0.0", "v24.15.0-rc.1")) {
-            IllegalStateException error = assertThrows(
-                    IllegalStateException.class,
-                    () -> toolchain(25, true, node, "10.0.0").verify(),
-                    node);
+                "v20.19.0", "v22.22.2", "v23.9.0", "v24.14.9", "v25.0.0", "v24.15.0-rc.1")) {
+            DevelopmentToolchain.Report report = toolchain(25, true, node, "7.99.9").verify();
 
-            assertTrue(error.getMessage().contains("Node.js"), node);
-            assertTrue(error.getMessage().contains(DevelopmentToolchain.NODE_REQUIREMENT), node);
+            assertTrue(report.warnings().stream().anyMatch(warning -> warning.contains("Node.js")), node);
+            assertTrue(report.warnings().stream().anyMatch(warning -> warning.contains("npm 7.99.9")), node);
         }
     }
 
     @Test
-    void reportsEveryMissingOrOutdatedToolInOneFailure() {
+    void onlyJavaProblemsBlockProjectCreation() {
         DevelopmentToolchain toolchain = new DevelopmentToolchain(
                 () -> new DevelopmentToolchain.JavaInstallation("20.0.2", 20, false),
                 command -> {
@@ -58,22 +56,28 @@ class DevelopmentToolchainTest {
     }
 
     @Test
-    void rejectsOldNpmAndMalformedVersionOutput() {
-        IllegalStateException oldNpm = assertThrows(
-                IllegalStateException.class,
-                () -> toolchain(25, true, "v24.15.0", "9.99.9").verify());
-        assertTrue(oldNpm.getMessage().contains("npm 9.99.9 is too old"));
+    void missingAndMalformedFrontendToolsAreAdvisory() {
+        DevelopmentToolchain missing = new DevelopmentToolchain(
+                () -> new DevelopmentToolchain.JavaInstallation("25.0.1", 25, true),
+                command -> {
+                    throw new IOException(command.getFirst() + " missing");
+                });
+        DevelopmentToolchain.Report missingReport = missing.verify();
+        assertEquals("not available", missingReport.nodeVersion());
+        assertEquals("not available", missingReport.npmVersion());
+        assertTrue(missingReport.warnings().stream().anyMatch(warning -> warning.contains("Node.js was not found")));
+        assertTrue(missingReport.warnings().stream().anyMatch(warning -> warning.contains("npm was not found")));
 
-        IllegalStateException malformed = assertThrows(
-                IllegalStateException.class,
-                () -> toolchain(21, true, "node version unknown", "10.0.0").verify());
-        assertTrue(malformed.getMessage().contains("unrecognized version"));
+        DevelopmentToolchain.Report malformed = toolchain(
+                25, true, "node version unknown", "10.0.0").verify();
+        assertEquals("not available", malformed.nodeVersion());
+        assertTrue(malformed.warnings().stream().anyMatch(warning -> warning.contains("unrecognized version")));
     }
 
     @Test
-    void reportsTimeoutAndNonZeroExit() {
+    void reportsTimeoutAndNonZeroExitAsWarnings() {
         DevelopmentToolchain toolchain = new DevelopmentToolchain(
-                () -> new DevelopmentToolchain.JavaInstallation("21.0.12", 21, true),
+                () -> new DevelopmentToolchain.JavaInstallation("25.0.1", 25, true),
                 command -> {
                     if (command.getFirst().startsWith("node")) {
                         throw new TimeoutException("node");
@@ -81,10 +85,10 @@ class DevelopmentToolchainTest {
                     return new DevelopmentToolchain.CommandResult(7, "npm failed\n");
                 });
 
-        IllegalStateException error = assertThrows(IllegalStateException.class, toolchain::verify);
+        DevelopmentToolchain.Report report = toolchain.verify();
 
-        assertTrue(error.getMessage().contains("Node.js version check timed out"));
-        assertTrue(error.getMessage().contains("npm version check failed with exit code 7"));
+        assertTrue(report.warnings().stream().anyMatch(warning -> warning.contains("Node.js version check timed out")));
+        assertTrue(report.warnings().stream().anyMatch(warning -> warning.contains("npm version check failed with exit code 7")));
     }
 
     private DevelopmentToolchain toolchain(

@@ -1,8 +1,8 @@
 # Build and deployment rules
 
-- The WIZ Spring `1.2.0` deployment baseline uses a full JDK 25 or newer, Maven
+- The WIZ Spring `1.2.1` deployment baseline uses a full JDK 25 or newer, Maven
   Wrapper `3.9.15`, Node.js
-  `^22.22.3 || ^24.15.0`, and npm 10 or newer.
+  `^22.22.3 || ^24.15.0 || >=26.0.0`, and npm 8 or newer.
 - Backend: `npm run backend:build`; it packages Spring without deleting the independently
   watched frontend output. Use direct `./mvnw clean package` only when the live development
   lifecycle is stopped or when a following frontend build will restore that output.

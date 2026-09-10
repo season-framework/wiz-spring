@@ -3,12 +3,12 @@
 # AI 인스트럭션
 
 모든 생성 프로젝트에는 공통 프로젝트, Spring 백엔드, 배포 계약과 선택한 프론트엔드
-계약 하나가 들어갑니다. 이 파일들은 AI coding tool과 사람에게 현재 `1.2.0`
+계약 하나가 들어갑니다. 이 파일들은 AI coding tool과 사람에게 현재 `1.2.1`
 프로젝트 계약을 설명하며 MCP runtime을 추가하지 않습니다.
 
 인스트럭션의 기준은 Java 25, Spring Boot `4.1.1`, Spring Framework `7.0.9`
 (Boot BOM 관리), springdoc `3.1.0`, Maven `3.9.15`, Node.js
-`^22.22.3 || ^24.15.0`입니다. 프론트엔드별 인스트럭션은
+`^22.22.3 || ^24.15.0 || >=26.0.0`입니다. 프론트엔드별 인스트럭션은
 고정된 Angular 22 또는 React 19 toolchain도 명시합니다. 독립적인 생성
 프로젝트를 이후에 버전업했다면 해당 프로젝트의 `pom.xml`, `package.json`,
 lockfile이 최종 기준입니다.

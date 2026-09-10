@@ -18,12 +18,12 @@ import java.util.regex.Pattern;
 
 import javax.tools.ToolProvider;
 
-/** Verifies the local build tools required by every generated project. */
+/** Verifies Java build prerequisites and reports frontend toolchain compatibility. */
 public final class DevelopmentToolchain {
 
     public static final int MINIMUM_JAVA = 25;
-    public static final String NODE_REQUIREMENT = "^22.22.3 || ^24.15.0";
-    public static final String NPM_REQUIREMENT = ">=10.0.0";
+    public static final String NODE_REQUIREMENT = "^22.22.3 || ^24.15.0 || >=26.0.0";
+    public static final String NPM_REQUIREMENT = ">=8.0.0";
 
     private static final Duration COMMAND_TIMEOUT = Duration.ofSeconds(5);
     private static final int MAXIMUM_OUTPUT_BYTES = 4096;
@@ -44,29 +44,42 @@ public final class DevelopmentToolchain {
 
     public Report verify() {
         ArrayList<String> problems = new ArrayList<>();
+        ArrayList<String> warnings = new ArrayList<>();
         JavaInstallation java = inspectJava(problems);
-        ToolInstallation node = inspectCommand("Node.js", nodeCommand(), NODE_REQUIREMENT, problems);
-        ToolInstallation npm = inspectCommand("npm", npmCommand(), NPM_REQUIREMENT, problems);
+        ToolInstallation node = inspectCommand("Node.js", nodeCommand(), NODE_REQUIREMENT, warnings);
+        ToolInstallation npm = inspectCommand("npm", npmCommand(), NPM_REQUIREMENT, warnings);
 
         if (node.available() && !node.version().isStable()) {
-            problems.add("Node.js prerelease versions are not supported: " + node.rawVersion());
+            warnings.add("Node.js prerelease versions may not be supported by the generated project: "
+                    + node.rawVersion());
         } else if (node.available() && !supportsNode(node.version())) {
-            problems.add("Node.js " + node.version() + " is unsupported (required: " + NODE_REQUIREMENT + ")");
+            warnings.add("Node.js " + node.version() + " is outside the generated project range (expected: "
+                    + NODE_REQUIREMENT + ")");
         }
         if (npm.available() && !npm.version().isStable()) {
-            problems.add("npm prerelease versions are not supported: " + npm.rawVersion());
-        } else if (npm.available() && npm.version().compareTo(new Version(10, 0, 0, null)) < 0) {
-            problems.add("npm " + npm.version() + " is too old (required: " + NPM_REQUIREMENT + ")");
+            warnings.add("npm prerelease versions may not be supported by the generated project: "
+                    + npm.rawVersion());
+        } else if (npm.available() && npm.version().compareTo(new Version(8, 0, 0, null)) < 0) {
+            warnings.add("npm " + npm.version() + " is outside the generated project range (expected: "
+                    + NPM_REQUIREMENT + ")");
         }
 
         if (!problems.isEmpty()) {
-            throw new IllegalStateException("Development toolchain requirements not met:\n- "
+            String frontendWarnings = warnings.isEmpty()
+                    ? ""
+                    : "\nFrontend toolchain warnings (these do not block project creation):\n- "
+                            + String.join("\n- ", warnings);
+            throw new IllegalStateException("Java toolchain requirements not met:\n- "
                     + String.join("\n- ", problems)
-                    + "\nRequired: JDK " + MINIMUM_JAVA + "+, Node.js " + NODE_REQUIREMENT
-                    + ", npm " + NPM_REQUIREMENT
-                    + ". Install supported tools and retry; no project files were created.");
+                    + "\nRequired: full JDK " + MINIMUM_JAVA
+                    + "+. Install a supported JDK and retry; no project files were created."
+                    + frontendWarnings);
         }
-        return new Report(java.displayVersion(), node.version().toString(), npm.version().toString());
+        return new Report(
+                java.displayVersion(),
+                displayVersion(node),
+                displayVersion(npm),
+                warnings);
     }
 
     private JavaInstallation inspectJava(List<String> problems) {
@@ -90,31 +103,32 @@ public final class DevelopmentToolchain {
             String label,
             List<String> command,
             String requirement,
-            List<String> problems) {
+            List<String> warnings) {
         CommandResult result;
         try {
             result = commandProbe.execute(command);
         } catch (IOException exception) {
-            problems.add(label + " was not found on PATH (required: " + requirement + ")");
+            warnings.add(label + " was not found on PATH (generated project range: " + requirement + ")");
             return ToolInstallation.unavailable();
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            problems.add(label + " version check was interrupted");
+            warnings.add(label + " version check was interrupted");
             return ToolInstallation.unavailable();
         } catch (TimeoutException exception) {
-            problems.add(label + " version check timed out after " + COMMAND_TIMEOUT.toSeconds() + " seconds");
+            warnings.add(label + " version check timed out after " + COMMAND_TIMEOUT.toSeconds() + " seconds");
             return ToolInstallation.unavailable();
         }
         String output = result.output().strip();
         if (result.exitCode() != 0) {
-            problems.add(label + " version check failed with exit code " + result.exitCode()
+            warnings.add(label + " version check failed with exit code " + result.exitCode()
                     + (output.isEmpty() ? "" : ": " + oneLine(output)));
             return ToolInstallation.unavailable();
         }
         try {
             return new ToolInstallation(output, Version.parse(output), true);
         } catch (IllegalArgumentException exception) {
-            problems.add(label + " returned an unrecognized version: " + (output.isEmpty() ? "<empty>" : oneLine(output)));
+            warnings.add(label + " returned an unrecognized version: "
+                    + (output.isEmpty() ? "<empty>" : oneLine(output)));
             return ToolInstallation.unavailable();
         }
     }
@@ -126,7 +140,11 @@ public final class DevelopmentToolchain {
         if (version.major() == 24) {
             return version.compareTo(new Version(24, 15, 0, null)) >= 0;
         }
-        return false;
+        return version.major() >= 26;
+    }
+
+    private static String displayVersion(ToolInstallation installation) {
+        return installation.available() ? installation.version().toString() : "not available";
     }
 
     private static JavaInstallation currentJava() {
@@ -186,7 +204,15 @@ public final class DevelopmentToolchain {
         return message == null || message.isBlank() ? exception.getClass().getSimpleName() : oneLine(message);
     }
 
-    public record Report(String javaVersion, String nodeVersion, String npmVersion) {
+    public record Report(String javaVersion, String nodeVersion, String npmVersion, List<String> warnings) {
+        public Report {
+            warnings = List.copyOf(warnings);
+        }
+
+        public Report(String javaVersion, String nodeVersion, String npmVersion) {
+            this(javaVersion, nodeVersion, npmVersion, List.of());
+        }
+
         public String summary() {
             return "Java " + javaVersion + ", Node.js " + nodeVersion + ", npm " + npmVersion;
         }

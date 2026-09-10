@@ -6,19 +6,22 @@ WIZ Spring은 선택한 프론트엔드 하나와 표준 Spring Boot 프로젝�
 생성 후에는 generator가 필요하지 않습니다. 빌드, watch, 실행, bundle 명령은 생성된
 저장소에 포함됩니다.
 
-## 요구 사항
+## 생성 프로젝트 요구 사항
 
 - `javac`를 포함한 full JDK 25 이상
-- Node.js `^22.22.3 || ^24.15.0`(LTS만 지원)
-- npm 10 이상
+- Node.js `^22.22.3 || ^24.15.0 || >=26.0.0`
+- npm 8 이상
 - `--uri`로 import할 때 `PATH`에서 실행할 수 있는 Git
 
-`create`는 target에 파일을 쓰기 전에 전체 toolchain을 검사합니다. 생성되는 Angular
-toolchain이 지원하지 않는 Node.js 범위는 숫자가 더 높더라도 거부합니다.
+`create`는 full JDK 25 이상이 없을 때만 생성을 중단합니다. Node.js와 npm은 프로젝트
+파일을 쓰는 데 필요하지 않으므로 검사 결과를 안내로만 사용합니다. 도구가 없거나 버전
+확인이 실패한 경우, prerelease 또는 생성 프로젝트 범위 밖의 버전인 경우에도 경고를
+표시하고 프로젝트를 생성합니다. `npm ci` 전에 호환되는 프론트엔드 toolchain을
+설치하십시오.
 
 ## 생성 플랫폼
 
-모든 `1.2.0` 템플릿은 Java release 25, Spring Boot `4.1.1`, 해당 BOM이 관리하는
+모든 `1.2.1` 템플릿은 Java release 25, Spring Boot `4.1.1`, 해당 BOM이 관리하는
 Spring Framework `7.0.9`, springdoc `3.1.0`, Maven Wrapper `3.9.15`를 고정합니다. Angular 템플릿은 Angular `22.1.4`, Angular
 CLI/build `22.1.6`, TypeScript `6.0.3`을, React 템플릿은 React `19.2.8`, Vite
 `8.2.2`를 고정합니다. 사람이 읽는 기준표는 루트
@@ -33,7 +36,7 @@ Generator 버전업은 기존 생성 프로젝트를 자동으로 변경하지 �
 
 ```bash
 ./mvnw clean package
-alias wiz-spring='java -jar /absolute/path/to/wiz-spring/target/wiz-spring-1.2.0.jar'
+alias wiz-spring='java -jar /absolute/path/to/wiz-spring/target/wiz-spring-1.2.1.jar'
 ```
 
 ## CLI
