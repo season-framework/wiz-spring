@@ -1,0 +1,166 @@
+# syntax=docker/dockerfile:1.7
+
+ARG DOCKER_PLATFORM=linux/amd64
+ARG MAVEN_IMAGE=maven:3.9.15-eclipse-temurin-25-noble
+ARG NODE_IMAGE=node:24.20.0-bookworm-slim
+ARG WIZ_VERSION=1.2.2
+
+FROM --platform=${DOCKER_PLATFORM} ${NODE_IMAGE} AS node-toolchain
+
+FROM --platform=${DOCKER_PLATFORM} ${MAVEN_IMAGE} AS generator-builder
+
+ARG WIZ_VERSION
+WORKDIR /workspace
+
+COPY .mvn/ .mvn/
+COPY mvnw pom.xml ./
+RUN --mount=type=cache,id=wiz-spring-generator-m2,target=/root/.m2,sharing=locked \
+    chmod 0755 mvnw && \
+    ./mvnw --batch-mode --no-transfer-progress dependency:go-offline
+
+COPY src/ src/
+RUN --mount=type=cache,id=wiz-spring-generator-m2,target=/root/.m2,sharing=locked \
+    ./mvnw --batch-mode --no-transfer-progress -DskipTests clean package && \
+    test -s "target/wiz-spring-${WIZ_VERSION}.jar" && \
+    install -D -m 0644 "target/wiz-spring-${WIZ_VERSION}.jar" /opt/wiz-spring/wiz-spring.jar
+
+FROM --platform=${DOCKER_PLATFORM} ${MAVEN_IMAGE} AS development-tools
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG WIZ_VERSION
+ARG INSTALL_CODEX=true
+ARG CODEX_VERSION=0.152.1
+
+ENV TZ=Asia/Seoul \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    APP_ROOT=/opt/app \
+    WIZ_SPRING_JAR=/opt/wiz-spring/wiz-spring.jar \
+    SERVER_PORT=8080 \
+    SPRING_PROFILES_ACTIVE=dev \
+    WIZ_ENABLE_SSH=true \
+    NPM_CONFIG_UPDATE_NOTIFIER=false
+
+LABEL org.opencontainers.image.title="WIZ Spring development environment" \
+      org.opencontainers.image.version="${WIZ_VERSION}"
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        bash-completion \
+        build-essential \
+        ca-certificates \
+        curl \
+        git \
+        iproute2 \
+        jq \
+        less \
+        libatomic1 \
+        net-tools \
+        neovim \
+        openssh-server \
+        procps \
+        python3 \
+        ripgrep \
+        sudo \
+        tini \
+        tree \
+        tzdata \
+        unzip \
+        vim \
+        zip && \
+    ln -snf "/usr/share/zoneinfo/$TZ" /etc/localtime && \
+    printf '%s\n' "$TZ" > /etc/timezone && \
+    install -d -m 0755 /run/sshd /etc/ssh/sshd_config.d && \
+    printf '%s\n' \
+        'PermitRootLogin yes' \
+        'PasswordAuthentication yes' \
+        'PubkeyAuthentication no' \
+        'AuthenticationMethods password' \
+        > /etc/ssh/sshd_config.d/99-wiz-spring.conf && \
+    git config --global init.defaultBranch main && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=node-toolchain /usr/local/bin/node /usr/local/bin/node
+COPY --from=node-toolchain /usr/local/lib/node_modules /usr/local/lib/node_modules
+COPY --from=generator-builder /opt/wiz-spring/wiz-spring.jar /opt/wiz-spring/wiz-spring.jar
+COPY wiz-spring-cli /usr/local/bin/wiz-spring
+COPY docker/dev-entrypoint.sh /usr/local/bin/wiz-spring-dev-entrypoint
+COPY docker/java-env.sh /etc/profile.d/wiz-java.sh
+
+RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && \
+    ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx && \
+    chmod 0755 \
+        /usr/local/bin/wiz-spring \
+        /usr/local/bin/wiz-spring-dev-entrypoint && \
+    chmod 0644 /etc/profile.d/wiz-java.sh && \
+    printf '%s\n' \
+        "JAVA_HOME=\"$JAVA_HOME\"" \
+        "PATH=\"$PATH\"" \
+        >> /etc/environment && \
+    case "$INSTALL_CODEX" in \
+        true) npm install --global --no-audit --no-fund "@openai/codex@$CODEX_VERSION" ;; \
+        false) ;; \
+        *) printf 'INSTALL_CODEX must be true or false\n' >&2; exit 1 ;; \
+    esac && \
+    test "$(wiz-spring --version)" = "wiz-spring $WIZ_VERSION" && \
+    java -version && \
+    javac -version && \
+    node --version && \
+    npm --version
+
+FROM development-tools AS workspace-builder
+
+ARG WIZ_TEMPLATE=angular-wiz
+ARG WIZ_PACKAGE_ROOT=com.wiz.app
+
+RUN case "$WIZ_TEMPLATE" in \
+        angular-wiz|angular|react|html|jsp) ;; \
+        *) printf 'Unsupported WIZ_TEMPLATE: %s\n' "$WIZ_TEMPLATE" >&2; exit 1 ;; \
+    esac && \
+    wiz-spring create "$APP_ROOT" \
+        --package "$WIZ_PACKAGE_ROOT" \
+        --template "$WIZ_TEMPLATE"
+
+WORKDIR /opt/app
+
+RUN --mount=type=cache,id=wiz-spring-development-m2,target=/root/.m2,sharing=locked \
+    --mount=type=cache,id=wiz-spring-development-npm,target=/root/.npm,sharing=locked \
+    npm ci --no-audit --no-fund && \
+    npm run build && \
+    WIZ_TEMPLATE="$WIZ_TEMPLATE" node -e \
+        'const fs = require("node:fs"); const p = JSON.parse(fs.readFileSync("package.json", "utf8")); if (p.wiz?.frontend !== process.env.WIZ_TEMPLATE) process.exit(1)' && \
+    install -d /opt/wiz-cache/m2 && \
+    cp -a /root/.m2/. /opt/wiz-cache/m2/
+
+FROM development-tools AS runtime
+
+ARG WIZ_VERSION
+ARG WIZ_TEMPLATE=angular-wiz
+ARG WIZ_PACKAGE_ROOT=com.wiz.app
+
+ENV WIZ_TEMPLATE=${WIZ_TEMPLATE} \
+    WIZ_PACKAGE_ROOT=${WIZ_PACKAGE_ROOT}
+
+LABEL io.wiz.spring.version="${WIZ_VERSION}" \
+      io.wiz.spring.frontend-template="${WIZ_TEMPLATE}" \
+      io.wiz.spring.host-bind-required="false"
+
+COPY --from=workspace-builder /opt/wiz-cache/m2/ /root/.m2/
+COPY --from=workspace-builder /opt/app/ /opt/app/
+
+RUN rm -f /etc/ssh/ssh_host_* && \
+    test -s /opt/app/package.json && \
+    test -s /opt/app/.env
+
+WORKDIR /opt/app
+
+EXPOSE 22 8080
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=120s --retries=5 \
+    CMD curl --fail --silent --show-error \
+        "http://127.0.0.1:${SERVER_PORT:-8080}/actuator/health" >/dev/null || exit 1
+
+STOPSIGNAL SIGTERM
+
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/wiz-spring-dev-entrypoint"]
+CMD ["dev"]

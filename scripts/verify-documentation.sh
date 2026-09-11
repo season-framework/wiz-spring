@@ -78,6 +78,13 @@ require_text helper/internal/generator/generator.go 'const Version = "1.2.2"'
 require_text helper/internal/httpapi/openapi.yaml 'version: 1.2.2'
 require_text release-log/1.2.2.md '# WIZ Spring 1.2.2'
 require_text release-log/README.md '[`1.2.2`](1.2.2.md)'
+require_text README.md 'WIZ Spring 1.2.2 development images'
+require_text README.ko.md 'WIZ Spring 1.2.2 개발 이미지는'
+reject_text README.md 'WIZ Spring 1.2.1 development images'
+reject_text README.ko.md 'WIZ Spring 1.2.1 개발 이미지는'
+require_text docker-compose.yaml 'registry.nanoha.kr/kwon3286/wiz-spring:1.2.2'
+require_text docker-compose.yaml 'image: postgres:18-alpine'
+require_text docker-compose.yaml 'image: redis:8-alpine'
 
 deployment_docs=(
     docs/build-and-deployment.md

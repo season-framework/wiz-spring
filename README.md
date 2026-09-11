@@ -131,6 +131,47 @@ at runtime.
 
 Use `<command> --help` for the complete options.
 
+## Development Docker images
+
+The WIZ Spring 1.2.2 development images include a generated project, frontend
+dependencies, the Maven cache, and the JDK/Node.js/Codex toolchain under `/opt/app`.
+They declare no `VOLUME`, so the default `npm run dev` command starts without a host
+bind mount. The default `1.2.2` tag uses `angular-wiz`; select a template explicitly with
+`1.2.2-angular-wiz`, `1.2.2-angular`, `1.2.2-react`, `1.2.2-html`, or `1.2.2-jsp`.
+
+```bash
+docker run --detach --name wiz-spring-dev \
+  --publish 8080:8080 \
+  --env WIZ_ENABLE_SSH=false \
+  registry.nanoha.kr/kwon3286/wiz-spring:1.2.2-react
+```
+
+The checked-in [`docker-compose.yaml`](docker-compose.yaml) starts the default development
+image together with PostgreSQL 18 and Redis 8. Their data is retained in named volumes,
+and all published ports bind to `127.0.0.1` by default.
+
+```bash
+SSH_PASSWORD='replace-this-password' docker compose up --detach
+docker compose ps
+ssh -p 2222 root@127.0.0.1
+```
+
+The development container receives PostgreSQL connection values through
+`POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, and
+`POSTGRES_PASSWORD`, and the matching Redis values through `REDIS_HOST`, `REDIS_PORT`,
+and `REDIS_PASSWORD`. The generated sample application continues to use H2 until its
+datasource and dependencies are changed explicitly.
+
+Override `WIZ_SPRING_IMAGE` to select another frontend image. Host ports can be changed
+with `WIZ_HTTP_PORT`, `WIZ_SSH_PORT`, `POSTGRES_PORT`, and `REDIS_PORT`; credentials can
+be placed in a local `.env` file. The defaults are intended only for local development.
+Run `docker compose down` to stop the stack, or `docker compose down --volumes` to also
+remove its database data.
+
+To use SSH without Compose, publish port 22 and pass `SSH_PASSWORD` in the runtime
+environment. The images target `linux/amd64`. Run
+`scripts/build-dev-images.sh all --push` to rebuild, verify, and publish every variant.
+
 ## HTTP project helper
 
 The optional [Docker project helper](helper/README.md) exposes project generation over

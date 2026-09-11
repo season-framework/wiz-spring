@@ -130,6 +130,46 @@ DevTools로 재기동하므로, 일반적인 소스 수정에는 명령을 다�
 
 전체 옵션은 `<command> --help`에서 확인하십시오.
 
+## 개발환경 Docker 이미지
+
+WIZ Spring 1.2.2 개발 이미지는 생성 프로젝트, 프론트엔드 의존성, Maven cache와
+JDK/Node.js/Codex 도구를 `/opt/app`에 포함합니다. `VOLUME`을 선언하지 않으므로 host
+bind mount 없이 기본 명령인 `npm run dev`를 바로 시작합니다. 기본 `1.2.2` 태그는
+`angular-wiz`이며, `1.2.2-angular-wiz`, `1.2.2-angular`, `1.2.2-react`,
+`1.2.2-html`, `1.2.2-jsp` 태그로 각 템플릿을 선택할 수 있습니다.
+
+```bash
+docker run --detach --name wiz-spring-dev \
+  --publish 8080:8080 \
+  --env WIZ_ENABLE_SSH=false \
+  registry.nanoha.kr/kwon3286/wiz-spring:1.2.2-react
+```
+
+저장소의 [`docker-compose.yaml`](docker-compose.yaml)은 기본 개발 이미지와 PostgreSQL
+18, Redis 8을 함께 시작합니다. 데이터는 named volume에 유지되며 publish하는 모든
+포트는 기본적으로 `127.0.0.1`에만 bind합니다.
+
+```bash
+SSH_PASSWORD='replace-this-password' docker compose up --detach
+docker compose ps
+ssh -p 2222 root@127.0.0.1
+```
+
+개발 컨테이너에는 PostgreSQL 접속값이 `POSTGRES_HOST`, `POSTGRES_PORT`,
+`POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`로 전달되고, Redis 접속값은
+`REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`로 전달됩니다. 생성된 샘플 애플리케이션은
+datasource와 dependency를 명시적으로 변경하기 전까지 H2를 계속 사용합니다.
+
+다른 프론트엔드 이미지는 `WIZ_SPRING_IMAGE`로 선택합니다. Host 포트는
+`WIZ_HTTP_PORT`, `WIZ_SSH_PORT`, `POSTGRES_PORT`, `REDIS_PORT`로 바꿀 수 있고,
+credential은 로컬 `.env` 파일에 둘 수 있습니다. 기본 credential은 로컬 개발
+전용입니다. `docker compose down`은 묶음을 중지하고, 데이터까지 제거하려면
+`docker compose down --volumes`를 사용합니다.
+
+Compose 없이 SSH를 사용하려면 22번 포트를 publish하고 `SSH_PASSWORD`를 runtime
+환경으로 전달합니다. 이미지는 `linux/amd64` 기준입니다. 전체 변형을 다시 검증하고
+push하려면 `scripts/build-dev-images.sh all --push`를 실행합니다.
+
 ## HTTP 프로젝트 Helper
 
 선택적 [Docker 프로젝트 Helper](helper/README.ko.md)는 HTTP로 프로젝트를 생성해 ZIP으로
