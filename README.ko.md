@@ -4,7 +4,7 @@
 
 **프로젝트에 필요한 프론트엔드 구조와 표준 Spring Boot 백엔드를 생성합니다.**
 
-[![Release 1.2.1](https://img.shields.io/badge/release-1.2.1-2563eb)](release-log/1.2.1.md)
+[![Release 1.2.2](https://img.shields.io/badge/release-1.2.2-2563eb)](release-log/1.2.2.md)
 [![Java 25+](https://img.shields.io/badge/Java-25%2B-e76f00)](pom.xml)
 [![MIT License](https://img.shields.io/badge/license-MIT-16a34a)](LICENSE)
 
@@ -22,25 +22,24 @@ workflow는 생성된 프로젝트가 직접 소유합니다.
 > workspace를 인플레이스 마이그레이션하지 않습니다. 애플리케이션을 옮기기 전에
 > [1.0 호환성 문서](docs/compatibility.ko.md)를 확인하십시오.
 
-## 1.2.1 핵심 변경
+## 1.2.2 핵심 변경
 
-- `create`는 Node.js 또는 npm이 없거나 prerelease이거나 생성 프로젝트의 범위를
-  벗어나거나 버전을 확인할 수 없어도 생성을 거부하지 않습니다. 프로젝트를 생성하고
-  명확한 toolchain 경고만 표시합니다.
-- 생성 프로젝트의 프론트엔드 정책을 고정된 Angular toolchain이 실제 지원하는 범위인
-  Node.js `^22.22.3 || ^24.15.0 || >=26.0.0`, npm 8 이상으로 완화했습니다.
-- `javac`가 포함된 full JDK 25 이상만 필수 사전 조건으로 유지합니다. 1.2.0에서 도입한
-  실시간 개발, 직접 사용하는 `.env`, 독립 서비스, JDK-only bundle workflow는 그대로
-  유지됩니다.
+- `npm run bundle`은 이제 executable `application.jar`(JSP는 WAR), 프론트엔드
+  `public/`, `.env`, `docker-compose.yaml`만 게시합니다.
+- Docker Compose는 빌드된 Spring 애플리케이션 하나만 실행합니다. Nginx와 Apache HTTP
+  Server는 Compose 서비스와 bundle에서 제거하고, 수정 가능한 host 설정 예시는 생성
+  프로젝트의 `deploy/` 디렉터리에 남겼습니다.
+- Production service 설치는 새 root archive를 자동 인식하며, 1.2.1에서 생성한
+  manifest/checksum bundle도 기존과 같이 엄격하게 검증해 실행합니다.
 
-## 1.2.1 플랫폼 기준
+## 1.2.2 플랫폼 기준
 
-WIZ Spring `1.2.1`이 생성하고 검증하는 정확한 stack은 다음과 같습니다. 단순한 최소
+WIZ Spring `1.2.2`가 생성하고 검증하는 정확한 stack은 다음과 같습니다. 단순한 최소
 호환 버전이 아니라 템플릿에 고정된 버전입니다.
 
-| 계층 | 1.2.1 기준 |
+| 계층 | 1.2.2 기준 |
 | --- | --- |
-| Generator와 생성 프로젝트 버전 | `1.2.1` |
+| Generator와 생성 프로젝트 버전 | `1.2.2` |
 | Java | release `25`; full JDK 25 이상 필요 |
 | Spring 백엔드 | Spring Boot `4.1.1`, Boot 관리 Spring Framework `7.0.9`, springdoc `3.1.0` |
 | 빌드 도구 | Maven Wrapper `3.9.15`, npm `8+` |
@@ -49,7 +48,7 @@ WIZ Spring `1.2.1`이 생성하고 검증하는 정확한 stack은 다음과 같
 | React 템플릿 | React `19.2.8`, Vite `8.2.2` |
 
 Generator를 올려도 이미 생성된 프로젝트를 자동으로 다시 쓰지 않습니다. 이 기준을
-적용하려면 새 `1.2.1` 프로젝트를 생성하거나 기존 프로젝트의 `pom.xml`,
+적용하려면 새 `1.2.2` 프로젝트를 생성하거나 기존 프로젝트의 `pom.xml`,
 `package.json`, lockfile, `docs/ai` 인스트럭션을 함께 명시적으로 갱신하십시오.
 
 ## WIZ Spring을 사용하는 이유
@@ -62,8 +61,8 @@ Generator를 올려도 이미 생성된 프로젝트를 자동으로 다시 쓰�
   편집하도록 설계된 Angular WIZ 구조를 유지할 수 있습니다.
 - **독립 프로젝트** — `create` 이후 빌드에는 generator JAR나 외부 WIZ NPM package가
   필요하지 않으며 `.wiz` 디렉터리도 만들지 않습니다.
-- **하나의 배포 workflow** — 모든 템플릿이 watch, 통합 build, bundle, Docker
-  Compose, Nginx/Apache2, 선택적 systemd service를 제공합니다.
+- **하나의 배포 workflow** — 모든 템플릿이 watch, 통합 build, 최소 bundle,
+  애플리케이션 전용 Docker Compose, proxy 예시, 선택적 systemd를 제공합니다.
 
 ## 빠른 시작
 
@@ -73,7 +72,7 @@ Generator를 올려도 이미 생성된 프로젝트를 자동으로 다시 쓰�
 ```bash
 ./mvnw clean package
 
-java -jar target/wiz-spring-1.2.1.jar create ../dashboard \
+java -jar target/wiz-spring-1.2.2.jar create ../dashboard \
   --package com.example.dashboard
 
 cd ../dashboard
@@ -103,14 +102,14 @@ identifier여야 하므로 `-`를 사용할 수 없습니다.
 | `html` | 정적 HTML, CSS, JavaScript |
 | `jsp` | 서버 렌더링 Spring MVC/JSP 애플리케이션 |
 
-내장 설명은 `java -jar target/wiz-spring-1.2.1.jar templates`로 확인할 수 있습니다.
+내장 설명은 `java -jar target/wiz-spring-1.2.2.jar templates`로 확인할 수 있습니다.
 
 ## 생성 프로젝트 workflow
 
 ```bash
 npm run dev       # Spring + 백엔드 compile watcher + 프론트엔드 watcher
 npm run build     # 백엔드와 프론트엔드 clean build
-npm run bundle    # 배포 artifact, proxy 설정, Compose, checksum
+npm run bundle    # archive, frontend, .env, 애플리케이션 전용 Compose
 ```
 
 모든 템플릿은 `frontend:build`, `backend:build`도 제공합니다. Angular WIZ에는
@@ -118,8 +117,8 @@ npm run bundle    # 배포 artifact, proxy 설정, Compose, checksum
 개발 명령은 프론트엔드 watcher 결과를 Spring 정적 산출물에 기록하고 백엔드는
 DevTools로 재기동하므로, 일반적인 소스 수정에는 명령을 다시 시작할 필요가 없습니다.
 모든 프로젝트 npm script는 root `.env`를 읽습니다. 생성한 배포 bundle은 JDK만 설치된
-서버로 복사해 `./run.sh`로 시작할 수 있으며, 이 launcher와 설치된 systemd service는
-runtime에 WIZ Spring을 요구하지 않습니다.
+서버로 복사해 `.env`를 export한 뒤 root archive를 `java -jar`로 시작할 수 있습니다.
+설치된 systemd service도 runtime에 WIZ Spring이나 build toolchain을 요구하지 않습니다.
 
 ## CLI
 
@@ -135,7 +134,7 @@ runtime에 WIZ Spring을 요구하지 않습니다.
 
 선택적 [Docker 프로젝트 Helper](helper/README.ko.md)는 HTTP로 프로젝트를 생성해 ZIP으로
 반환합니다. Build-time registry로 템플릿을 추가·수정·삭제할 수 있으며 Helper는
-`wiz-spring-1.2.1.jar`에 포함되지 않습니다.
+`wiz-spring-1.2.2.jar`에 포함되지 않습니다.
 
 ## 문서
 

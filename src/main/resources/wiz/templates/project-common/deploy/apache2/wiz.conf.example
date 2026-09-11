@@ -1,0 +1,45 @@
+<VirtualHost *:80>
+    ServerName example.test
+
+    # Copy bundle/public to this path, or change the path to your deployment root.
+    DocumentRoot "/srv/wiz/public"
+
+    <Directory "/srv/wiz/public">
+        Options FollowSymLinks
+        AllowOverride None
+        Require all granted
+        RewriteEngine On
+        RewriteCond %{REQUEST_FILENAME} !-f
+        RewriteCond %{REQUEST_FILENAME} !-d
+        RewriteCond %{REQUEST_URI} !/[^/]+\.[^/]+$ [NC]
+        RewriteRule ^ /index.html [L]
+    </Directory>
+
+    <Files "index.html">
+        Header always set Cache-Control "no-cache, must-revalidate"
+    </Files>
+    <FilesMatch "\.(?:css|js|mjs|png|jpg|jpeg|gif|svg|ico|woff2?)$">
+        Header always set Cache-Control "no-cache, must-revalidate"
+    </FilesMatch>
+    <FilesMatch "[-.][A-Za-z0-9_-]{8,}\.(?:css|js|mjs|png|jpg|jpeg|gif|svg|ico|woff2?)$">
+        Header always set Cache-Control "public, max-age=604800, immutable"
+    </FilesMatch>
+
+    ProxyPreserveHost On
+    ProxyPass "/api/" "http://127.0.0.1:8080/api/" flushpackets=on timeout=3600
+    ProxyPassReverse "/api/" "http://127.0.0.1:8080/api/"
+    ProxyPass "/app-config.json" "http://127.0.0.1:8080/app-config.json"
+    ProxyPassReverse "/app-config.json" "http://127.0.0.1:8080/app-config.json"
+    ProxyPass "/v3/api-docs" "http://127.0.0.1:8080/v3/api-docs"
+    ProxyPassReverse "/v3/api-docs" "http://127.0.0.1:8080/v3/api-docs"
+    ProxyPass "/swagger-ui" "http://127.0.0.1:8080/swagger-ui"
+    ProxyPassReverse "/swagger-ui" "http://127.0.0.1:8080/swagger-ui"
+    ProxyPass "/actuator" "http://127.0.0.1:8080/actuator"
+    ProxyPassReverse "/actuator" "http://127.0.0.1:8080/actuator"
+
+    RewriteEngine On
+    RewriteCond %{HTTP:Upgrade} =websocket [NC]
+    RewriteRule ^/(.*)$ ws://127.0.0.1:8080/$1 [P,L]
+    RewriteCond expr "%{REQUEST_URI} == '/api'"
+    RewriteRule ^/api$ http://127.0.0.1:8080/api [P,L,NE]
+</VirtualHost>

@@ -3,7 +3,7 @@
 # AI 인스트럭션
 
 모든 생성 프로젝트에는 공통 프로젝트, Spring 백엔드, 배포 계약과 선택한 프론트엔드
-계약 하나가 들어갑니다. 이 파일들은 AI coding tool과 사람에게 현재 `1.2.1`
+계약 하나가 들어갑니다. 이 파일들은 AI coding tool과 사람에게 현재 `1.2.2`
 프로젝트 계약을 설명하며 MCP runtime을 추가하지 않습니다.
 
 인스트럭션의 기준은 Java 25, Spring Boot `4.1.1`, Spring Framework `7.0.9`

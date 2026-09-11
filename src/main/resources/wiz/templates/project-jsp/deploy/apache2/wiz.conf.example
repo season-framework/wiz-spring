@@ -1,0 +1,27 @@
+<VirtualHost *:80>
+    ServerName example.test
+
+    # Copy bundle/public to this path, or change the path to your deployment root.
+    Alias "/assets/" "/srv/wiz/public/"
+    <Directory "/srv/wiz/public">
+        Options FollowSymLinks
+        AllowOverride None
+        Require all granted
+    </Directory>
+
+    <FilesMatch "\.(?:css|js|mjs|png|jpg|jpeg|gif|svg|ico|woff2?)$">
+        Header always set Cache-Control "no-cache, must-revalidate"
+    </FilesMatch>
+    <FilesMatch "[-.][A-Za-z0-9_-]{8,}\.(?:css|js|mjs|png|jpg|jpeg|gif|svg|ico|woff2?)$">
+        Header always set Cache-Control "public, max-age=604800, immutable"
+    </FilesMatch>
+
+    ProxyPreserveHost On
+    ProxyPass "/assets/" "!"
+    ProxyPass "/" "http://127.0.0.1:8080/" flushpackets=on timeout=3600
+    ProxyPassReverse "/" "http://127.0.0.1:8080/"
+
+    RewriteEngine On
+    RewriteCond %{HTTP:Upgrade} =websocket [NC]
+    RewriteRule ^/(.*)$ ws://127.0.0.1:8080/$1 [P,L]
+</VirtualHost>

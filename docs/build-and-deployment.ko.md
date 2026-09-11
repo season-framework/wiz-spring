@@ -101,51 +101,48 @@ app:
 
 ```text
 bundle/
-├── app/application.jar     # JSP는 application.war
+├── application.jar         # JSP는 application.war
 ├── public/
-├── config/
-├── data/                    # 변경 가능한 runtime database 디렉터리
-├── deploy/
-│   ├── nginx/
-│   ├── apache2/
-│   └── docker/
-├── docker-compose.yaml
-├── run.sh
 ├── .env
-├── manifest.json
-└── SHA256SUMS
+└── docker-compose.yaml
 ```
 
-배포 전에 번들을 검증합니다.
+Bundle 디렉터리에서 archive를 직접 실행합니다.
 
 ```bash
 cd bundle
-sha256sum -c SHA256SUMS
-./run.sh
+set -a
+. ./.env
+set +a
+java -jar "$APP_ARTIFACT"
 ```
 
 Spring Boot가 executable JAR에서 JSP를 지원하지 않으므로 JSP는 executable WAR를
 사용합니다. 다른 템플릿은 executable JAR와 독립 프론트엔드 tree를 생성합니다.
-복사한 `bundle/`은 JDK 25 이상과 POSIX shell만 있으면 독립 실행됩니다. `./run.sh` 실행에
-Node.js, npm, Maven, WIZ Spring 설치는 필요하지 않습니다. 외부에서 설정한 환경 변수가
-`.env`보다 우선하며 Spring command-line 인자는 `./run.sh` 뒤에 추가할 수 있습니다.
-Checksum은 변경되지 않아야 할 애플리케이션·설정 파일을 보호하고 `.env`와 `data/`만
-명시적인 runtime 변경 영역으로 둡니다.
+복사한 `bundle/`은 JDK 25 이상만 있으면 직접 실행할 수 있고, 위처럼 `.env`를 읽을
+때는 POSIX shell도 사용합니다. Node.js, npm, Maven, WIZ Spring 설치는 필요하지 않습니다.
+배포 환경에서 값을 바꿔야 하면 `.env`를 읽은 뒤 해당 환경 변수를 다시 export합니다.
+네 항목을 복사할 때는 transport 또는 artifact repository의 무결성 기능을 사용합니다.
+WIZ Spring은 별도의 manifest/checksum 계층을 더 이상 만들지 않습니다.
 
 ## Docker Compose
 
-필요하면 생성된 `bundle/.env`를 직접 편집한 뒤 reverse proxy profile 하나만 실행합니다.
+필요하면 `bundle/.env`를 직접 편집한 뒤 빌드된 애플리케이션을 시작합니다.
 
 ```bash
 cd bundle
-docker compose --profile nginx up -d
-# 또는
-docker compose --profile apache2 up -d
+docker compose up -d
 ```
 
-Backend container는 UID/GID `10001`로 실행됩니다. 제공되는 proxy 설정은 SSE 응답을
-buffering하지 않습니다. TLS, 인증서, secret, 운영 data storage는 배포 환경에서
-환경 변수 또는 외부 Spring 설정으로 구성해야 합니다.
+Compose에는 JRE image를 사용하는 Spring service 하나만 있습니다. Archive와 `public/`을
+read-only로 bind mount하고 `SERVER_PORT`를 publish하며 application data는 named volume에
+보관합니다. Image를 build하거나 reverse proxy를 시작하지 않습니다.
+
+Host에서 관리할 설정 예시는 생성 source 프로젝트의
+`deploy/nginx/default.conf.example`과 `deploy/apache2/wiz.conf.example`에 남아 있습니다.
+애플리케이션은 `127.0.0.1:8080`, frontend는 `/srv/wiz/public`에 설치됐다고 가정하므로
+설치 전에 환경에 맞게 바꾸십시오. 예시는 SSE buffering 비활성화와 WebSocket forwarding을
+포함합니다. TLS, 인증서, secret, 운영 data storage는 배포 환경에서 구성해야 합니다.
 
 ## systemd 서비스
 
@@ -172,8 +169,10 @@ wiz-spring service install dashboard \
 모드를 선택하면서 bundle 위치도 바꿉니다. Production unit은 bundle artifact를 직접
 실행합니다. Installer는 launcher에 절대 경로의 `npm` 또는 `java` 명령을 기록하며,
 설치된 두 모드는 WIZ Spring executable이나 generator JAR를 호출하거나 요구하지
-않습니다. 개발 모드의 기본 Spring profile은 `dev`, production은 `prod,bundle`입니다.
-두 모드 모두 journald에 기록하고 기본 `.env`를 읽으며 설치 직후와 재부팅 시 자동
+않습니다. 개발 모드의 기본 Spring profile은 `dev`, production은 `prod`입니다.
+Installer는 root의 `application.jar` 또는 `application.war`를 자동 선택하며 WIZ Spring
+1.2.1이 만든 manifest/checksum bundle도 계속 검증해 설치합니다. 두 모드 모두 journald에
+기록하고 기본 `.env`를 읽으며 설치 직후와 재부팅 시 자동
 기동합니다. `--port`, `--profiles`, 명시적으로 설정한 unit 환경이 기본값보다 우선하고,
 다른 설정 파일은 `--env-file`로 선택합니다.
 

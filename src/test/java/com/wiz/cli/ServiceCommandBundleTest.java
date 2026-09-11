@@ -26,8 +26,8 @@ class ServiceCommandBundleTest {
     Path tempDir;
 
     @Test
-    void installDryRunLaunchesManifestJarDirectly() throws Exception {
-        Path bundle = createBundle("jar");
+    void installDryRunLaunchesMinimalRootJarDirectly() throws Exception {
+        Path bundle = createSimpleBundle("jar");
         CommandResult result = execute(
                 "service", "install", "demo",
                 "--bundle", bundle.toString(),
@@ -40,13 +40,13 @@ class ServiceCommandBundleTest {
         assertEquals(0, result.exitCode(), result.error());
         String script = result.output();
         assertTrue(script.contains("# wiz.service.bundle=" + bundle.toRealPath()));
-        assertTrue(script.contains("# wiz.service.artifact=" + bundle.resolve("app/application.jar").toRealPath()));
+        assertTrue(script.contains("# wiz.service.artifact=" + bundle.resolve("application.jar").toRealPath()));
         assertTrue(script.contains("# wiz.service.artifact-type=jar"));
-        assertTrue(script.contains("# wiz.service.profiles=prod,bundle"));
+        assertTrue(script.contains("# wiz.service.profiles=prod"));
         assertTrue(script.contains("# wiz.service.env-file=" + bundle.toRealPath().resolve(".env")));
         assertTrue(script.contains("# wiz.service.logs=journald"));
-        assertTrue(script.contains(" -jar '" + bundle.resolve("app/application.jar").toRealPath() + "'"));
-        assertTrue(script.contains("export SPRING_PROFILES_ACTIVE=\"${SPRING_PROFILES_ACTIVE:-prod,bundle}\""));
+        assertTrue(script.contains(" -jar '" + bundle.resolve("application.jar").toRealPath() + "'"));
+        assertTrue(script.contains("export SPRING_PROFILES_ACTIVE=\"${SPRING_PROFILES_ACTIVE:-prod}\""));
         assertTrue(script.contains("'--server.port=19090'"));
         assertTrue(script.contains("set -euo pipefail"));
         assertFalse(script.contains(" 2>&1"));
@@ -56,8 +56,8 @@ class ServiceCommandBundleTest {
     }
 
     @Test
-    void installDryRunSupportsExecutableWarFromManifest() throws Exception {
-        Path bundle = createBundle("war");
+    void installDryRunSupportsMinimalExecutableWar() throws Exception {
+        Path bundle = createSimpleBundle("war");
         CommandResult result = execute(
                 "service", "install", "jsp-demo",
                 "--bundle", bundle.toString(),
@@ -68,15 +68,26 @@ class ServiceCommandBundleTest {
 
         assertEquals(0, result.exitCode(), result.error());
         assertTrue(result.output().contains("# wiz.service.artifact-type=war"));
-        assertTrue(result.output().contains(" -jar '" + bundle.resolve("app/application.war").toRealPath() + "'"));
+        assertTrue(result.output().contains(" -jar '" + bundle.resolve("application.war").toRealPath() + "'"));
         assertFalse(result.output().contains("wiz-spring run"));
+    }
+
+    @Test
+    void installDryRunRetainsLegacyManifestBundleCompatibility() throws Exception {
+        Path bundle = createBundle("jar");
+
+        CommandResult result = installDryRun("legacy-manifest", bundle);
+
+        assertEquals(0, result.exitCode(), result.error());
+        assertTrue(result.output().contains("# wiz.service.artifact="
+                + bundle.resolve("app/application.jar").toRealPath()));
     }
 
     @Test
     void explicitProductionModeUsesBundleBeneathProjectRoot() throws Exception {
         Path project = Files.createDirectories(tempDir.resolve("production-project"));
         Path bundle = project.resolve("bundle");
-        Files.move(createBundle("jar"), bundle);
+        Files.move(createSimpleBundle("jar"), bundle);
 
         CommandResult result = execute(
                 "service", "install", "production-demo",
@@ -90,14 +101,14 @@ class ServiceCommandBundleTest {
         assertEquals(0, result.exitCode(), result.error());
         assertTrue(result.output().contains("# wiz.service.mode=production"));
         assertTrue(result.output().contains("# wiz.service.bundle=" + bundle.toRealPath()));
-        assertTrue(result.output().contains("# wiz.service.profiles=prod,bundle"));
-        assertTrue(result.output().contains(" -jar '" + bundle.resolve("app/application.jar").toRealPath() + "'"));
+        assertTrue(result.output().contains("# wiz.service.profiles=prod"));
+        assertTrue(result.output().contains(" -jar '" + bundle.resolve("application.jar").toRealPath() + "'"));
         assertFalse(result.output().contains("run dev"));
     }
 
     @Test
     void relativeBundleWithoutRootResolvesFromTheWorkingDirectory() throws Exception {
-        Path bundle = createBundle("jar");
+        Path bundle = createSimpleBundle("jar");
         Path workingDirectory = Path.of("").toAbsolutePath().normalize();
         Path relativeBundle = workingDirectory.relativize(bundle);
 
@@ -115,7 +126,7 @@ class ServiceCommandBundleTest {
     }
 
     @Test
-    void rejectsBundleWithoutRequiredManifest() throws Exception {
+    void rejectsLegacyNestedLayoutWithoutManifest() throws Exception {
         Path bundle = Files.createDirectories(tempDir.resolve("fallback-bundle/app")).getParent();
         Files.writeString(bundle.resolve("app/application.jar"), "archive");
         writeChecksums(bundle);
@@ -129,7 +140,32 @@ class ServiceCommandBundleTest {
                 "--bin-dir", tempDir.resolve("bin-fallback").toString());
 
         assertEquals(1, result.exitCode());
-        assertTrue(result.error().contains("Bundle manifest is required"), result.error());
+        assertTrue(result.error().contains("exactly one root application.jar or application.war"), result.error());
+        assertFalse(result.output().contains("# wiz.service."));
+    }
+
+    @Test
+    void rejectsAmbiguousSimpleBundleArchives() throws Exception {
+        Path bundle = Files.createDirectories(tempDir.resolve("ambiguous-simple-bundle/public")).getParent();
+        Files.writeString(bundle.resolve("application.jar"), "archive");
+        Files.writeString(bundle.resolve("application.war"), "archive");
+
+        CommandResult result = installDryRun("ambiguous-simple", bundle);
+
+        assertEquals(1, result.exitCode());
+        assertTrue(result.error().contains("exactly one root application.jar or application.war"), result.error());
+        assertFalse(result.output().contains("# wiz.service."));
+    }
+
+    @Test
+    void rejectsSimpleBundleWithoutFrontendDirectory() throws Exception {
+        Path bundle = Files.createDirectories(tempDir.resolve("no-frontend-simple-bundle"));
+        Files.writeString(bundle.resolve("application.jar"), "archive");
+
+        CommandResult result = installDryRun("no-frontend-simple", bundle);
+
+        assertEquals(1, result.exitCode());
+        assertTrue(result.error().contains("Bundle frontend path must be a real directory"), result.error());
         assertFalse(result.output().contains("# wiz.service."));
     }
 
@@ -341,7 +377,7 @@ class ServiceCommandBundleTest {
 
     @Test
     void installedLauncherRunsWithoutWizSpringCliAndEnablesImmediately() throws Exception {
-        Path bundle = createBundle("jar");
+        Path bundle = createSimpleBundle("jar");
         Path systemd = Files.createDirectories(tempDir.resolve("installed-systemd"));
         Path bin = Files.createDirectories(tempDir.resolve("installed-bin"));
         Path java = tempDir.resolve("fake-java");
@@ -386,13 +422,13 @@ class ServiceCommandBundleTest {
         String applicationOutput = new String(process.getInputStream().readAllBytes());
         assertEquals(0, process.waitFor());
         assertEquals("PROFILE=prod,blue-green\nFAKE_JAVA:-jar "
-                + bundle.resolve("app/application.jar").toRealPath()
+                + bundle.resolve("application.jar").toRealPath()
                 + " --server.port=18080\n", applicationOutput);
     }
 
     @Test
     void refusesImplicitRootServiceUserUnlessExplicitlyApproved() throws Exception {
-        Path bundle = createBundle("jar");
+        Path bundle = createSimpleBundle("jar");
         String owner = Files.getOwner(bundle).getName();
         if (!"root".equalsIgnoreCase(owner) && !"0".equals(owner)) {
             return;
@@ -706,6 +742,16 @@ class ServiceCommandBundleTest {
         Files.writeString(bundle.resolve(".env"), "SERVER_PORT=8080\nSPRING_PROFILES_ACTIVE=prod,bundle\n");
         writeManifest(bundle, type);
         writeChecksums(bundle);
+        return bundle;
+    }
+
+    private Path createSimpleBundle(String type) throws Exception {
+        Path bundle = Files.createDirectories(tempDir.resolve(type + "-simple-bundle"));
+        Files.writeString(bundle.resolve("application." + type), "archive");
+        Files.createDirectories(bundle.resolve("public"));
+        Files.writeString(bundle.resolve("public/index.html"), "<!doctype html>\n");
+        Files.writeString(bundle.resolve(".env"), "SERVER_PORT=8080\nSPRING_PROFILES_ACTIVE=prod\n");
+        Files.writeString(bundle.resolve("docker-compose.yaml"), "services: {}\n");
         return bundle;
     }
 

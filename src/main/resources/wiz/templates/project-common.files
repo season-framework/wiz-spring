@@ -7,13 +7,8 @@ AGENTS.md
 README.md
 docker-compose.yaml
 deploy/README.md
-deploy/application-bundle.yml
-deploy/docker/backend.Dockerfile
-deploy/nginx/Dockerfile
-deploy/nginx/default.conf.template
-deploy/apache2/Dockerfile
-deploy/apache2/entrypoint.sh
-deploy/apache2/000-default.conf.template
+deploy/nginx/default.conf.example
+deploy/apache2/wiz.conf.example
 docs/ai/backend-spring.md
 docs/ai/deployment.md
 mvnw

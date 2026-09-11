@@ -21,7 +21,7 @@ running `npm ci`.
 
 ## Generated platform
 
-Every `1.2.1` template pins Java release 25, Spring Boot `4.1.1`, its BOM-managed
+Every `1.2.2` template pins Java release 25, Spring Boot `4.1.1`, its BOM-managed
 Spring Framework `7.0.9`, springdoc `3.1.0`, and Maven Wrapper `3.9.15`. The Angular templates pin Angular `22.1.4`, Angular
 CLI/build `22.1.6`, and TypeScript `6.0.3`; the React template pins React `19.2.8`
 and Vite `8.2.2`. The root [`README`](../README.md#111-platform-baseline) is the
@@ -36,7 +36,7 @@ Build the generator from source:
 
 ```bash
 ./mvnw clean package
-alias wiz-spring='java -jar /absolute/path/to/wiz-spring/target/wiz-spring-1.2.1.jar'
+alias wiz-spring='java -jar /absolute/path/to/wiz-spring/target/wiz-spring-1.2.2.jar'
 ```
 
 ## CLI

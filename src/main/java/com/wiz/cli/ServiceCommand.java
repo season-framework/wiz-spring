@@ -125,7 +125,7 @@ public class ServiceCommand implements Callable<Integer> {
         private boolean allowRoot;
 
         @Option(names = "--profiles",
-                description = "Comma-separated Spring profiles. Defaults to dev, or prod,bundle with --production.")
+                description = "Comma-separated Spring profiles. Defaults to dev, or prod with --production.")
         private String profiles;
 
         @Option(names = "--env-file",
@@ -162,7 +162,7 @@ public class ServiceCommand implements Callable<Integer> {
             validatePort(port);
             boolean profilesExplicit = profiles != null;
             String activeProfiles = normalizeProfiles(profiles == null
-                    ? (productionMode ? "prod,bundle" : "dev")
+                    ? (productionMode ? "prod" : "dev")
                     : profiles);
             String serviceUser;
             String script;
@@ -170,7 +170,9 @@ public class ServiceCommand implements Callable<Integer> {
             if (productionMode) {
                 Path bundlePath = bundlePath(rootPath, bundle);
                 BundleArtifact resolvedArtifact = resolveBundleArtifact(bundlePath, artifact);
-                verifyBundleChecksums(bundlePath);
+                if (Files.exists(bundlePath.resolve(BUNDLE_MANIFEST), LinkOption.NOFOLLOW_LINKS)) {
+                    verifyBundleChecksums(bundlePath);
+                }
                 serviceUser = serviceUser(user, bundlePath, allowRoot);
                 serviceEnvironment = serviceEnvironment(envFile, bundlePath);
                 requireBundleAccessibleToServiceUser(resolvedArtifact, javaPath, serviceUser);
@@ -548,6 +550,20 @@ public class ServiceCommand implements Callable<Integer> {
 
     private static BundleArtifact resolveBundleArtifact(Path bundleRoot, Path configuredArtifact) throws IOException {
         Path manifest = bundleRoot.resolve(BUNDLE_MANIFEST);
+        if (!Files.exists(manifest, LinkOption.NOFOLLOW_LINKS)) {
+            Path selected = configuredArtifact == null
+                    ? simpleBundleArtifact(bundleRoot)
+                    : configuredArtifact.isAbsolute()
+                            ? configuredArtifact
+                            : bundleRoot.resolve(configuredArtifact);
+            return checkedBundleArtifact(
+                    bundleRoot,
+                    selected,
+                    archiveType(selected),
+                    false,
+                    bundleRoot.resolve("public"));
+        }
+
         Map<String, Object> manifestValues = readBundleManifest(manifest);
         if (configuredArtifact != null) {
             Path selected = configuredArtifact.isAbsolute()
@@ -579,7 +595,26 @@ public class ServiceCommand implements Callable<Integer> {
                 manifestFrontendPath(manifestValues, bundleRoot, manifest));
     }
 
-    /** Verifies the complete checksum set required for every 1.0 bundle. */
+    private static Path simpleBundleArtifact(Path bundleRoot) throws IOException {
+        List<Path> candidates;
+        try (Stream<Path> entries = Files.list(bundleRoot)) {
+            candidates = entries
+                    .filter(path -> {
+                        String filename = path.getFileName().toString();
+                        return "application.jar".equals(filename) || "application.war".equals(filename);
+                    })
+                    .filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
+                    .sorted()
+                    .toList();
+        }
+        if (candidates.size() != 1) {
+            throw new IllegalArgumentException(
+                    "Bundle must contain exactly one root application.jar or application.war: " + bundleRoot);
+        }
+        return candidates.getFirst();
+    }
+
+    /** Verifies the complete checksum set used by legacy manifest-based bundles. */
     private static void verifyBundleChecksums(Path bundleRoot) throws IOException {
         Path checksumFile = bundleRoot.resolve(BUNDLE_CHECKSUMS);
         if (!Files.exists(checksumFile, LinkOption.NOFOLLOW_LINKS)) {

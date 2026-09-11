@@ -27,5 +27,6 @@
 | [`1.1.1`](1.1.1.md) | tagged | Java 25, Spring Boot 4.1.1 / Framework 7.0.9, Angular 22, npm dependency refresh, and template verification hardening |
 | [`1.2.0`](1.2.0.md) | tagged | live development services, direct `.env` configuration, JDK-only standalone bundles, and removal of CLI runtime coupling |
 | [`1.2.1`](1.2.1.md) | tagged | advisory Node.js/npm create checks and dependency-aligned frontend toolchain ranges |
+| [`1.2.2`](1.2.2.md) | tagged | four-item deployment bundles, application-only Compose, and host proxy examples |
 
 릴리즈를 실제로 배포할 때는 `pom.xml`의 `<version>`과 Git tag, GitHub/GitLab release note가 이 로그와 일치해야 한다.

@@ -21,7 +21,7 @@ WIZ Spring은 선택한 프론트엔드 하나와 표준 Spring Boot 프로젝�
 
 ## 생성 플랫폼
 
-모든 `1.2.1` 템플릿은 Java release 25, Spring Boot `4.1.1`, 해당 BOM이 관리하는
+모든 `1.2.2` 템플릿은 Java release 25, Spring Boot `4.1.1`, 해당 BOM이 관리하는
 Spring Framework `7.0.9`, springdoc `3.1.0`, Maven Wrapper `3.9.15`를 고정합니다. Angular 템플릿은 Angular `22.1.4`, Angular
 CLI/build `22.1.6`, TypeScript `6.0.3`을, React 템플릿은 React `19.2.8`, Vite
 `8.2.2`를 고정합니다. 사람이 읽는 기준표는 루트
@@ -36,7 +36,7 @@ Generator 버전업은 기존 생성 프로젝트를 자동으로 변경하지 �
 
 ```bash
 ./mvnw clean package
-alias wiz-spring='java -jar /absolute/path/to/wiz-spring/target/wiz-spring-1.2.1.jar'
+alias wiz-spring='java -jar /absolute/path/to/wiz-spring/target/wiz-spring-1.2.2.jar'
 ```
 
 ## CLI

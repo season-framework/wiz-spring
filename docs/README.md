@@ -8,7 +8,7 @@ details.
 
 | Guide | Covers |
 | --- | --- |
-| [Project generation](project-generation.md) | 1.2.1 version baseline, requirements, CLI, templates, imports, and sample application |
+| [Project generation](project-generation.md) | 1.2.2 version baseline, requirements, CLI, templates, imports, and sample application |
 | [Build and deployment](build-and-deployment.md) | Project scripts, API prefixes, bundles, Docker Compose, and systemd services |
 | [1.0 compatibility](compatibility.md) | The clean break from 0.2.x and the supported migration path |
 | [AI instructions](ai-instructions.md) | Versioned instruction contract, sources, generated destinations, and verification |

@@ -1,66 +1,75 @@
-# Deployment bundle
+# Reverse proxy examples
 
-The backend artifact and frontend files were built from the same source revision.
-Verify the bundle before deploying it:
+`npm run bundle` creates a deliberately small deployment directory containing only the
+root `application.jar` (`application.war` for JSP), frontend files, environment defaults,
+and the Compose sample:
 
-```bash
-sha256sum -c SHA256SUMS
+```text
+bundle/
+├── application.__WIZ_ARTIFACT_TYPE__
+├── public/
+├── .env
+└── docker-compose.yaml
 ```
 
-Run the complete application directly from this directory:
+The bundle does not include or start Nginx or Apache HTTP Server. Run the Spring application
+directly or with the included single-service Compose file, then configure an independently
+managed reverse proxy when one is needed.
+
+## Run the application
+
+From the bundle directory, a POSIX shell can load the generated environment file and launch Java:
 
 ```bash
-./run.sh
+set -a
+. ./.env
+set +a
+java -jar "$APP_ARTIFACT"
 ```
 
-This bundle already contains `.env` with production defaults. Edit it directly when needed.
-
-This copied directory needs only JDK 25+ and a POSIX shell. It does not need Node.js,
-npm, Maven, the generator JAR, or a `wiz-spring` executable. `run.sh` loads this directory's
-`.env`, keeps any already exported environment value as the higher-priority value, selects
-the `prod,bundle` profiles by default, and then runs `app/application.__WIZ_ARTIFACT_TYPE__`.
-Spring command-line options can be appended, for example `./run.sh --server.port=9090`.
-The production profile disables API docs and Swagger UI by default. Set
-`SPRINGDOC_API_DOCS_ENABLED=true` and `SPRINGDOC_SWAGGER_UI_ENABLED=true` only when
-those endpoints should be exposed.
-
-For a reverse proxy, edit `.env` when needed, then choose exactly one profile:
+Alternatively:
 
 ```bash
-docker compose --profile nginx up -d
-docker compose --profile apache2 up -d
+docker compose up -d
 ```
 
-`.env` and `data/` are the only runtime-mutable locations intentionally allowed beside the
-checksum-protected bundle files. Keep any additional Spring configuration outside the bundle and set
-`SPRING_CONFIG_ADDITIONAL_LOCATION` in `.env`.
+The Compose service publishes `SERVER_PORT` (8080 by default), mounts `public/` read-only, and
+keeps application data in a named volume. It requires neither a source tree nor a local image
+build.
 
-Install this immutable output from the generated project root with:
+## Nginx
+
+`nginx/default.conf.example` assumes:
+
+- the application listens on `127.0.0.1:8080`;
+- the frontend files are installed at `/srv/wiz/public`;
+- the application API prefix is `/api`.
+
+Copy it into the host's Nginx configuration, change those values and `server_name` for the
+deployment, validate with `nginx -t`, and reload Nginx. The example includes SPA fallback,
+WebSocket forwarding, and unbuffered long-lived API responses for SSE.
+
+## Apache HTTP Server
+
+`apache2/wiz.conf.example` uses the same defaults. Enable the `proxy`, `proxy_http`,
+`proxy_wstunnel`, `rewrite`, and `headers` modules, copy the example into the host's virtual-host
+configuration, adjust it, validate it, and reload Apache HTTP Server.
+
+The JSP template receives proxy examples tailored to its executable WAR: `/assets/` is served
+from `/srv/wiz/public`, while other requests are forwarded to Spring so JSP rendering stays in
+the application.
+
+TLS certificates and secret provisioning are intentionally site-specific. Keep secrets outside
+the generated project and bundle, and expose API documentation only when the deployment requires
+it.
+
+## systemd installation
+
+After creating the bundle, WIZ Spring can install it as a systemd service:
 
 ```bash
 wiz-spring service install <name> --production --root . --user <service-user>
 ```
 
-From this bundle directory, `wiz-spring service install <name> --bundle . --user
-<service-user>` is equivalent. `--bundle <path>` selects production mode and overrides the
-default bundle path. The CLI is only a one-time installer/administrator: the installed
-systemd launcher executes Java directly and has no runtime dependency on WIZ Spring.
-Omit `--production` only when intentionally installing the editable project as a
-live-development service; that mode runs `npm run dev` and does not execute this bundle.
-
-The production service reads `<bundle>/.env` by default. Pass `--env-file <path>` to choose
-another file. `--port` and `--profiles` override values from that file. Restart the service
-after changing environment configuration; rebuilding is unnecessary for configuration-only
-changes.
-
-The backend container runs as the non-root UID/GID `10001`. Keep bundled files
-world-readable or owned by that identity if you replace them at deployment time.
-The Compose file mounts the `backend-data` named volume at `/app/data`, preserving the
-sample H2 database across container replacement. Replace that volume or configure an
-external datasource before treating the sample as a production data store.
-
-Both proxy profiles disable buffering and extend the read timeout on proxied API
-responses so `/api/chat/stream` can deliver SSE events immediately.
-
-Set secrets through environment variables or that external Spring configuration file.
-TLS termination and certificate provisioning are intentionally not included.
+From inside the bundle, `--bundle .` is equivalent. The installed service executes Java directly,
+loads the bundle `.env`, and does not depend on WIZ Spring, Node.js, npm, or Maven at runtime.

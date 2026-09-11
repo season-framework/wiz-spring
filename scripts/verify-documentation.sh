@@ -37,7 +37,7 @@ current_docs=(
 )
 
 for file in "${current_docs[@]}"; do
-    require_text "$file" '1.2.1'
+    require_text "$file" '1.2.2'
     reject_text "$file" 'Java 21'
     reject_text "$file" 'JDK 21'
     reject_text "$file" 'Spring Boot 4.0.6'
@@ -64,7 +64,7 @@ for file in \
     require_text "$file" 'Spring Framework `7.0.9`'
 done
 
-require_text pom.xml '<version>1.2.1</version>'
+require_text pom.xml '<version>1.2.2</version>'
 require_text pom.xml '<maven.compiler.release>25</maven.compiler.release>'
 require_text src/main/resources/wiz/templates/project-angular/pom.xml '<version>4.1.1</version>'
 require_text src/main/resources/wiz/templates/project-angular/pom.xml '<java.version>25</java.version>'
@@ -74,6 +74,39 @@ require_text src/main/resources/wiz/templates/project-common/.env 'SERVER_PORT=8
 require_text helper/.env 'WIZ_HELPER_PORT=8080'
 require_text helper/docs/operations.md 'checked-in [`helper/.env`](../.env)'
 require_text helper/docs/operations.ko.md '기본값이 포함된 [`helper/.env`](../.env)'
+require_text helper/internal/generator/generator.go 'const Version = "1.2.2"'
+require_text helper/internal/httpapi/openapi.yaml 'version: 1.2.2'
+require_text release-log/1.2.2.md '# WIZ Spring 1.2.2'
+require_text release-log/README.md '[`1.2.2`](1.2.2.md)'
+
+deployment_docs=(
+    docs/build-and-deployment.md
+    docs/build-and-deployment.ko.md
+    src/main/resources/wiz/templates/project-common/README.md
+    src/main/resources/wiz/templates/project-common/AGENTS.md
+    src/main/resources/wiz/templates/project-common/deploy/README.md
+    src/main/resources/wiz/templates/project-common/docs/ai/deployment.md
+)
+
+for file in "${deployment_docs[@]}"; do
+    require_text "$file" 'application.jar'
+    require_text "$file" 'docker-compose.yaml'
+    reject_text "$file" './run.sh'
+    reject_text "$file" 'prod,bundle'
+    reject_text "$file" 'docker compose --profile nginx'
+    reject_text "$file" 'docker compose --profile apache2'
+done
+
+for proxy_example in \
+    src/main/resources/wiz/templates/project-common/deploy/nginx/default.conf.example \
+    src/main/resources/wiz/templates/project-common/deploy/apache2/wiz.conf.example \
+    src/main/resources/wiz/templates/project-jsp/deploy/nginx/default.conf.example \
+    src/main/resources/wiz/templates/project-jsp/deploy/apache2/wiz.conf.example; do
+    if [[ ! -f "$proxy_example" ]]; then
+        printf 'Missing reverse-proxy example: %s\n' "$proxy_example" >&2
+        exit 1
+    fi
+done
 
 for retired_env_example in \
     src/main/resources/wiz/templates/project-common/.env.example \
@@ -94,8 +127,8 @@ frontend_guides=(
 )
 
 for file in "${frontend_guides[@]}"; do
-    require_text "$file" 'WIZ Spring `1.2.1`'
+    require_text "$file" 'WIZ Spring `1.2.2`'
     reject_text "$file" 'Angular 21'
 done
 
-printf 'Documentation and executable version policies are aligned with WIZ Spring 1.2.1.\n'
+printf 'Documentation and executable version policies are aligned with WIZ Spring 1.2.2.\n'

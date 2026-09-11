@@ -126,7 +126,7 @@ class ProjectTemplateCommandTest {
             String packageJson = Files.readString(target.resolve("package.json"));
             String packageLock = Files.readString(target.resolve("package-lock.json"));
             String pom = Files.readString(target.resolve("pom.xml"));
-            assertTrue(packageJson.contains("\"version\": \"1.2.1\""), template.id());
+            assertTrue(packageJson.contains("\"version\": \"1.2.2\""), template.id());
             assertTrue(packageJson.contains("\"frontend\": \"" + template.id() + "\""), template.id());
             assertTrue(packageJson.contains(
                     "\"node\": \"^22.22.3 || ^24.15.0 || >=26.0.0\""), template.id());
@@ -134,22 +134,29 @@ class ProjectTemplateCommandTest {
             assertTrue(packageLock.contains(
                     "\"node\": \"^22.22.3 || ^24.15.0 || >=26.0.0\""), template.id());
             assertTrue(packageLock.contains("\"npm\": \">=8.0.0\""), template.id());
-            assertTrue(pom.contains("<version>1.2.1</version>"), template.id());
+            assertTrue(pom.contains("<version>1.2.2</version>"), template.id());
             assertTrue(pom.contains("<version>4.1.1</version>"), template.id());
             assertTrue(pom.contains("<java.version>25</java.version>"), template.id());
             assertTrue(pom.contains("<springdoc.version>3.1.0</springdoc.version>"), template.id());
             String archiveType = template == com.wiz.core.FrontendTemplate.JSP ? "war" : "jar";
-            assertTrue(Files.readString(target.resolve("docker-compose.yaml"))
-                    .contains("${APP_ARTIFACT:-application." + archiveType + "}"), template.id());
+            String compose = Files.readString(target.resolve("docker-compose.yaml"));
+            assertTrue(compose.contains("${APP_ARTIFACT:-application." + archiveType + "}"), template.id());
+            assertTrue(compose.contains("image: eclipse-temurin:25-jre"), template.id());
+            assertTrue(compose.contains("  application:"), template.id());
+            assertFalse(compose.contains("  nginx:"), template.id());
+            assertFalse(compose.contains("  apache2:"), template.id());
+            assertFalse(compose.contains("build:"), template.id());
             assertTrue(Files.readString(target.resolve(".env"))
                     .contains("APP_ARTIFACT=application." + archiveType), template.id());
             assertFalse(Files.exists(target.resolve(".env.example")), template.id());
             assertFalse(Files.readAllLines(target.resolve(".gitignore")).stream()
                     .anyMatch(".env"::equals), template.id());
-            assertTrue(Files.readString(target.resolve("deploy/docker/backend.Dockerfile"))
-                    .contains("ARG APP_ARTIFACT=application." + archiveType), template.id());
-            assertTrue(Files.readString(target.resolve("deploy/docker/backend.Dockerfile"))
-                    .contains("FROM eclipse-temurin:25-jre"), template.id());
+            assertTrue(Files.isRegularFile(target.resolve("deploy/nginx/default.conf.example")), template.id());
+            assertTrue(Files.isRegularFile(target.resolve("deploy/apache2/wiz.conf.example")), template.id());
+            assertFalse(Files.exists(target.resolve("deploy/docker/backend.Dockerfile")), template.id());
+            assertFalse(Files.exists(target.resolve("deploy/nginx/Dockerfile")), template.id());
+            assertFalse(Files.exists(target.resolve("deploy/apache2/Dockerfile")), template.id());
+            assertFalse(Files.exists(target.resolve("deploy/application-bundle.yml")), template.id());
             assertFalse(Files.exists(target.resolve(".wiz")), template.id());
             assertFalse(Files.exists(target.resolve("config/wiz.yml")), template.id());
             assertTrue(Files.readString(target.resolve(".github/copilot-instructions.md"))
@@ -188,17 +195,17 @@ class ProjectTemplateCommandTest {
                 "--package", "com.example.jspproxy",
                 "--template", "jsp"));
 
-        String nginx = Files.readString(target.resolve("deploy/nginx/default.conf.template"));
+        String nginx = Files.readString(target.resolve("deploy/nginx/default.conf.example"));
         assertTrue(nginx.contains("location ^~ /assets/"));
-        assertTrue(nginx.contains("alias /usr/share/nginx/html/"));
+        assertTrue(nginx.contains("alias /srv/wiz/public/"));
         assertTrue(nginx.contains("location / {"));
-        assertTrue(nginx.contains("proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT}"));
+        assertTrue(nginx.contains("proxy_pass http://127.0.0.1:8080"));
         assertFalse(nginx.contains("try_files $uri $uri/ /index.html"));
 
-        String apache = Files.readString(target.resolve("deploy/apache2/000-default.conf.template"));
-        assertTrue(apache.contains("Alias \"/assets/\" \"/usr/local/apache2/htdocs/\""));
+        String apache = Files.readString(target.resolve("deploy/apache2/wiz.conf.example"));
+        assertTrue(apache.contains("Alias \"/assets/\" \"/srv/wiz/public/\""));
         assertTrue(apache.contains("ProxyPass \"/assets/\" \"!\""));
-        assertTrue(apache.contains("ProxyPass \"/\" \"http://${BACKEND_HOST}:${BACKEND_PORT}/\""));
+        assertTrue(apache.contains("ProxyPass \"/\" \"http://127.0.0.1:8080/\""));
         assertFalse(apache.contains("RewriteRule ^ /index.html"));
     }
 

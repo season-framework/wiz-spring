@@ -104,52 +104,49 @@ version segment.
 
 ```text
 bundle/
-├── app/application.jar     # application.war for JSP
+├── application.jar         # application.war for JSP
 ├── public/
-├── config/
-├── data/                    # mutable runtime database directory
-├── deploy/
-│   ├── nginx/
-│   ├── apache2/
-│   └── docker/
-├── docker-compose.yaml
-├── run.sh
 ├── .env
-├── manifest.json
-└── SHA256SUMS
+└── docker-compose.yaml
 ```
 
-Verify a bundle before deployment:
+Run the archive directly from the bundle directory:
 
 ```bash
 cd bundle
-sha256sum -c SHA256SUMS
-./run.sh
+set -a
+. ./.env
+set +a
+java -jar "$APP_ARTIFACT"
 ```
 
 JSP uses an executable WAR because Spring Boot does not support JSP in an executable
 JAR. The other templates produce an executable JAR and an independent frontend tree.
-The copied `bundle/` is self-contained apart from JDK 25+ and a POSIX shell: running
-`./run.sh` needs no Node.js, npm, Maven, or WIZ Spring installation. Inherited environment
-variables override `.env`; Spring command-line arguments can be appended to `./run.sh`.
-Checksums cover immutable application/configuration files; `.env` and `data/` are the two
-documented runtime-mutable locations.
+The copied `bundle/` needs only JDK 25+ for direct execution; loading `.env` as shown also
+uses a POSIX shell. It needs no Node.js, npm, Maven, or WIZ Spring installation. Exported
+environment variables can be set after loading `.env` when a deployment must override it.
+Use the transport or artifact repository's integrity mechanism when copying the four-item
+bundle; WIZ Spring no longer adds a second manifest/checksum layer.
 
 ## Docker Compose
 
-Edit the generated `bundle/.env` directly when needed, then run exactly one reverse-proxy profile:
+Edit `bundle/.env` when needed, then start the prebuilt application:
 
 ```bash
 cd bundle
-docker compose --profile nginx up -d
-# or
-docker compose --profile apache2 up -d
+docker compose up -d
 ```
 
-The backend container runs as UID/GID `10001`. The provided proxy configuration keeps
-SSE responses unbuffered. TLS, certificate provisioning, secrets, and production data
-storage remain deployment responsibilities; pass them through environment variables or
-external Spring configuration.
+Compose contains one Spring service based on the JRE image. It bind-mounts the archive and
+`public/` read-only, publishes `SERVER_PORT`, and keeps application data in a named volume;
+it neither builds an image nor starts a reverse proxy.
+
+Host-managed examples remain in the generated source project at
+`deploy/nginx/default.conf.example` and `deploy/apache2/wiz.conf.example`. They assume the
+application is reachable at `127.0.0.1:8080` and frontend files are installed at
+`/srv/wiz/public`. Adjust them before installation. The examples keep SSE responses
+unbuffered and include WebSocket forwarding. TLS, certificates, secrets, and production
+data storage remain deployment responsibilities.
 
 ## systemd service
 
@@ -176,7 +173,9 @@ wiz-spring service install dashboard \
 and overrides the bundle. The installed production unit executes the bundle artifact
 directly. The installer writes an absolute `npm` or `java` command into the launcher;
 neither installed mode invokes or requires the WIZ Spring executable or generator JAR.
-Development defaults to Spring profile `dev`; production defaults to `prod,bundle`. Both
+Development defaults to Spring profile `dev`; production defaults to `prod`. The installer
+automatically selects a root `application.jar` or `application.war`; it also continues to
+validate and install manifest/checksum bundles created by WIZ Spring 1.2.1. Both
 modes write to journald, accept `--profiles`, load their default `.env`, and are enabled and
 started immediately. `--port`, `--profiles`, and an explicitly exported unit environment
 take precedence over defaults; use `--env-file` to select another configuration file.

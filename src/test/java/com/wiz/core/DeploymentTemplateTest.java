@@ -12,42 +12,32 @@ import org.junit.jupiter.api.Test;
 class DeploymentTemplateTest {
 
     private static final String COMMON_NGINX =
-            "/wiz/templates/project-common/deploy/nginx/default.conf.template";
+            "/wiz/templates/project-common/deploy/nginx/default.conf.example";
     private static final String COMMON_APACHE =
-            "/wiz/templates/project-common/deploy/apache2/000-default.conf.template";
+            "/wiz/templates/project-common/deploy/apache2/wiz.conf.example";
     private static final String JSP_NGINX =
-            "/wiz/templates/project-jsp/deploy/nginx/default.conf.template";
+            "/wiz/templates/project-jsp/deploy/nginx/default.conf.example";
     private static final String JSP_APACHE =
-            "/wiz/templates/project-jsp/deploy/apache2/000-default.conf.template";
+            "/wiz/templates/project-jsp/deploy/apache2/wiz.conf.example";
 
     @Test
-    void backendContainerPreservesArchiveExtensionAndRunsAsNonRoot() throws Exception {
-        try (InputStream input = DeploymentTemplateTest.class.getResourceAsStream(
-                "/wiz/templates/project-common/deploy/docker/backend.Dockerfile")) {
-            assertNotNull(input);
-            String dockerfile = new String(input.readAllBytes(), StandardCharsets.UTF_8);
-
-            assertTrue(dockerfile.contains("ENV APP_ARTIFACT=${APP_ARTIFACT}"));
-            assertTrue(dockerfile.contains("app/${APP_ARTIFACT} /app/${APP_ARTIFACT}"));
-            assertTrue(dockerfile.contains("USER 10001:10001"));
-            assertTrue(dockerfile.contains("mkdir -p /app/data"));
-            assertTrue(dockerfile.contains("chown -R 10001:10001 /app"));
-            assertTrue(dockerfile.contains("exec java -jar \\\"/app/${APP_ARTIFACT}\\\""));
-            assertFalse(dockerfile.contains("/app/application\n"),
-                    "JSP executable WARs must not lose their .war extension");
-        }
-    }
-
-    @Test
-    void composePersistsTheSampleDatabaseOutsideTheBackendContainer() throws Exception {
+    void composeRunsOnlyTheApplicationAndPersistsItsData() throws Exception {
         String compose = resource("/wiz/templates/project-common/docker-compose.yaml");
 
-        assertTrue(compose.contains("- backend-data:/app/data"));
-        assertTrue(compose.contains("volumes:\n  backend-data:"));
+        assertTrue(compose.contains("  application:"));
+        assertTrue(compose.contains("image: eclipse-temurin:25-jre"));
+        assertTrue(compose.contains("java\", \"-jar\", \"${APP_ARTIFACT"));
+        assertTrue(compose.contains("./public:/opt/application/public:ro"));
+        assertTrue(compose.contains("application-data:/opt/application/data"));
+        assertTrue(compose.contains("volumes:\n  application-data:"));
+        assertFalse(compose.contains("  nginx:"));
+        assertFalse(compose.contains("  apache2:"));
+        assertFalse(compose.contains("build:"));
+        assertFalse(compose.contains("dockerfile:"));
     }
 
     @Test
-    void reverseProxiesDoNotBufferServerSentEvents() throws Exception {
+    void reverseProxyExamplesDoNotBufferServerSentEvents() throws Exception {
         for (String path : new String[] {COMMON_NGINX, JSP_NGINX}) {
             String nginx = resource(path);
             assertTrue(nginx.contains("proxy_buffering off;"), path);
@@ -63,20 +53,19 @@ class DeploymentTemplateTest {
     }
 
     @Test
-    void dynamicApiPrefixUsesLiteralBoundaryMappingsInsteadOfRegexInterpolation() throws Exception {
+    void proxyExamplesUseSafeLiteralApiBoundaryMappings() throws Exception {
         String nginx = resource(COMMON_NGINX);
-        assertTrue(nginx.contains("location = \"${API_PREFIX}\""));
-        assertTrue(nginx.contains("location ^~ \"${API_PREFIX}/\""));
+        assertTrue(nginx.contains("location = /api"));
+        assertTrue(nginx.contains("location ^~ /api/"));
         assertTrue(nginx.contains("v3/api-docs(?:\\.yaml)?"));
         assertTrue(nginx.contains("swagger-ui(?:\\.html)?"));
-        assertFalse(nginx.contains("location ~ ^${API_PREFIX}"));
+        assertFalse(nginx.contains("${API_PREFIX}"));
 
         String apache = resource(COMMON_APACHE);
-        assertTrue(apache.contains(
-                "ProxyPass \"${API_PREFIX}/\" \"http://${BACKEND_HOST}:${BACKEND_PORT}${API_PREFIX}/\""));
-        assertTrue(apache.contains("%{REQUEST_URI} == '${API_PREFIX}'"));
+        assertTrue(apache.contains("ProxyPass \"/api/\" \"http://127.0.0.1:8080/api/\""));
+        assertTrue(apache.contains("%{REQUEST_URI} == '/api'"));
         assertFalse(apache.contains("ProxyPassMatch"));
-        assertFalse(apache.contains("^${API_PREFIX}"));
+        assertFalse(apache.contains("${API_PREFIX}"));
     }
 
     @Test
@@ -113,26 +102,14 @@ class DeploymentTemplateTest {
     @Test
     void springStaticLocationsUseResolvableFileResources() throws Exception {
         String application = resource("/wiz/templates/project-common/src/main/resources/application.yml");
-        String bundle = resource("/wiz/templates/project-common/deploy/application-bundle.yml");
 
         assertTrue(application.contains("- file:./public/"));
         assertTrue(application.contains("- file:./target/generated-resources/frontend/"));
-        assertTrue(bundle.contains("- file:./public/"));
         assertFalse(application.contains("optional:file:"));
-        assertFalse(bundle.contains("optional:file:"));
     }
 
     @Test
-    void proxyImagesNormalizeStaticFilePermissionsForUnprivilegedWorkers() throws Exception {
-        String nginxDockerfile = resource("/wiz/templates/project-common/deploy/nginx/Dockerfile");
-        String apacheDockerfile = resource("/wiz/templates/project-common/deploy/apache2/Dockerfile");
-
-        assertTrue(nginxDockerfile.contains("chmod -R a=rX /usr/share/nginx/html"));
-        assertTrue(apacheDockerfile.contains("chmod -R a=rX /usr/local/apache2/htdocs"));
-    }
-
-    @Test
-    void generatedConfigurationAndBundleLauncherAreStandaloneAndExplicit() throws Exception {
+    void generatedConfigurationAndBundleAreMinimalAndExplicit() throws Exception {
         String environment = resource("/wiz/templates/project-common/.env");
         String projectHelpers = resource("/wiz/templates/project-common/scripts/lib/project.mjs");
         String bundle = resource("/wiz/templates/project-common/scripts/bundle.mjs");
@@ -142,19 +119,27 @@ class DeploymentTemplateTest {
         assertFalse(manifest.contains(".env.example"));
         assertTrue(environment.contains("SERVER_PORT=8080"));
         assertTrue(environment.contains("SPRING_PROFILES_ACTIVE=dev"));
+        assertFalse(environment.contains("BUNDLE_DIR"));
+        assertFalse(environment.contains("HTTP_PORT"));
         assertFalse(environment.lines().anyMatch("SPRINGDOC_API_DOCS_ENABLED=false"::equals));
         assertFalse(environment.lines().anyMatch("SPRINGDOC_SWAGGER_UI_ENABLED=false"::equals));
         assertTrue(projectHelpers.contains("process.loadEnvFile(projectEnvironmentFile)"));
         assertTrue(bundle.contains("writeFile(path.join(stage, '.env')"));
-        assertTrue(bundle.contains("if (relative === '.env') continue"));
+        assertTrue(bundle.contains("path.join(stage, artifactName)"));
+        assertTrue(bundle.contains("path.join(stage, 'public')"));
+        assertTrue(bundle.contains("path.join(stage, 'docker-compose.yaml')"));
+        assertTrue(bundle.contains("'SPRING_PROFILES_ACTIVE=prod'"));
         assertFalse(bundle.contains(".env.example"));
-        assertTrue(bundle.contains("const launcherPath = path.join(stage, 'run.sh')"));
-        assertTrue(bundle.contains("await chmod(launcherPath, 0o755)"));
-        assertTrue(bundle.contains("SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-prod,bundle}"));
-        assertTrue(bundle.contains("carriage_return=$(printf"));
-        assertTrue(bundle.contains("exec \"$java_bin\" -jar"));
-        assertFalse(bundle.contains("exec wiz-spring"));
-        assertFalse(bundle.contains("exec npm"));
+        assertFalse(bundle.contains("manifest.json"));
+        assertFalse(bundle.contains("SHA256SUMS"));
+        assertFalse(bundle.contains("run.sh"));
+        assertFalse(bundle.contains("application-bundle.yml"));
+        assertFalse(bundle.contains("createHash"));
+        assertFalse(manifest.contains("deploy/docker/backend.Dockerfile"));
+        assertFalse(manifest.contains("deploy/nginx/Dockerfile"));
+        assertFalse(manifest.contains("deploy/apache2/Dockerfile"));
+        assertTrue(manifest.contains("deploy/nginx/default.conf.example"));
+        assertTrue(manifest.contains("deploy/apache2/wiz.conf.example"));
     }
 
     private static String resource(String path) throws Exception {

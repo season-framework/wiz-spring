@@ -60,38 +60,38 @@ for template in "${templates[@]}"; do
         npm run backend:build
         npm run build
         npm run bundle
-        (cd bundle && sha256sum -c SHA256SUMS)
         test -f .env
         test ! -e .env.example
         test -f bundle/.env
         test ! -e bundle/.env.example
-        if grep -Eq '  \.env$' bundle/SHA256SUMS; then
-            printf 'Mutable bundle .env must not be checksum-protected: %s\n' "$template" >&2
+        grep -qx 'SPRING_PROFILES_ACTIVE=prod' bundle/.env
+        if [[ "$template" == "jsp" ]]; then artifact=war; else artifact=jar; fi
+        expected_entries=$(printf '.env\napplication.%s\ndocker-compose.yaml\npublic\n' "$artifact")
+        actual_entries=$(find bundle -mindepth 1 -maxdepth 1 -printf '%f\n' | LC_ALL=C sort)
+        if [[ "$actual_entries" != "$expected_entries" ]]; then
+            printf 'Unexpected top-level bundle entries for %s:\n%s\n' "$template" "$actual_entries" >&2
             exit 1
         fi
-        test -x bundle/run.sh
-        test -d bundle/data
-        sh -n bundle/run.sh
-        if grep -Eiq 'wiz-spring|node|npm|mvn' bundle/run.sh; then
-            printf 'Standalone bundle launcher has a forbidden generator/build-tool dependency: %s\n' \
-                "$template" >&2
-            exit 1
-        fi
-        node -e '
-          const fs = require("node:fs");
-          const manifest = JSON.parse(fs.readFileSync("bundle/manifest.json", "utf8"));
-          const expected = process.argv[1];
-          const artifact = expected === "jsp" ? "war" : "jar";
-          const publicEntry = expected === "jsp" ? "bundle/public/js/shell.js" : "bundle/public/index.html";
-          if (manifest.template !== expected || manifest.artifact.type !== artifact) process.exit(1);
-          if (manifest.launcher?.path !== "run.sh" || manifest.launcher?.requires !== "JDK 25+") process.exit(1);
-          if (!manifest.mutable?.files?.includes(".env")) process.exit(1);
-          if (!manifest.mutable?.directories?.includes("data")) process.exit(1);
-          if (!fs.existsSync(`bundle/app/application.${artifact}`)) process.exit(1);
-          if (!fs.existsSync(publicEntry)) process.exit(1);
-        ' "$template"
+        test -f "bundle/application.$artifact"
         if [[ "$template" == "jsp" ]]; then
-            jar tf bundle/app/application.war | grep -qx 'WEB-INF/jsp/dashboard.jsp'
+            public_entry=bundle/public/js/shell.js
+        else
+            public_entry=bundle/public/index.html
+        fi
+        test -f "$public_entry"
+        test -f deploy/nginx/default.conf.example
+        test -f deploy/apache2/wiz.conf.example
+        test ! -e bundle/deploy
+        test ! -e bundle/manifest.json
+        test ! -e bundle/SHA256SUMS
+        test ! -e bundle/run.sh
+        test ! -e bundle/data
+        if grep -Eq '^  (nginx|apache2):|build:|dockerfile:' bundle/docker-compose.yaml; then
+            printf 'Bundle Compose file must contain only the prebuilt application service: %s\n' "$template" >&2
+            exit 1
+        fi
+        if [[ "$template" == "jsp" ]]; then
+            jar tf bundle/application.war | grep -qx 'WEB-INF/jsp/dashboard.jsp'
         fi
     )
 done

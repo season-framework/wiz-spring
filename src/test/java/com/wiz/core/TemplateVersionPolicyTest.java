@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 
 class TemplateVersionPolicyTest {
 
-    private static final String WIZ_VERSION = "1.2.1";
+    private static final String WIZ_VERSION = "1.2.2";
     private static final String JAVA_RELEASE = "25";
     private static final String SPRING_BOOT_VERSION = "4.1.1";
     private static final String SPRING_FRAMEWORK_VERSION = "7.0.9";
@@ -93,13 +93,13 @@ class TemplateVersionPolicyTest {
     void apiDocumentationIsExplicitInDevelopmentAndOptInForProduction() throws Exception {
         String application = resource("/wiz/templates/project-common/src/main/resources/application.yml");
         String production = resource("/wiz/templates/project-common/src/main/resources/application-prod.yml");
-        String compose = resource("/wiz/templates/project-common/docker-compose.yaml");
+        String environment = resource("/wiz/templates/project-common/.env");
 
         assertTrue(application.contains("enabled: true"));
         assertTrue(production.contains("enabled: ${SPRINGDOC_API_DOCS_ENABLED:false}"));
         assertTrue(production.contains("enabled: ${SPRINGDOC_SWAGGER_UI_ENABLED:false}"));
-        assertTrue(compose.contains("SPRINGDOC_API_DOCS_ENABLED: ${SPRINGDOC_API_DOCS_ENABLED:-false}"));
-        assertTrue(compose.contains("SPRINGDOC_SWAGGER_UI_ENABLED: ${SPRINGDOC_SWAGGER_UI_ENABLED:-false}"));
+        assertTrue(environment.contains("SPRINGDOC_API_DOCS_ENABLED=false"));
+        assertTrue(environment.contains("SPRINGDOC_SWAGGER_UI_ENABLED=false"));
     }
 
     @Test
@@ -153,7 +153,8 @@ class TemplateVersionPolicyTest {
         assertContains(agents, "Do not stop and restart it for ordinary source edits");
         assertContains(agents, "generated root `.env`");
         assertContains(agents, "never introduce a copy or rename step");
-        assertContains(agents, "runnable with `./run.sh`");
+        assertContains(agents, "exactly four top-level entries");
+        assertContains(agents, "application-only Compose service");
         assertContains(copilot, "watcher reports a successful rebuild");
         assertContains(copilot, "without calling the WIZ Spring CLI at runtime");
         assertContains(deployment, "service install <name> --root <project>");
@@ -179,14 +180,14 @@ class TemplateVersionPolicyTest {
     }
 
     @Test
-    void frontendInstructionsNameThePinnedOnePointTwoPointZeroToolchains() throws Exception {
+    void frontendInstructionsNameThePinnedOnePointTwoPointTwoToolchains() throws Exception {
         Map<String, List<String>> expected = Map.of(
-                "angular-wiz", List.of("WIZ Spring `1.2.1`", "22.1.4", "22.1.6", "6.0.3", "3.0.4"),
-                "angular", List.of("WIZ Spring `1.2.1`", "22.1.4", "22.1.6", "6.0.3"),
-                "react", List.of("WIZ Spring `1.2.1`", "19.2.8", "8.2.2", "6.1.1"),
-                "html", List.of("WIZ Spring `1.2.1`", "^22.22.3 || ^24.15.0 || >=26.0.0"),
+                "angular-wiz", List.of("WIZ Spring `1.2.2`", "22.1.4", "22.1.6", "6.0.3", "3.0.4"),
+                "angular", List.of("WIZ Spring `1.2.2`", "22.1.4", "22.1.6", "6.0.3"),
+                "react", List.of("WIZ Spring `1.2.2`", "19.2.8", "8.2.2", "6.1.1"),
+                "html", List.of("WIZ Spring `1.2.2`", "^22.22.3 || ^24.15.0 || >=26.0.0"),
                 "jsp", List.of(
-                        "WIZ Spring `1.2.1`",
+                        "WIZ Spring `1.2.2`",
                         "Spring Boot `4.1.1`",
                         "^22.22.3 || ^24.15.0 || >=26.0.0"));
 

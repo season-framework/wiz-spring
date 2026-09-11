@@ -3,7 +3,7 @@
 # AI instructions
 
 Every generated project receives the common project, Spring backend, and deployment
-contracts plus exactly one frontend contract. These files describe the current `1.2.1`
+contracts plus exactly one frontend contract. These files describe the current `1.2.2`
 project contract to AI coding tools and human contributors; they do not add an MCP
 runtime.
 

@@ -15,7 +15,7 @@ fresh clone and its package manager can report the policy before a build.
 
 ## Generated platform baseline
 
-This project was generated from WIZ Spring `1.2.1` with the following backend and
+This project was generated from WIZ Spring `1.2.2` with the following backend and
 build baseline:
 
 | Layer | Version or policy |
@@ -140,8 +140,22 @@ not inject the demo controllers, domain, database, tests, or frontend screens in
 imported application.
 
 Deployment output is written to `bundle/`. See `deploy/README.md`.
-The bundle itself starts with `./run.sh` on a server with JDK 25+ and does not require
-Node.js, npm, Maven, or WIZ Spring.
+It contains only the root archive (`application.jar`, or `application.war` for JSP),
+`public/`, `.env`, and `docker-compose.yaml`. On a server with JDK 25+, load its
+environment and run the archive:
+
+```bash
+cd bundle
+set -a
+. ./.env
+set +a
+java -jar "$APP_ARTIFACT"
+```
+
+`docker compose up -d` runs the same prebuilt application as a single JRE service. Nginx
+and Apache HTTP Server are not part of Compose or the bundle; editable host configuration
+examples are kept in `deploy/nginx/default.conf.example` and
+`deploy/apache2/wiz.conf.example`.
 
 For a continuously updated systemd service, install the project root in the default
 development mode:
